@@ -1,0 +1,13 @@
+According to #1214, exp and log operation has random failure on PVC, investigation is TBD. 
+“AssertionError: Tensor-likes are not close!” means accuracy issue, please check whether the kernel used compiler implementation.
+According to #774, “RuntimeError: Double and complex datatype matmul is not supported in oneDNN” depends on oneDNN
+Batch_norm owner is xutintel
+LayerNorm owner is xutintel
+LayerNorm is target PT2.7
+LayerNorm is P1 in PT2.7
+Unit test owner is daisyden
+E2E test owner is retonym
+Client owner is stonepia
+BMG is client platform
+oneDNN fix is targeting 2.8
+"Fatal Python error: Illegal instruction" are knwon P2 issue

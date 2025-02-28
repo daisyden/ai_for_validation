@@ -1,0 +1,4 @@
+{‘test_LayerNorm’, ‘PASSED and failed 4 times before’}
+{‘test_ABC’, ‘PASSED and failed 0 times before’}
+{‘test_BatchNorm", ‘FAILED’}
+
