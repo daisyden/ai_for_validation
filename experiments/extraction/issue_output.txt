@@ -1,0 +1,50 @@
+issue https://github.com/intel/intel/torch-xpu-ops/issues/1437: [ owner: 'daisyden', error_message: 'RuntimeError: output 1: meta disagrees with real impl', evidence: 'test_meta_xpu.py::TestMetaXPU::test_dispatch_meta_outplace_nn_functional_scaled_dot_product_attention_xpu_bfloat16
+...and 7 more', dependency: 'pytorch/pytorch#148652', root_cause: 'Issue fixed', PR: 'https://github.com/pytorch/pytorch/pull/148652' ]
+
+issue https://github.com/intel/intel/torch-xpu-ops/issues/1169: [ owner: 'guangyey', error_message: 'torch.nextafter has an incorrect result for bf16 on XPU', evidence: 'As titled, this is a regression. IPEX could give a correct result for bf16 on XPU. import torch
+torch.manual_seed(0)
+a = torch.randn(5, dtype=torch.bfloat16)
+b = torch.randn(5, dtype=torch.bfloat16)
+print(f"a: {a}")
+print(f"b: {b}")
+print(torch.nextafter(a, b))
+x_a = a.to('xpu')
+x_b = b.to('xpu')
+print(torch.nextafter(x_a, x_b))
+Output:
+a: tensor([ 1.5391, -0.2930, -2.1719,  0.5703, -1.0859], dtype=torch.bfloat16)
+b: tensor([-1.3984,  0.4043,  0.8398, -0.7188, -0.4043], dtype=torch.bfloat16)
+tensor([ 1.5312, -0.2910, -2.1562,  0.5664, -1.0781], dtype=torch.bfloat16)
+tensor([ 1.5391, -0.2930, -2.1719,  0.5703, -1.0859], device='xpu:0',
+dtype=torch.bfloat16)', dependency: 'torch-xpu-ops', root_cause: 'NA', PR: 'NA' ]
+
+
+issue https://github.com/intel/intel/torch-xpu-ops/issues/1147: [ owner: 'maciek226', error_message: 'topk calculation gives wrong result when on xpu. I find the issue when using both bfloat16 and float16 but not on float32.', evidence: 'Following code results with a different results. If the .to('xpu') is removed, the answer is 0.', dependency: 'torch', root_cause: 'NA', PR: 'NA' ]
+
+issue https://github.com/intel/intel/torch-xpu-ops/issues/891: [ owner: 'hoshibara', error_message: 'addmm will throw unknown type name 'PO_1_BIN_ARG_DATA_T' when runing UT', evidence: 'Reproducing step: enable test/inductor/test_torchinductor_opinfo.py with this PR: [Inductor UT] Generalize inductor UT for intel GPU (Part 2) pytorch/pytorch#134556
+python test/inductor/test_torchinductor_opinfo.py -k addmm_xpu', dependency: 'https://github.com/pytorch/pytorch/pull/139721', root_cause: 'addmm UT cases on f16 and f32 pass as expected', PR: 'https://github.com/pytorch/pytorch/pull/139721/files#diff-57c0f6a344227861850f9d31387ff82cb089898f7472542060349544dade7875' ]
+
+issue https://github.com/intel/intel/torch-xpu-ops/issues/827: [ owner: 'guangyey', error_message: 'IndexError: tensors used as indices must be long, byte or bool tensors', evidence: 'A reproducer for the behavior of index_put_ which is inconsistency with other backends.', dependency: 'gcc', root_cause: 'formerly does not have the `allow_int` in `checkIndexTensorType()`', PR: 'https://github.com/intel/torch-xpu-ops/pull/597' ]
+
+issue https://github.com/intel/intel/torch-xpu-ops/issues/750: [ owner: 'Stonepia', error_message: 'bf conversion instruction not supported!', evidence: 'in kernel: 'triton_poi_fused__to_copy_2'', dependency: 'latest triton release/2.5.0 branch', root_cause: 'The issue is verified with latest triton release/2.5.0 branch, and it should work with PyTorch', PR: 'https://github.com/intel/intel/torch-xpu-ops/issues/750' ]
+
+issue https://github.com/intel/intel/torch-xpu-ops/issues/674: [ owner: 'Stonepia', error_message: 'Something isn't working', evidence: 'Describe the bug', dependency: 'https://github.com/intel/torch-xpu-ops/pull/702', root_cause: 'Fixing', PR: 'https://github.com/intel/torch-xpu-ops/pull/702' ]
+
+
+issue https://github.com/intel/intel/torch-xpu-ops/issues/673: [ owner: 'Stonepia', error_message: 'PageFault UnrolledElementwiseKernel cause pagefault', evidence: 'test_inplace_forward_mode_AD_add_xpu_complex128', dependency: 'fengyuan14', root_cause: 'NA', PR: 'https://github.com/intel/torch-xpu-ops/pull/702' ]
+
+issue https://github.com/intel/intel/torch-xpu-ops/issues/589: [ owner: 'yuchengliu', error_message: 'AssertionError: Tensor-likes are not equal!', evidence: 'test_quick__batch_norm_with_update_xpu_bfloat16', dependency: 'yuchengliu1', root_cause: 'test_quick__batch_norm_with_update_xpu_bfloat16
+Original max diff: 8.890871061595362e-08, Decomp max diff: 2.0987157833829428e-07, atol = 1e-07
+test_quick__batch_norm_with_update_xpu_float16
+Original max diff: 0.0, Decomp max diff: 1.1920928955078125e-07, atol = 1e-07
+set atol=2e-7 can pass these case', PR: 'NA' ]
+
+issue https://github.com/intel/intel/torch-xpu-ops/issues/375: [ owner: 'etaf', error_message: 'The following code some times hung and sometimes get Native API failed. Native API returns: -2 (PI_ERROR_DEVICE_NOT_AVAILABLE) -2', evidence: 'The bug description in the issue body', dependency: 'oneDNN', root_cause: 'issue in oneDNN', PR: 'NA' ]
+
+
+
+
+
+
+
+
