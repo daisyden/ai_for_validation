@@ -1,27 +1,9 @@
-#pip install transformers
-#pip install faiss-cpu  # or faiss-gpu if you have a GPU
-#pip install torch
-#pip install sentence-transformers
-
 import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
 # Load a pre-trained sentence transformer model
-#encoder = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 encoder = SentenceTransformer('thenlper/gte-large')
-
-
-## Example documents
-#documents = [
-#    "DeepSeek is a powerful AI model.",
-#    "RAG combines retrieval and generation.",
-#    "FAISS is a library for efficient similarity search.",
-#    # Add more documents here
-#]
-#
-## Encode documents
-#document_embeddings = encoder.encode(documents)
 
 
 try:
