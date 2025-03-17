@@ -3,6 +3,7 @@ from typing import List
 
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
+from langchain.output_parsers import PydanticOutputParser
 
 
 class IssueKeys(BaseModel):
@@ -26,6 +27,8 @@ class IssueExtractionData(BaseModel):
     issue_keys: List[IssueKeys]
 
 
+#issue_prompt_parser = PydanticOutputParser(pydantic_object=IssueKeys)
+
 # Define a custom prompt to provide instructions and any additional context.
 # 1) You can add examples into the prompt template to improve extraction quality
 # 2) Introduce additional parameters to take context into account (e.g., include metadata
@@ -35,7 +38,7 @@ issue_extraction_prompt = ChatPromptTemplate.from_messages(
         (
             "system",
             "You are an expert at identifying github issue reporter and error message in text. "
-            "Only extract important information about the issue. Extract nothing if no important information can be found in the text.",
+            "Only extract important information about the issue. Extract nothing if no important information can be found in the text."
         ),
         ("human", "{text}"),
     ]

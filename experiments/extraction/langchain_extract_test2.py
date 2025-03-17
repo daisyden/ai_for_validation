@@ -1,4 +1,4 @@
-../../../RAG/langchain_extract_test2.pyimport re
+import re
 
 import requests
 from langchain_community.document_loaders import BSHTMLLoader
@@ -145,7 +145,7 @@ import os
 
 if not os.environ.get("GROQ_API_KEY"):
   #os.environ["GROQ_API_KEY"] = getpass.getpass("Enter API key for Groq: ")
-  os.environ["GROQ_API_KEY"] = "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"
+  os.environ["GROQ_API_KEY"] = ""
 
 from langchain.chat_models import init_chat_model
 
