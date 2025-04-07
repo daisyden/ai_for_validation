@@ -8,10 +8,10 @@ from vllm import LLM, SamplingParams
 from vllm.sampling_params import GuidedDecodingParams
 from github_issue import Github_Issue 
 
-llm = LLM(model="Qwen/Qwen2.5-14B-Instruct", max_model_len=5000)
+llm = LLM(model="Qwen/Qwen2.5-3B-Instruct", max_model_len=5000)
 class IssueDescription(BaseModel):
     issue_number: int 
-    issue_descrption: str
+    issue_description: str
     reporter: str
     assignee: str
     resolution: str
@@ -22,63 +22,166 @@ class IssueDescription(BaseModel):
 json_schema = IssueDescription.model_json_schema()
 
 guided_decoding_params = GuidedDecodingParams(json=json_schema, backend="xgrammar:disable-any-whitespace")
-sampling_params = SamplingParams(guided_decoding=guided_decoding_params, max_tokens=500, temperature=0)
+sampling_params = SamplingParams(guided_decoding=guided_decoding_params, max_tokens=1000, temperature=0)
 
 repo = "intel/torch-xpu-ops"
 token = ""
 github_issue = Github_Issue(repo, token)
-issues = github_issue.get_issues()
+issues = github_issue.get_issues("all")
+#issues_closed = github_issue.get_issues("closed")
 
 for issue in issues:
+    #if issue.number not in [ 1422, 1352, 1280, 774, 754, 719, 432, 426, 253, 157 ]:
+    if issue.number not in [ 1533 ]:
+        continue
     try:
         # request issue and comments contents
         if issue.pull_request != None:
             print("\n### Drop the issue becuase it is pull request : " + str(issue.number))
             continue
 
-        issue_contents = issue.body if issue.body != None else "None"
-        issue_contents = "Content of #" + str(issue.number) + ": " + "{ " + issue_contents + " }"
+        #print("\n### the pure issue : " + str(issue.number))
+        #continue 
+        issue_contents = issue.body if issue.body != None else ""
+
+        # Remove version information that is with less information
+        where_version = issue_contents.find("### Versions")
+        if where_version != -1:
+            issue_contents = issue_contents[:where_version]
+            
+        issue_contents = "Content of #" + str(issue.number) + " is : " + issue_contents
         comments_page_content = github_issue.get_comments(issue.number)
-        if comments_page_content == None:
-            comments_page_content = "None"
-        comments_contents = "Content of #" + str(issue.number) + " comments : " + "{ " + comments_page_content + " }"
-        
-        user = str(issue.user.name) if issue.user != None else "None"
-        assignee = str(issue.assignee.name) if issue.assignee != None else "None"
+        if comments_page_content == None or comments_page_content == "":
+            print("### No comments\n")
+            comments_page_content = ""
+            comments_contents = ""
+        else:
+            comments_contents = "Content of #" + str(issue.number) + " comments are: " + "{ " + comments_page_content + " }"
+
+        user = str(issue.user.login) if issue.user != None else ""
+        assignee = str(issue.assignee.login) if issue.assignee != None else ""
         issue_number = issue.number
+        state = issue.state
 
-                      
+
         from langchain_text_splitters import TokenTextSplitter
-
+     
         text_splitter = TokenTextSplitter(
             # Controls the size of each chunk
-            chunk_size= (5000 - len(comments_contents) - 500),
+            chunk_size=4000,
             # Controls overlap between chunks
             chunk_overlap=100,
         )
-
+     
         texts = text_splitter.split_text(issue_contents)
+        comments_texts = text_splitter.split_text(comments_contents) if comments_contents != "" else None
+        
+        import json
+        def merge_json(json1, json2):
+            """Merges two JSON-like dictionaries.
+            
+            Args:
+                json1: The first JSON-like dictionary.
+                json2: The second JSON-like dictionary.
+                
+            Returns:
+                A new dictionary with the merged contents of json1 and json2. 
+                If keys are duplicated, the value from json2 will overwrite the value from json1.
+            """
+            merged = {}
+            for item1 in json1.items():
+                key = item1[0]
+                value = item1[1]
+                    
+                if key in json2.keys():
+                    if key in [ "issue_description", "resolution", "root_cuase" ]:
+                        value = value + "\n" + json2[key]
+
+                    if (value == "None" or value == "") and \
+                    (json2[key] != None and json2[key] != "None" and json2[key] != ""):
+                        value = json2[key]
+
+                    merged[key] = value
+                else:
+                    merged[key] = value 
+            return merged
+
+        #################################################################################
+        output_json = None
 
         for text in texts:
+            print("\n********* {}\n".format(text))
+
             prompt = f""" 
-                This is a github issue link https://github.com/{repo}/{issue_number}. 
+                This is a github issue link https://github.com/{repo}/issues/{issue_number}. 
                 The reporter of the issue is {user}, 
                 and the assignee is {assignee},
-                This is the github issue title {issue.title},
+                and the state of the issue is {state}.
+                \nThis is the github issue title {issue.title},
                 and issue body {text}, 
-                \nExtract the github issue description from issue tile and issue body. 
-                And this is the comments for this github issue {comments_contents}, 
-                \nExtract the resolution and root cause information from it. 
-                \nPlease generate a json for the information collected in English only. Please provide details and don't generate unrelated informations not addressed in the prompt.
+                Extract the github issue description from issue tile and issue body, 
+                if possible also extract the resolution and root cause information. 
+                \nnPlease generate a json for the information collected in English only. Please provide details and don't generate unrelated informations not addressed in the prompt. If the information is not collected succussfully, just return 0 for integer dtype or "" for string dtype as the json value. Please ensure the generated output is a valid json and without repeated information. 
                 """
+
             outputs = llm.generate(
                     prompts=prompt,
                     sampling_params=sampling_params,
             )
 
-            print("### Result of :" + str(issue.number) + outputs[0].outputs[0].text)
-            with open("results.txt", 'a') as f:
-                f.write("### Result:" + str(issue.number) + outputs[0].outputs[0].text)
+            outputs[0].outputs[0].text = outputs[0].outputs[0].text.encode('utf-8', 'replace').decode()
+            print("### Result of each chunck:" + str(issue.number) + outputs[0].outputs[0].text)
+            if output_json == None:
+                output_json = json.loads(outputs[0].outputs[0].text)
+            else:
+                json2 = json.loads(outputs[0].outputs[0].text)
+                output_json = merge_json(output_json, json2)
+
+        print("\n#### Results: " + str(issue.number) + json.dumps(output_json)) 
+        output_json0 = output_json
+
+        #with open("results.txt", 'a') as f:
+        #    f.write("### Result:" + str(issue.number) + json.dumps(output_json))
+        #################################################################################
+        if comments_texts != None:
+            output_json = None
+
+            for text in comments_texts:
+                print("\n********* comments {}\n".format(text))
+
+                prompt = f""" 
+                    This is a github issue link https://github.com/{repo}/issues/{issue_number}. 
+                    The reporter of the issue is {user}, 
+                    and the assignee is {assignee},
+                    and the state of the issue is {state}.
+                    \nAnd this is the comments for this github issue {text}, 
+                    Extract the resolution and root cause information from it. 
+                    \nnPlease generate a json for the information collected in English only. Please provide details and don't generate unrelated informations not addressed in the prompt. If the information is not collected succussfully, just return 0 for integer dtype or "" for string dtype as the json value. Please ensure the generated output is a valid json and without repeated information. 
+                    """
+
+                outputs = llm.generate(
+                        prompts=prompt,
+                        sampling_params=sampling_params,
+                )
+
+                outputs[0].outputs[0].text = outputs[0].outputs[0].text.encode('utf-8', 'replace').decode()
+                print("### Result of each chunck in comments:" + str(issue.number) + outputs[0].outputs[0].text)
+                if output_json == None:
+                    output_json = json.loads(outputs[0].outputs[0].text)
+                else:
+                    json2 = json.loads(outputs[0].outputs[0].text)
+                    output_json = merge_json(output_json, json2)
+
+            print("\n#### Results of comments: " + str(issue.number) + json.dumps(output_json)) 
+
+            #################################################################################
+            output_json = merge_json(output_json0, output_json)
+
+        print("\n#### Merged Results: " + str(issue.number) + json.dumps(output_json)) 
+
+        with open("results.txt", 'a') as f:
+            f.write("### Merged Result:" + str(issue.number) + json.dumps(output_json))
+ 
     except:
         print("### Result:" + str(issue.number) + " failed to extract") 
         with open("results.txt", 'a') as f:
