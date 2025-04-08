@@ -45,7 +45,7 @@ class Github_Issue:
             comments = issue.get_comments()
 
             comments_contents = "" 
-            #comments_contents = "Comments of #" + str(ticket) + ": {\n"
+
             # process the comments
             for comment in comments:
                 # Do not support url parsing at present
@@ -55,7 +55,7 @@ class Github_Issue:
                     comments_contents = comments_contents + f" Date: {comment.created_at}, "
                     comments_contents = comments_contents + f" Comment: {comment.body}\n"
                     comments_contents = comments_contents + "},"
-            #comments_contents = comments_contents + " }"
+
             return comments_contents
         else:
             raise AssertionError()
