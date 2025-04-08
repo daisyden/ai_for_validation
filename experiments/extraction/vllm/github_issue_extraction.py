@@ -32,8 +32,8 @@ issues = github_issue.get_issues("all")
 
 for issue in issues:
     #if issue.number not in [ 1422, 1352, 1280, 774, 754, 719, 432, 426, 253, 157 ]:
-    if issue.number not in [ 1533 ]:
-        continue
+    #if issue.number not in [ 1533 ]:
+    #    continue
     try:
         # request issue and comments contents
         if issue.pull_request != None:
