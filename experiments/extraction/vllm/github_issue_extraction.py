@@ -105,7 +105,7 @@ for issue in issues:
                     and the state of the issue is {state}.
                     \nThis is the github issue title {issue.title},
                     and issue body {text}, 
-                    Extract the github issue description from issue tile and issue body, 
+                    Extract the github issue description with error message information from issue tile and issue body,
                     if possible also extract the resolution and root cause information. 
                     \nnPlease generate a valid json for the information collected in English only. Please provide details and don't generate unrelated informations not addressed in the prompt. If the information is not collected succussfully, just return 0 for integer dtype or "" for string dtype as the json value. Please ensure the generated output is a valid json and without repeated information. 
                     """
