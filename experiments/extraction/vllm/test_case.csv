@@ -1,0 +1,21 @@
+ third_party.torch-xpu-ops.test.xpu.test_linalg_xpu.TestLinalgXPU , test_gemm_bias_offline_tunableop_xpu_bfloat16 , failed , AssertionError: Torch not compiled with CUDA enabled
+ third_party.torch-xpu-ops.test.xpu.test_linalg_xpu.TestLinalgXPU , test_gemm_bias_tunableop_xpu_bfloat16 , failed , AttributeError: module &#x27;torch._C&#x27; has no attribute &#x27;_cuda_tunableop_enable&#x27; 
+ third_party.torch-xpu-ops.test.xpu.test_linalg_xpu.TestLinalgXPU , test_scaled_gemm_offline_tunableop_xpu_float8_e4m3fnuz , failed , AssertionError: Torch not compiled with CUDA enabled 
+ third_party.torch-xpu-ops.test.xpu.test_linalg_xpu.TestLinalgXPU , test_scaled_gemm_tunableop_xpu_float8_e5m2fnuz , failed , AttributeError: module &#x27;torch._C&#x27; has no attribute &#x27;_cuda_tunableop_enable&#x27; 
+ third_party.torch-xpu-ops.test.xpu.test_transformers_xpu.TestTransformersXPU , test_multiheadattention_fastpath_attn_mask_attn_mask_dim_2_key_padding_mask_dim_2_bool_xpu , failed , RuntimeError: output 1: meta disagrees with real impl 
+ third_party.torch-xpu-ops.test.xpu.test_transformers_xpu.TestTransformersXPU , test_transformerencoder_fastpath_use_torchscript_False_enable_nested_tensor_False_use_autocast_False_d_model_12_xpu , failed , RuntimeError: output 1: meta disagrees with real impl 
+ third_party.torch-xpu-ops.test.xpu.test_transformers_xpu.TestTransformersXPU , test_transformerencoder_fastpath_use_torchscript_False_enable_nested_tensor_False_use_autocast_True_d_model_12_xpu , failed , RuntimeError: output 1: meta disagrees with real impl 
+third_party.torch-xpu-ops.test.xpu.test_meta_xpu.TestMetaXPU,test_dispatch_meta_outplace_norm_fro_xpu_bfloat16,failed,RuntimeError: output 0: meta disagrees with real impl
+third_party.torch-xpu-ops.test.xpu.test_meta_xpu.TestMetaXPU,test_dispatch_meta_outplace_norm_fro_xpu_complex128,failed,RuntimeError: output 0: meta disagrees with real impl
+third_party.torch-xpu-ops.test.xpu.test_meta_xpu.TestMetaXPU,test_dispatch_meta_outplace_norm_fro_xpu_complex64,failed,RuntimeError: output 0: meta disagrees with real impl
+test_ops_xpu.py::TestCommonXPU,test_compare_cpu_cosh_xpu_complex128,failed,AssertionError: Tensor-likes are not close! 
+TestPoolingNNDeviceTypeXPU.test_MaxUnpool_index_errors_case1_xpu,test_MaxUnpool_index_errors_case1_xpu,failed,AssertionError: 'Assertion `maxind >= 0 && maxind < outputImageSize` failed' not found in '\nAssertHandler::printMessage\n' : The expected error was not found
+nn\test_pooling_xpu.py::TestPoolingNNDeviceTypeXPU,test_maxpool3d_non_square_backward_xpu,failed,RuntimeError: UR error
+test_native_mha_xpu.py::TestMHADeviceTypeXPU,test_native_multihead_attention_xpu_float16,failed,AssertionError: Tensor-likes are not close!
+test_unary_ufuncs_xpu.py::TestUnaryUfuncsXPU,test_reference_numerics_extremal_exp_xpu_complex64,failed,AssertionError: Tensor-likes are not close!
+test_autograd_xpu.py::TestAutograd,test_multi_grad_all_hooks,failed,RuntimeError: Ninja is required to load C++ extensions
+test_autograd_xpu.py::TestAutogradDeviceTypeXPU,test_rnn_backward_to_input_but_not_parameters_xpu,failed,NotImplementedError: Could not run 'aten::_thnn_fused_lstm_cell' with arguments from the 'CPU' backend
+test_unary_ufuncs_xpu.py::TestUnaryUfuncsXPU,test_reference_numerics_small_acos_xpu_complex32,failed,AssertionError: Tensor-likes are not close!
+test_ops_xpu.py::TestCommonXPU,test_compare_cpu_nn_functional_softshrink_xpu_bfloat16,failed,AssertionError: Tensor-likes are not close!
+NA,NA,failed,RuntimeError: Native API failed. Native API returns: -36 (PI_ERROR_INVALID_QUEUE) -36 (PI_ERROR_INVALID_QUEUE)
+NA,NA,failed,AssertionError: Tensor-likes are not close! \nMismatched elements: 540 / 640 (84.4%)\n"Greatest absolute difference: 0.00005278512835502625 at index (1, 45) (up to 1e-05 allowed)"\n"Greatest relative difference: 0.0000021018216609955 at index (8, 26) (up to 1.3e-06 allowed)"
