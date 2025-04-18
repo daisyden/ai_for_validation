@@ -18,4 +18,4 @@ test_autograd_xpu.py::TestAutogradDeviceTypeXPU,test_rnn_backward_to_input_but_n
 test_unary_ufuncs_xpu.py::TestUnaryUfuncsXPU,test_reference_numerics_small_acos_xpu_complex32,failed,AssertionError: Tensor-likes are not close!
 test_ops_xpu.py::TestCommonXPU,test_compare_cpu_nn_functional_softshrink_xpu_bfloat16,failed,AssertionError: Tensor-likes are not close!
 NA,NA,failed,RuntimeError: Native API failed. Native API returns: -36 (PI_ERROR_INVALID_QUEUE) -36 (PI_ERROR_INVALID_QUEUE)
-NA,NA,failed,AssertionError: Tensor-likes are not close! \nMismatched elements: 540 / 640 (84.4%)\n"Greatest absolute difference: 0.00005278512835502625 at index (1, 45) (up to 1e-05 allowed)"\n"Greatest relative difference: 0.0000021018216609955 at index (8, 26) (up to 1.3e-06 allowed)"
+test_modules_xpu.py::TestModuleXPU,test_non_contiguous_tensors_nn_LazyConv3d_xpu_float32,failed,AssertionError: Tensor-likes are not close! \nMismatched elements: 540 / 640 (84.4%)\n"Greatest absolute difference: 0.00005278512835502625 at index (1, 45) (up to 1e-05 allowed)"\n"Greatest relative difference: 0.0000021018216609955 at index (8, 26) (up to 1.3e-06 allowed)"
