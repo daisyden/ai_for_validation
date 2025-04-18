@@ -33,7 +33,7 @@ def upload_rag_file(rag_file, host_ip=DEFAULT_HOST_IP):
     return response
 
 delete_rag_file("all")
-upload_rag_file("result_0418.txt")
+upload_rag_file("results_0418.txt")
 
 import csv
 with open('test_case.csv', 'r') as csvfile:
@@ -49,7 +49,7 @@ with open('test_case.csv', 'r') as csvfile:
         request = {
                 "messages": message,
                 "stream": False,
-                "top_n": 5,
+                "top_n": 3,
             }
         
         QnA_response=QnA(request)
