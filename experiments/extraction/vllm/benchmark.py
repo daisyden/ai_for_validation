@@ -15,6 +15,13 @@ def QnA(request, host_ip=DEFAULT_HOST_IP):
     response = requests.post(url, headers=headers, json=request)
     return response
 
+def delete_rag_file(rag_file, host_ip=DEFAULT_HOST_IP):
+    url = f"http://{host_ip}:6007/v1/dataprep/delete"
+    headers = {"Content-Type": "application/json"}
+    payload = {"file_path": rag_file}
+
+    response = requests.post(url, headers=headers, json=payload)
+    return response
 
 def upload_rag_file(rag_file, host_ip=DEFAULT_HOST_IP):
     url = f"http://{host_ip}:6007/v1/dataprep/ingest"
@@ -25,20 +32,24 @@ def upload_rag_file(rag_file, host_ip=DEFAULT_HOST_IP):
 
     return response
 
+delete_rag_file("all")
+upload_rag_file("result_0418.txt")
+
 import csv
 with open('test_case.csv', 'r') as csvfile:
-    import pdb
-    pdb.set_trace()
     _reader = csv.reader(csvfile, quotechar=',')
     for row in _reader:
-        test_case = row[1] + " " + row[2]
-        result = row[3]
-        err_msg = "".join(row[4:])
-        message = f"unit test {test_case} got {result} with error message {err_msg}, is it a known issue? If yes, please return the issue id? Who is the assignee of the issue and what are the root causes and resolutions?"
-
+        print("#######################################\n")
+        test_case = row[0] + " " + row[1]
+        result = row[2]
+        err_msg = "".join(row[3:])
+        #message = f"unit test {test_case} got {result} with error message {err_msg}, is it a known issue no matter closed or open? If yes, please return the issue id? Who is the assignee of the issue and what are the root causes and resolutions?"
+        #message = f"Unit test {test_case} returned {result} with the following error message: {err_msg}. Is this a known issue based on the RAG search results? Should all issues retrieved by RAG—regardless of whether they are closed—be considered known issues? If yes, please provide the issue ID. Also, who is the assignee of the issue, and what are the identified root causes and proposed resolutions?"
+        message = f"Unit test {test_case} returned failed returned: {err_msg}."
         request = {
                 "messages": message,
-                "stream": False
+                "stream": False,
+                "top_n": 5,
             }
         
         QnA_response=QnA(request)
