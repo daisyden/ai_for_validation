@@ -6,7 +6,13 @@ import json
 import os
 import re
 
-from comps import MegaServiceEndpoint, MicroService, ServiceOrchestrator, ServiceRoleType, ServiceType
+from comps import (
+    MegaServiceEndpoint,
+    MicroService,
+    ServiceOrchestrator,
+    ServiceRoleType,
+    ServiceType,
+)
 from comps.cores.mega.utils import handle_message
 from comps.cores.proto.api_protocol import (
     ChatCompletionRequest,
@@ -25,7 +31,11 @@ class ChatTemplate:
     @staticmethod
     def generate_rag_prompt(question, documents):
         context_str = "\n".join(documents)
-        if context_str and len(re.findall("[\u4e00-\u9fff]", context_str)) / len(context_str) >= 0.3:
+        if (
+            context_str
+            and len(re.findall("[\u4e00-\u9fff]", context_str)) / len(context_str)
+            >= 0.3
+        ):
             # chinese context
             template = """
 ### 你将扮演一个乐于助人、尊重他人并诚实的助手，你的目标是帮助用户解答问题。有效地利用来自本地知识库的搜索结果。确保你的回答中只包含相关信息。如果你不确定问题的答案，请避免分享不准确的信息。
@@ -37,10 +47,12 @@ class ChatTemplate:
             template = """
 ### You are a helpful, respectful, and honest assistant tasked with determining whether a failed unit test case is a known issue. \
 Please refer to the search results from the local knowledge base. All issues retrieved by RAG, regardless of status, if matched, they should be treated as known issues \
-If yes, provide the issue ID, the assignee, and summarize the root cause and resolution. \
-If no, please also help to infer the root cause of the issue and provide suggestions for resolution. \    
+If yes, provide the issue id, issue state, issue description, issue owner, issue root cause and solution information. \
+If no, return the issue id, issue state and issue owner as N/A and give some insights in issue description, issue root cause and solution. \
 Only include information relevant to the question. Do not provide false information if unsure. \
-Keep the answer concise, within three sentences. \n
+Please generate a valid json for the information collected in English only. \
+Please provide details and don't generate unrelated informations not addressed in the prompt. \
+Please ensure the generated output is a valid json and without repeated information. \n
 ### Search results: {context} \n
 ### Question: {question} \n
 ### Answer:
@@ -60,6 +72,25 @@ RERANK_SERVER_PORT = int(os.getenv("RERANK_SERVER_PORT", 80))
 LLM_SERVER_HOST_IP = os.getenv("LLM_SERVER_HOST_IP", "0.0.0.0")
 LLM_SERVER_PORT = int(os.getenv("LLM_SERVER_PORT", 80))
 LLM_MODEL = os.getenv("LLM_MODEL", "meta-llama/Meta-Llama-3-8B-Instruct")
+
+from pydantic import BaseModel
+
+
+class KnownIssue(BaseModel):
+    issue_id: int
+    issue_state: str
+    issue_description: str
+    issue_owner: str
+    issue_root_cause: str
+    solution: str
+
+
+class TriageResult(BaseModel):
+    issues: list[KnownIssue]
+    final_answer: str
+
+
+json_schema = TriageResult.model_json_schema()
 
 
 def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **kwargs):
@@ -83,11 +114,17 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         # next_inputs["presence_penalty"] = inputs["presence_penalty"]
         # next_inputs["repetition_penalty"] = inputs["repetition_penalty"]
         next_inputs["temperature"] = inputs["temperature"]
+        next_inputs["extra_body"] = {
+            "guided_json": json_schema,
+            "guided_decoding_backend": "xgrammar:no-fallback",
+        }
         inputs = next_inputs
     return inputs
 
 
-def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_dict, **kwargs):
+def align_outputs(
+    self, data, cur_node, inputs, runtime_graph, llm_parameters_dict, **kwargs
+):
     next_data = {}
     if self.services[cur_node].service_type == ServiceType.EMBEDDING:
         assert isinstance(data, list)
@@ -120,12 +157,18 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
                 prompt_template = PromptTemplate.from_template(chat_template)
                 input_variables = prompt_template.input_variables
                 if sorted(input_variables) == ["context", "question"]:
-                    prompt = prompt_template.format(question=data["initial_query"], context="\n".join(docs))
+                    prompt = prompt_template.format(
+                        question=data["initial_query"], context="\n".join(docs)
+                    )
                 elif input_variables == ["question"]:
                     prompt = prompt_template.format(question=data["initial_query"])
                 else:
-                    print(f"{prompt_template} not used, we only support 2 input variables ['question', 'context']")
-                    prompt = ChatTemplate.generate_rag_prompt(data["initial_query"], docs)
+                    print(
+                        f"{prompt_template} not used, we only support 2 input variables ['question', 'context']"
+                    )
+                    prompt = ChatTemplate.generate_rag_prompt(
+                        data["initial_query"], docs
+                    )
             else:
                 prompt = ChatTemplate.generate_rag_prompt(data["initial_query"], docs)
 
@@ -149,18 +192,25 @@ def align_outputs(self, data, cur_node, inputs, runtime_graph, llm_parameters_di
             prompt_template = PromptTemplate.from_template(chat_template)
             input_variables = prompt_template.input_variables
             if sorted(input_variables) == ["context", "question"]:
-                prompt = prompt_template.format(question=prompt, context="\n".join(reranked_docs))
+                prompt = prompt_template.format(
+                    question=prompt, context="\n".join(reranked_docs)
+                )
             elif input_variables == ["question"]:
                 prompt = prompt_template.format(question=prompt)
             else:
-                print(f"{prompt_template} not used, we only support 2 input variables ['question', 'context']")
+                print(
+                    f"{prompt_template} not used, we only support 2 input variables ['question', 'context']"
+                )
                 prompt = ChatTemplate.generate_rag_prompt(prompt, reranked_docs)
         else:
             prompt = ChatTemplate.generate_rag_prompt(prompt, reranked_docs)
 
         next_data["inputs"] = prompt
 
-    elif self.services[cur_node].service_type == ServiceType.LLM and not llm_parameters_dict["stream"]:
+    elif (
+        self.services[cur_node].service_type == ServiceType.LLM
+        and not llm_parameters_dict["stream"]
+    ):
         if "faqgen" in self.services[cur_node].endpoint:
             next_data = data
         else:
@@ -184,7 +234,9 @@ def align_generator(self, gen, **kwargs):
             # sometimes yield empty chunk, do a fallback here
             json_data = json.loads(json_str)
             if "ops" in json_data and "op" in json_data["ops"][0]:
-                if "value" in json_data["ops"][0] and isinstance(json_data["ops"][0]["value"], str):
+                if "value" in json_data["ops"][0] and isinstance(
+                    json_data["ops"][0]["value"], str
+                ):
                     yield f"data: {repr(json_data['ops'][0]['value'].encode('utf-8'))}\n\n"
                 else:
                     pass
@@ -332,7 +384,9 @@ class ChatQnAService:
         #     service_type=ServiceType.GUARDRAIL,
         # )
         # self.megaservice.add(guardrail_in).add(embedding).add(retriever).add(rerank).add(llm).add(guardrail_out)
-        self.megaservice.add(guardrail_in).add(embedding).add(retriever).add(rerank).add(llm)
+        self.megaservice.add(guardrail_in).add(embedding).add(retriever).add(
+            rerank
+        ).add(llm)
         self.megaservice.flow_to(guardrail_in, embedding)
         self.megaservice.flow_to(embedding, retriever)
         self.megaservice.flow_to(retriever, rerank)
@@ -391,20 +445,40 @@ class ChatQnAService:
             top_k=chat_request.top_k if chat_request.top_k else 10,
             top_p=chat_request.top_p if chat_request.top_p else 0.95,
             temperature=chat_request.temperature if chat_request.temperature else 0.01,
-            frequency_penalty=chat_request.frequency_penalty if chat_request.frequency_penalty else 0.0,
-            presence_penalty=chat_request.presence_penalty if chat_request.presence_penalty else 0.0,
-            repetition_penalty=chat_request.repetition_penalty if chat_request.repetition_penalty else 1.03,
+            frequency_penalty=(
+                chat_request.frequency_penalty
+                if chat_request.frequency_penalty
+                else 0.0
+            ),
+            presence_penalty=(
+                chat_request.presence_penalty if chat_request.presence_penalty else 0.0
+            ),
+            repetition_penalty=(
+                chat_request.repetition_penalty
+                if chat_request.repetition_penalty
+                else 1.03
+            ),
             stream=stream_opt,
-            chat_template=chat_request.chat_template if chat_request.chat_template else None,
+            chat_template=(
+                chat_request.chat_template if chat_request.chat_template else None
+            ),
             model=chat_request.model if chat_request.model else None,
         )
         retriever_parameters = RetrieverParms(
-            search_type=chat_request.search_type if chat_request.search_type else "similarity",
+            search_type=(
+                chat_request.search_type if chat_request.search_type else "similarity"
+            ),
             k=chat_request.k if chat_request.k else 4,
-            distance_threshold=chat_request.distance_threshold if chat_request.distance_threshold else None,
+            distance_threshold=(
+                chat_request.distance_threshold
+                if chat_request.distance_threshold
+                else None
+            ),
             fetch_k=chat_request.fetch_k if chat_request.fetch_k else 20,
             lambda_mult=chat_request.lambda_mult if chat_request.lambda_mult else 0.5,
-            score_threshold=chat_request.score_threshold if chat_request.score_threshold else 0.2,
+            score_threshold=(
+                chat_request.score_threshold if chat_request.score_threshold else 0.2
+            ),
         )
         reranker_parameters = RerankerParms(
             top_n=chat_request.top_n if chat_request.top_n else 1,
