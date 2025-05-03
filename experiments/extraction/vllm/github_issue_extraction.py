@@ -1,13 +1,24 @@
-from enum import Enum
+from openai import OpenAI
+import os
+import httpx
+import requests
 
+from enum import Enum
 from pydantic import BaseModel
 
-from vllm import LLM, SamplingParams
-from vllm.sampling_params import GuidedDecodingParams
+#from vllm import LLM, SamplingParams
+#from vllm.sampling_params import GuidedDecodingParams
 from github_issue import Github_Issue 
 
-# Load the model
-llm = LLM(model="Qwen/Qwen2.5-3B-Instruct", max_model_len=5000)
+DEFAULT_HOST_IP = "10.112.100.138"
+
+# initialize client 
+client = OpenAI(
+    base_url=f"http://{DEFAULT_HOST_IP}:9009/v1",
+    api_key="-",
+    http_client=httpx.Client(trust_env=False)
+)
+
 
 # Data schema
 class IssueDescription(BaseModel):
@@ -22,8 +33,8 @@ class IssueDescription(BaseModel):
 
 json_schema = IssueDescription.model_json_schema()
 
-guided_decoding_params = GuidedDecodingParams(json=json_schema, backend="xgrammar:disable-any-whitespace")
-sampling_params = SamplingParams(guided_decoding=guided_decoding_params, max_tokens=1000, temperature=0, seed=1234)
+#guided_decoding_params = GuidedDecodingParams(json=json_schema, backend="xgrammar:disable-any-whitespace")
+#sampling_params = SamplingParams(guided_decoding=guided_decoding_params, max_tokens=1000, temperature=0, seed=1234)
 
 # Collect all the issues
 repo = "intel/torch-xpu-ops"
@@ -110,17 +121,26 @@ for issue in issues:
                     \nnPlease generate a valid json for the information collected in English only. Please provide details and don't generate unrelated informations not addressed in the prompt. If the information is not collected succussfully, just return 0 for integer dtype or "" for string dtype as the json value. Please ensure the generated output is a valid json and without repeated information. 
                     """
                 print(prompt)
-                outputs = llm.generate(
-                        prompts=prompt,
-                        sampling_params=sampling_params,
+
+                completion = client.chat.completions.create(
+                    model="deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt,
+                        }
+                    ],
+                    extra_body={"guided_json": json_schema, "guided_decoding_backend": "xgrammar:disable-any-whitespace"},
                 )
 
-                outputs[0].outputs[0].text = outputs[0].outputs[0].text.encode('utf-8', 'replace').decode()
-                print("### Result of each chunck:" + str(issue.number) + outputs[0].outputs[0].text)
+                #outputs[0].outputs[0].text = outputs[0].outputs[0].text.encode('utf-8', 'replace').decode()
+                output_text = completion.choices[0].message.content
+
+                print("### Result of each chunck:" + str(issue.number) + output_text)
                 if output_json == None:
-                    output_json = json.loads(outputs[0].outputs[0].text)
+                    output_json = json.loads(output_text)
                 else:
-                    json2 = json.loads(outputs[0].outputs[0].text)
+                    json2 = json.loads(text)
                     output_json = merge_json(output_json, json2)
 
             return output_json
@@ -147,17 +167,23 @@ for issue in issues:
                     \nnPlease generate a json for the information collected in English only. Please provide details and don't generate unrelated informations not addressed in the prompt. If the information is not collected succussfully, just return 0 for integer dtype or "" for string dtype as the json value. Please ensure the generated output is a valid json and without repeated information. 
                     """
 
-                outputs = llm.generate(
-                        prompts=prompt,
-                        sampling_params=sampling_params,
+                completion = client.chat.completions.create(
+                    model="deepseek-ai/DeepSeek-R1-Distill-Qwen-14B",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt,
+                        }
+                    ],
+                    extra_body={"guided_json": json_schema, "guided_decoding_backend": "xgrammar:disable-any-whitespace"},
                 )
 
-                outputs[0].outputs[0].text = outputs[0].outputs[0].text.encode('utf-8', 'replace').decode()
-                print("### Result of each chunck in comments:" + str(issue.number) + outputs[0].outputs[0].text)
+                text = completion.choices[0].message.content
+                print("### Result of each chunck in comments:" + str(issue.number) + text)
                 if output_json == None:
-                    output_json = json.loads(outputs[0].outputs[0].text)
+                    output_json = json.loads(text)
                 else:
-                    json2 = json.loads(outputs[0].outputs[0].text)
+                    json2 = json.loads(text)
                     output_json = merge_json(output_json, json2)
 
             print("\n#### Results of comments: " + str(issue.number) + json.dumps(output_json)) 
