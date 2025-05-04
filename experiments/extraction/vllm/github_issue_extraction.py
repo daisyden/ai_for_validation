@@ -44,6 +44,8 @@ issues = github_issue.get_issues("all")
 
 for issue in issues:
     try:
+        if issue.number != 717:
+            continue
         # skip pull requests 
         if issue.pull_request != None:
             print("\n### Drop the issue becuase it is pull request : " + str(issue.number))
@@ -140,7 +142,7 @@ for issue in issues:
                 if output_json == None:
                     output_json = json.loads(output_text)
                 else:
-                    json2 = json.loads(text)
+                    json2 = json.loads(output_text)
                     output_json = merge_json(output_json, json2)
 
             return output_json
@@ -178,15 +180,16 @@ for issue in issues:
                     extra_body={"guided_json": json_schema, "guided_decoding_backend": "xgrammar:disable-any-whitespace"},
                 )
 
-                text = completion.choices[0].message.content
-                print("### Result of each chunck in comments:" + str(issue.number) + text)
+                output_text = completion.choices[0].message.content
+
+                print("### Result of each chunck in comments:" + str(issue.number) + output_text)
                 if output_json == None:
-                    output_json = json.loads(text)
+                    output_json = json.loads(output_text)
                 else:
-                    json2 = json.loads(text)
+                    json2 = json.loads(output_text)
                     output_json = merge_json(output_json, json2)
 
-            print("\n#### Results of comments: " + str(issue.number) + json.dumps(output_json)) 
+            print("\n#### Results of comments: " + str(issue.number) + json.dumps(output_json))
             return output_json
 
 
@@ -195,13 +198,13 @@ for issue in issues:
             output_json = merge_json(output_json, comments_json)
         #################################################################################
 
-        print("\n#### Merged Results: " + str(issue.number) + json.dumps(output_json)) 
+        print("\n#### Merged Results: " + str(issue.number) + json.dumps(output_json))
 
         with open("results.txt", 'a') as f:
-            f.write("### Merged Result:" + str(issue.number) + json.dumps(output_json))
+            f.write("### Merged Result:" + str(issue.number) + json.dumps(output_json) + "\n")
  
     except:
         print("\n### Result:" + str(issue.number) + " failed to extract") 
         with open("results.txt", 'a') as f:
-            f.write("\n### Result:" + str(issue.number) + " failed to extract")
+            f.write("\n### Result:" + str(issue.number) + " failed to extract\n")
 
