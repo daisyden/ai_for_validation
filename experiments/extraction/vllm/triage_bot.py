@@ -1,8 +1,10 @@
 import os
 import argparse
 from github_issue import Github_Issue 
+from triage import submit_triage_request
 import time
 # Collect all the issues
+
 
 def main():
     parser = argparse.ArgumentParser(description='Download artifacts from all open PRs in a GitHub repository (single process)')
@@ -22,6 +24,7 @@ def main():
     repo = args.repo
     owner = args.owner
     token = args.token
+
     github_issue = Github_Issue(owner + '/' + repo, token)
     issues = github_issue.get_issues("all")
     
@@ -32,10 +35,12 @@ def main():
         if issue.pull_request != None and state == "open":
             pr_number = issue.number
             #owner = issue.login
+            #for testing
+            if pr_number != 1630:
+                continue
     
             runs = github_issue.get_workflow_runs_for_pr(pr_number, token)
             time.sleep(args.delay)
-
     
             if not runs:
                 print(f"No workflow runs found for PR #{pr_number}")
@@ -46,28 +51,46 @@ def main():
 
             if len(runs):
                 run = runs[0]
-
                 pr_dir = os.path.join(args.output_dir, f"PR-{pr_number}")
                 extract_path = os.path.join(pr_dir, f"{artifact_name}-run-{run['id']}")
-             
-                if os.path.isdir(extract_path):
-                    print(extract_path + " exists, skip downloading!")
-                    continue
+                failure_list_path = os.path.join(extract_path, "ut_failure_list.csv")
 
-                artifact = github_issue.get_artifact(run['id'], artifact_name, token)
-                if artifact:
-                    total_artifacts += 1
-                    if github_issue.download_and_extract_artifact(
-                        artifact['id'], artifact_name,
-                        pr_number, run['id'], args.token, args.output_dir
-                    ):
-                        successful_downloads += 1
+                #if os.path.isfile(failure_list_path):
+                #    print(failure_list_path + " exists, skip downloading!")
+                #    continue
 
-                        artifact_found = True
+                #artifact = github_issue.get_artifact(run['id'], artifact_name, token)
+                #if artifact:
+                #    total_artifacts += 1
+                #    if github_issue.download_and_extract_artifact(
+                #        artifact['id'], artifact_name,
+                #        pr_number, run['id'], args.token, args.output_dir
+                #    ):
+                #        successful_downloads += 1
+                #        artifact_found = True
+
+                if os.path.isfile(failure_list_path):
+                    responses = submit_triage_request(failure_list_path, pr_number)
+                    result = ""
+                    no = 1
+                    for response in responses:
+                        import json
+                        try:
+                            data = json.loads(response[7])
+                            triage_result = data
+                        except:
+                            print("triage result is invalid json\n")
+                            triage_result = "N/A"
+                        result = f"{result}\n{no}. {response[1]}.{response[2]} got {response[3]} with {response[4]}, triage_bot result:\n```\n{triage_result}\n```\n"
+                        no = no + 1
+                        
+                    body = "Xpu-ops triage bot UT analaysis result for your reference, only analyzed unique errors:\n" + result
+                    github_issue.add_comment(body, pr_number)
+
                     time.sleep(args.delay)
                     
-                if not artifact_found:
-                    print(f"No '{args.artifact_name}' artifacts found for PR #{pr_number}")
+                #if not artifact_found:
+                #    print(f"No '{args.artifact_name}' artifacts found for PR #{pr_number}")
     
 if __name__ == '__main__':
     main()
