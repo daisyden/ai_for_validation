@@ -142,3 +142,7 @@ class Github_Issue:
             return False
     
     
+    def add_comment(self, body, pr_number):
+        pull = self.repo.get_pull(pr_number)
+        pull.create_issue_comment(body=body) 
+       
