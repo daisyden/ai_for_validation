@@ -82,7 +82,6 @@ def submit_triage_request(fail_list_path, pr_number):
             if QnA_response.status_code==200:
                 result=QnA_response.json()["choices"][0]["message"]["content"]
                 answer = result.split("</think>")[-1].strip()
-                answer = answer.split("json\n")[-1].strip('```')
                 print("### PR " +  str(pr_number) + " Result: " + message + "\n\n" + answer)
                 row_to_append = row.copy()
                 row_to_append.append(answer)
