@@ -24,6 +24,7 @@ client = OpenAI(
 class IssueDescription(BaseModel):
     issue_number: int 
     issue_description: str
+    error_message: str
     reporter: str
     assignee: str
     resolution: str
@@ -41,11 +42,13 @@ repo = "intel/torch-xpu-ops"
 token = ""
 github_issue = Github_Issue(repo, token)
 issues = github_issue.get_issues("all")
+latencies = [] 
 
 for issue in issues:
     try:
-        if issue.number != 717:
-            continue
+        import time
+        extraction_start = time.time()
+
         # skip pull requests 
         if issue.pull_request != None:
             print("\n### Drop the issue becuase it is pull request : " + str(issue.number))
@@ -53,6 +56,8 @@ for issue in issues:
 
         # request issue contents
         issue_contents = issue.body if issue.body != None else ""
+        issue_contents = github_issue.parse_github_issue_attachement(issue_contents, "./attachment")
+
         # Remove version information that is with less information and could impact model result
         where_version = issue_contents.find("### Versions")
         if where_version != -1:
@@ -95,7 +100,8 @@ for issue in issues:
                     
                 if key in json2.keys():
                     if key in [ "issue_description", "resolution", "root_cuase" ]:
-                        value = value + "\n" + json2[key]
+                        if json2[key] not in value:
+                           value = value + "\n" + json2[key]
 
                     if (value == "None" or value == "") and \
                     (json2[key] != None and json2[key] != "None" and json2[key] != ""):
@@ -110,7 +116,8 @@ for issue in issues:
         def extract_description(texts):
             output_json = None
 
-            for text in texts:
+            max_split = 5
+            for text in texts[0:max_split-1]:
                 prompt = f""" 
                     This is a github issue link https://github.com/{repo}/issues/{issue_number}. 
                     The reporter of the issue is {user}, 
@@ -137,7 +144,6 @@ for issue in issues:
 
                 #outputs[0].outputs[0].text = outputs[0].outputs[0].text.encode('utf-8', 'replace').decode()
                 output_text = completion.choices[0].message.content
-
                 print("### Result of each chunck:" + str(issue.number) + output_text)
                 if output_json == None:
                     output_json = json.loads(output_text)
@@ -202,6 +208,10 @@ for issue in issues:
 
         with open("results.txt", 'a') as f:
             f.write("### Merged Result:" + str(issue.number) + json.dumps(output_json) + "\n")
+
+        extraction_end = time.time()
+        latencies.append(extraction_end - extraction_start)
+        print("\n\n*** Latency: {} ms , avg: {} ms\n\n".format(extraction_end - extraction_start, sum(latencies) / len(latencies)))
  
     except:
         print("\n### Result:" + str(issue.number) + " failed to extract") 

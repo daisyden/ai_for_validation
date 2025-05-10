@@ -6,6 +6,7 @@ from github import Auth
 import time
 import os
 import zipfile
+from urllib.parse import urlparse
 
 
 class Github_Issue:
@@ -140,9 +141,113 @@ class Github_Issue:
             if os.path.exists(zip_path):
                 os.remove(zip_path)
             return False
-    
-    
+
+
     def add_comment(self, body, pr_number):
         pull = self.repo.get_pull(pr_number)
         pull.create_issue_comment(body=body) 
-       
+
+
+    def parse_github_issue_attachement(self, content, output_dir):
+        """
+        Download attachment from GitHub issue comment, transform into text if it is a picture and return the merged comment. 
+        """
+        # Create output directory if it doesn't exist
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Process issue body (first comment)
+        content = self._process_content_with_attachments(content, output_dir)
+ 
+        print(f"Download complete. Files saved in {output_dir}/")
+
+        return content
+
+
+    def _process_content_with_attachments(self, text, output_dir):
+        """
+        Helper function to find and download attachments in comment text.
+        """
+        if not text:
+            return
+        result = []
+        # Find all markdown image/attachment links
+        lines = text.split('\n')
+        for line in lines:
+            if '](' in line:  # Simple check for markdown links
+                start = line.find('](') + 2
+                end = line.find(')', start)
+                if start != -1 and end != -1:
+                    url = line[start:end]
+                    if self._is_downloadable_url(url):
+                        filename = self._download_file(url, output_dir)
+
+                        import magic
+                        def get_file_type(file_path):
+                            mime = magic.Magic(mime=True)
+                            file_type = mime.from_file(file_path)
+                            return file_type
+
+                        filename = f"{output_dir}/{filename}"
+                        file_type = get_file_type(filename)
+                        if 'image' in file_type:
+                            from PIL import Image
+                            import pytesseract
+                            image = Image.open(filename)
+                            text = pytesseract.image_to_string(image)
+                            result.append(line[0:start])
+                            result.append(f"\n```\n{text}\n```\n")
+                            result.append(line[end:-1])
+                        if 'text' in file_type:
+                            f = open(filename, "r")
+                            result.append(line[0:start])
+                            text = f.read()
+                            result.append(f"\n```\n{text}\n```\n")
+                            result.append(line[end:-1])
+            else:
+                result.append(line)
+        return "".join(result)
+
+    def _is_downloadable_url(self, url):
+        """
+        Check if the URL points to a downloadable file.
+        """
+        # Common attachment hosts on GitHub
+        downloadable_hosts = [
+            'github.com',
+            'githubusercontent.com',
+            's3.amazonaws.com',  # Sometimes used for GitHub uploads
+            'user-images.githubusercontent.com'
+        ]
+
+        parsed = urlparse(url)
+        if not parsed.scheme in ('http', 'https'):
+            return False
+
+        return any(host in parsed.netloc for host in downloadable_hosts)
+
+    def _download_file(self, url, output_dir):
+        """
+        Download a file from URL to output directory.
+        """
+        try:
+            response = requests.get(url, stream=True)
+            response.raise_for_status()
+
+            # Extract filename from URL
+            filename = os.path.basename(urlparse(url).path)
+            if not filename:
+                filename = f"attachment_{hash(url)}.bin"  # fallback name
+
+            filepath = os.path.join(output_dir, filename)
+
+            # Save the file
+            with open(filepath, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+
+            print(f"Downloaded: {filename}")
+            return filename
+        except Exception as e:
+            print(f"Failed to download {url}: {str(e)}")
+
