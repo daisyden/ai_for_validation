@@ -211,7 +211,7 @@ for issue in issues:
 
         extraction_end = time.time()
         latencies.append(extraction_end - extraction_start)
-        print("\n\n*** Latency: {} ms , avg: {} ms\n\n".format(extraction_end - extraction_start, sum(latencies) / len(latencies)))
+        print("\n\n*** Latency: {} s , avg: {} s\n\n".format(extraction_end - extraction_start, sum(latencies) / len(latencies)))
  
     except:
         print("\n### Result:" + str(issue.number) + " failed to extract") 

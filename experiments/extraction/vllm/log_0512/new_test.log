@@ -1,0 +1,446 @@
+#######################################
+
+Status Code: 200
+Response Body: {"id":"chatcmpl-kQxNmsZyiNqW7LjNd7uvy5","object":"chat.completion","created":1746950512,"model":"chatqna","choices":[{"index":0,"message":{"role":"assistant","content":"Okay, so I need to figure out if the failed unit test `test.distributed.fsdp.test_fsdp_fine_tune.py` with the error `AssertionError: Scalars are not close!` is a known issue. Let me start by looking at the information provided.\n\nFirst, I see that there are three search results provided. Let me go through each one to see if they relate to the issue I'm looking at.\n\nThe first search result is issue 1636. It mentions three FSDP test cases failing with errors like \"AssertionError: Tensor-likes are not close!\" and \"Scalars are not equal!\". The tests that failed include `test_transformer_backend_inductor_fullgraph_True`, `test_fp16_hook_has_wrapping_False_sharding_strategy0`, and `test_fsdp_compile`. The error messages are similar to what I'm seeing, so this seems related. The issue is still open, so maybe it's the same problem.\n\nThe second search result is issue 222. It's about failures in `test_reductions_xpu.py` with errors like \"AssertionError: Scalars are not close!\" and others. It mentions issues with XPU devices and how NaN and INF are handled. The issue is closed, but it's about XPU tests, which might be related since the test in question is `test_hooks_multi_traversal_xpu`. However, the root cause here was different, involving handling of special values and missing kernels.\n\nThe third search result is issue 1504, which talks about accuracy gaps in FSDP tests on XELink hardware. It lists several failed tests, including `test_hooks_multi_traversal_xpu`, and mentions issues with scalar and tensor comparisons. The error messages here include differences in expected and actual values, similar to what I'm seeing. The issue is open, and the assignee is the same as in issue 1636.\n\nSo, the test that failed is `test_hooks_multi_traversal_xpu`, which is mentioned in both issues 1504 and 1636. The error message is about scalars not being close, which matches the problem I'm looking at. \n\nLooking at the root causes, issue 1504 suggests possible synchronization issues, data type mismatches, or incorrect gradient accumulation. Issue 1636 points to problems during compilation and execution, specifically in `run_and_get_code` and `aot_autograd` functions.\n\nThe assignee for both issues is `zhangxiaoli73`, so that's likely the owner to assign the current issue to.\n\nPutting this together, the failed test is part of known issues, specifically issue 1504, which is still open. The root causes point towards FSDP implementation issues on specific hardware, possibly related to data handling during training or synchronization. The suggested solutions would involve reviewing the FSDP implementation, checking for data type mismatches, and ensuring proper synchronization across devices, especially on XELink hardware.\n</think>\n\n```json\n{\n  \"similar_issue_id\": 1504,\n  \"similar_issue_state\": \"open\",\n  \"issue_owner\": \"zhangxiaoli73\",\n  \"issue_description\": \"Accuracy gaps in FSDP tests on XELink hardware were reported. The issue occurs on PVC 1550 with two tiles, and the same problem was observed on 1100 machines with ZE_AFFINITY_MASK=0,1. Several test cases failed, including test_hooks_multi_traversal_xpu, test_ddp_parity_xpu, test_freezing_weights_with_nested_trunk, test_fsdp_optimizer_overlap, and test_multi_forward_cpu. The errors include assertion failures where expected and actual values differ significantly, both in scalar and tensor comparisons. For example, in test_hooks_multi_traversal_xpu, the expected loss was -0.1668 but the actual was -0.1653, showing an absolute difference of 0.0015. Similar discrepancies were found in other tests, such as a 3934.4 difference in test_ddp_parity_xpu and a 0.0499 difference in test_fsdp_optimizer_overlap. The root cause is likely related to the FSDP implementation on XELink hardware, possibly involving synchronization issues, data type mismatches, or incorrect gradient accumulation.\",\n  \"root_causes\": [\n    \"Synchronization issues in distributed training\",\n    \"Data type mismatches during computation\",\n    \"Incorrect gradient accumulation in FSDP implementation\"\n  ],\n  \"suggested_solutions\": [\n    \"Review FSDP implementation for proper synchronization across devices\",\n    \"Check for data type consistency in tensor operations\",\n    \"Ensure accurate gradient accumulation and synchronization\"\n  ]\n}\n```","audio":null},"finish_reason":"stop","metadata":null}],"usage":{"prompt_tokens":0,"total_tokens":0,"completion_tokens":0}}
+### Result: Unit test test.distributed.fsdp.test_fsdp_fine_tune.py test_hooks_multi_traversal_xpu returned failed returned: AssertionError: Scalars are not close!.
+
+```json
+{
+  "similar_issue_id": 1504,
+  "similar_issue_state": "open",
+  "issue_owner": "zhangxiaoli73",
+  "issue_description": "Accuracy gaps in FSDP tests on XELink hardware were reported. The issue occurs on PVC 1550 with two tiles, and the same problem was observed on 1100 machines with ZE_AFFINITY_MASK=0,1. Several test cases failed, including test_hooks_multi_traversal_xpu, test_ddp_parity_xpu, test_freezing_weights_with_nested_trunk, test_fsdp_optimizer_overlap, and test_multi_forward_cpu. The errors include assertion failures where expected and actual values differ significantly, both in scalar and tensor comparisons. For example, in test_hooks_multi_traversal_xpu, the expected loss was -0.1668 but the actual was -0.1653, showing an absolute difference of 0.0015. Similar discrepancies were found in other tests, such as a 3934.4 difference in test_ddp_parity_xpu and a 0.0499 difference in test_fsdp_optimizer_overlap. The root cause is likely related to the FSDP implementation on XELink hardware, possibly involving synchronization issues, data type mismatches, or incorrect gradient accumulation.",
+  "root_causes": [
+    "Synchronization issues in distributed training",
+    "Data type mismatches during computation",
+    "Incorrect gradient accumulation in FSDP implementation"
+  ],
+  "suggested_solutions": [
+    "Review FSDP implementation for proper synchronization across devices",
+    "Check for data type consistency in tensor operations",
+    "Ensure accurate gradient accumulation and synchronization"
+  ]
+}
+```
+
+
+*** Latency: 219.67463898658752 s , avg: 219.67463898658752 s
+
+
+#######################################
+
+Status Code: 200
+Response Body: {"id":"chatcmpl-qkKjQYLoWZtUaMNz5bavyu","object":"chat.completion","created":1746950644,"model":"chatqna","choices":[{"index":0,"message":{"role":"assistant","content":"Okay, so I'm trying to figure out why the unit test `test_distributed_checkpoint.py` is failing with the error message about a timeout in port connections and issues with the CCL. The error message specifically mentions `oneCCL: recv_entry.hpp:63 update: EXCEPTION: RECV entry failed. atl_status: FAILURE`. \n\nLooking at the search results, I see that there's an existing issue #1536 that's very similar. The description there talks about the same test failing randomly with similar error messages involving CCL and MPI-launcher variables. They also mention issues with FSDP state_dict_type() methods and tensor conversions. The root cause seems to be related to communication problems using CCL, possibly due to environment variables or misconfiguration.\n\nSo, comparing this to the current issue, the error message is almost identical, and the test that's failing is the same. The only difference is the specific test method name, but it's still within the same test file. The root cause is likely the same, pointing towards communication issues in CCL, maybe due to environment setup or configuration problems.\n\nI should check if there are any known issues with the current setup, like environment variables not being set correctly or conflicts with other libraries. Maybe the MPI or oneCCL configurations are causing the processes to hang or fail during communication. Also, considering the test environment, if it's running on a different machine or with different hardware, that might affect how CCL is behaving.\n\nTo resolve this, I should look into the CCL and MPI configurations. Ensuring that all necessary environment variables are set properly and that there are no conflicts with other libraries might help. Additionally, checking if the latest versions of oneCCL and PyTorch are compatible and up-to-date could resolve the issue. If the problem persists, diving deeper into the logs to see if there are more specific error messages that can pinpoint the exact communication failure would be the next step.\n</think>\n\n```json\n{\n  \"similar_issue_id\": 1536,\n  \"similar_issue_state\": \"open\",\n  \"issue_owner\": \"ratnampa\",\n  \"issue_description\": \"The test `test_distributed_checkpoint.py` is failing with a timeout in port connections and CCL issues. The error indicates a failure in the allgather operation within CCL, leading to an abort.\",\n  \"root_causes\": [\n    \"Communication issues using CCL, possibly due to incorrect environment variables or misconfiguration.\",\n    \"Warnings about deprecated FSDP state_dict_type() methods and tensor conversion.\"\n  ],\n  \"suggested_solutions\": [\n    \"Check and ensure all necessary environment variables for CCL and MPI are correctly set.\",\n    \"Review and update the CCL configuration to resolve communication issues between processes.\",\n    \"Verify compatibility between oneCCL, PyTorch, and the XPU hardware in use.\",\n    \"Update to the latest versions of oneCCL and PyTorch if compatibility issues are suspected.\"\n  ]\n}\n```","audio":null},"finish_reason":"stop","metadata":null}],"usage":{"prompt_tokens":0,"total_tokens":0,"completion_tokens":0}}
+### Result: Unit test test_distributed_checkpoint.py test_distributed_checkpoint_state_dict_type0_xpu returned failed returned: EXCEPTION: RECV entry failed. atl_status: FAILURE.
+
+```json
+{
+  "similar_issue_id": 1536,
+  "similar_issue_state": "open",
+  "issue_owner": "ratnampa",
+  "issue_description": "The test `test_distributed_checkpoint.py` is failing with a timeout in port connections and CCL issues. The error indicates a failure in the allgather operation within CCL, leading to an abort.",
+  "root_causes": [
+    "Communication issues using CCL, possibly due to incorrect environment variables or misconfiguration.",
+    "Warnings about deprecated FSDP state_dict_type() methods and tensor conversion."
+  ],
+  "suggested_solutions": [
+    "Check and ensure all necessary environment variables for CCL and MPI are correctly set.",
+    "Review and update the CCL configuration to resolve communication issues between processes.",
+    "Verify compatibility between oneCCL, PyTorch, and the XPU hardware in use.",
+    "Update to the latest versions of oneCCL and PyTorch if compatibility issues are suspected."
+  ]
+}
+```
+
+
+*** Latency: 132.15776896476746 s , avg: 175.9162039756775 s
+
+
+#######################################
+
+Status Code: 200
+Response Body: {"id":"chatcmpl-vWHBghTyr4iRxhfVbXi37W","object":"chat.completion","created":1746950734,"model":"chatqna","choices":[{"index":0,"message":{"role":"assistant","content":"Okay, so I need to figure out if the failed unit test case is a known issue. The test that failed is test_set_reduce_scatter_divide_factor in test_fully_shard_comm.py, and the error message is \"ValueError: Cannot use ReduceOp.PREMUL_SUM with XCCL.\"\n\nFirst, I'll look through the provided search results to see if any similar issues are mentioned. \n\nLooking at the results:\n\n1. Issue 1571: The description says \"ValueError: Cannot use ReduceOp.PREMUL_SUM with XCCL\" and it's marked as a known feature gap, not a bug, and pending on oneCCL support. The state is open. This seems exactly like the error we're encountering.\n\n2. Issues 1569, 1565, and 1547 have different error messages and issues, so they don't seem related.\n\nSo, the failed test's error message matches issue 1571 exactly. Therefore, this is a known issue that's currently open and waiting for oneCCL support.\n\nNow, I'll structure the answer accordingly, including the similar issue ID, its state, and provide details about the issue owner, description, root cause, and suggested solutions based on the information from issue 1571.\n</think>\n\n```json\n{\n  \"similar_issue_id\": 1571,\n  \"similar_issue_state\": \"open\",\n  \"issue_owner\": \"zhangxiaoli73\",\n  \"issue_description\": \"ValueError: Cannot use ReduceOp.PREMUL_SUM with XCCL\",\n  \"root_causes\": [\"The issue is identified as a feature gap and not a bug. It is pending on the support for oneCCL.\"],\n  \"suggested_solutions\": [\"This is a known feature gap. The issue is pending on the support for oneCCL. Please refer to the linked issue for updates.\"]\n}\n```","audio":null},"finish_reason":"stop","metadata":null}],"usage":{"prompt_tokens":0,"total_tokens":0,"completion_tokens":0}}
+### Result: Unit test test/distributed/_composable/fsdp/test_fully_shard_comm.py TestFullyShardCommunication.test_set_reduce_scatter_divide_factor returned failed returned: ValueError: Cannot use ReduceOp.PREMUL_SUM with XCCL.
+
+```json
+{
+  "similar_issue_id": 1571,
+  "similar_issue_state": "open",
+  "issue_owner": "zhangxiaoli73",
+  "issue_description": "ValueError: Cannot use ReduceOp.PREMUL_SUM with XCCL",
+  "root_causes": ["The issue is identified as a feature gap and not a bug. It is pending on the support for oneCCL."],
+  "suggested_solutions": ["This is a known feature gap. The issue is pending on the support for oneCCL. Please refer to the linked issue for updates."]
+}
+```
+
+
+*** Latency: 89.49594211578369 s , avg: 147.10945002237955 s
+
+
+#######################################
+
+Status Code: 200
+Response Body: {"id":"chatcmpl-95Md64ahDgfQqvc2U7oEhb","object":"chat.completion","created":1746950894,"model":"chatqna","choices":[{"index":0,"message":{"role":"assistant","content":"Okay, so I'm trying to figure out why the unit test `test_transformer_no_grad_mixed_precision_True_xpu` in `test_fsdp_core.py` is failing. The error message says there's a discrepancy in expected and actual values, specifically that it expected 0 but got -11. This happens in the `_join_processes(fn)` function during mixed precision testing on XPU.\n\nLooking at the search results, I see a few relevant issues. The first one is issue #1475, which has almost the exact same description. It mentions the same test cases failing with the same error message about process exit codes. The state of that issue is \"open,\" so it's still being worked on. The reporter and assignee are both Daisy Den, which might be helpful for assigning ownership.\n\nAnother issue, #1173, involves a fatal Python error with an illegal instruction in a different test, but it's closed. Issue #645 is about test failures related to FP64 emulation and various other tests, but it's also closed. The other issues, #1472 and #1191, don't seem directly related to the problem at hand.\n\nSo, the most similar issue is definitely #1475. It's about the same test failing with the same error, so it's likely the same root cause. The fact that it's still open means it's a known issue that hasn't been resolved yet. The owner should probably be Daisy Den since she's handling #1475.\n\nThe root cause seems to be related to process exit codes during mixed precision testing on XPU. Maybe there's an issue with how processes are being joined or how their exit codes are being handled, especially under mixed precision conditions. The solution might involve debugging the `_join_processes` function to ensure that all processes exit with the expected codes, perhaps adding checks or handling exceptions more gracefully.\n\nI should suggest that the owner look into why process 1 is returning -11 instead of 0. Maybe there's an unhandled exception or a resource management issue. They could add logging to capture what's happening in process 1 and ensure that all processes terminate correctly. Also, reviewing the mixed precision setup might help, as the issue occurs during that phase of testing.\n</think>\n\n```json\n{\n  \"similar_issue_id\": 1475,\n  \"similar_issue_state\": \"open\",\n  \"issue_owner\": \"daisyden\",\n  \"issue_description\": \"Some test cases in test_fsdp_core.py are failing randomly in the _join_processes(fn) function during mixed precision testing on XPU. The error occurs in tests like test_transformer_no_grad_mixed_precision_True_xpu and test_transformer_no_grad_mixed_precision_False_xpu. The error message indicates a discrepancy in expected and actual values, with an assertion error stating that scalars are not equal (Expected 0 but got -11). The failure occurs when comparing exit codes of processes, with process 1 returning -11 instead of the expected 0.\",\n  \"root_causes\": [\n    \"Discrepancy in process exit codes during mixed precision testing on XPU.\",\n    \"Possibly an issue with process management or exception handling in the _join_processes function.\"\n  ],\n  \"suggested_solutions\": [\n    \"Investigate why process 1 returns exit code -11 instead of 0.\",\n    \"Review the _join_processes function for proper process termination handling.\",\n    \"Add logging or debugging to capture the state of processes during mixed precision testing.\"\n  ]\n}\n```","audio":null},"finish_reason":"stop","metadata":null}],"usage":{"prompt_tokens":0,"total_tokens":0,"completion_tokens":0}}
+### Result: Unit test test_fsdp_core.py  test_transformer_no_grad_mixed_precision_True_xpu returned failed returned: self._join_processes(fn) \nFile ""/home/sdp/miniforge3/envs/xpu_op_/lib/python3.10/site-packages/torch/testing/_internal/common_distributed.py"" line 845 in _join_processes\n  self._check_return_codes(elapsed_time) \n  File ""/home/sdp/miniforge3/envs/xpu_op_/lib/python3.10/site-packages/torch/testing/_internal/common_distributed.py"" line 902 in _check_return_codes \n self.assertEqual( \n File ""/home/sdp/miniforge3/envs/xpu_op_/lib/python3.10/site-packages/torch/testing/_internal/common_utils.py"" line 4094 in assertEqual \nraise error_metas.pop()[0].to_error(  # type: ignore[index] \n AssertionError: Scalars are not equal!.
+
+```json
+{
+  "similar_issue_id": 1475,
+  "similar_issue_state": "open",
+  "issue_owner": "daisyden",
+  "issue_description": "Some test cases in test_fsdp_core.py are failing randomly in the _join_processes(fn) function during mixed precision testing on XPU. The error occurs in tests like test_transformer_no_grad_mixed_precision_True_xpu and test_transformer_no_grad_mixed_precision_False_xpu. The error message indicates a discrepancy in expected and actual values, with an assertion error stating that scalars are not equal (Expected 0 but got -11). The failure occurs when comparing exit codes of processes, with process 1 returning -11 instead of the expected 0.",
+  "root_causes": [
+    "Discrepancy in process exit codes during mixed precision testing on XPU.",
+    "Possibly an issue with process management or exception handling in the _join_processes function."
+  ],
+  "suggested_solutions": [
+    "Investigate why process 1 returns exit code -11 instead of 0.",
+    "Review the _join_processes function for proper process termination handling.",
+    "Add logging or debugging to capture the state of processes during mixed precision testing."
+  ]
+}
+```
+
+
+*** Latency: 159.6168761253357 s , avg: 150.2363065481186 s
+
+
+#######################################
+
+Status Code: 200
+Response Body: {"id":"chatcmpl-Jv7n7CEMrS4SMVQ5Wh5qXT","object":"chat.completion","created":1746951023,"model":"chatqna","choices":[{"index":0,"message":{"role":"assistant","content":"Okay, so I need to figure out if the failed unit test case in test_ops_xpu.py, specifically test_compare_cpu_argmin_xpu_int64, is a known issue. The error message is an AssertionError stating that scalars are not close. \n\nLooking at the search results provided, there are a few merged results. The first one is issue 222, which was about failures in test_reductions_xpu.py. The error messages there included issues with scalars and tensors not being close, and the root cause was related to how NaN and INF were handled on XPU versus CPU, as well as cumulative multiplication errors. They fixed it by aligning XPU with CUDA's handling and adjusting accuracy. \n\nThe second result is issue 1475, which is about test failures in test_fsdp_core.py, but the error message is about exit codes, not scalar values. So this doesn't seem related.\n\nThe third result is issue 1472, which is about operator level optimizations and doesn't mention any test failures related to scalars or tensors.\n\nThe current issue is in test_ops_xpu.py, which is similar to the test_reductions_xpu.py in issue 222. Both are related to XPU operations. The error message mentions scalars not being close, which aligns with the issues in issue 222. The root cause there was differences in handling of special values and cumulative operations. \n\nSo, it's likely that the current issue is similar to issue 222, which was closed after being resolved. The root cause would probably be similar, involving how XPU handles certain operations compared to CPU, leading to discrepancies in scalar values during testing. \n\nThe suggested solution would involve reviewing how argmin is implemented on XPU, ensuring consistency with CPU behavior, and possibly adjusting the accuracy checks or how special values are handled. The owner should be PenghuiCheng, as they handled the previous issue.\n</think>\n\n```json\n{\n  \"similar_issue_id\": 222,\n  \"similar_issue_state\": \"closed\",\n  \"issue_owner\": \"PenghuiCheng\",\n  \"issue_description\": \"The test case test_compare_cpu_argmin_xpu_int64 in test_ops_xpu.py is failing with an AssertionError indicating that scalars are not close. This suggests discrepancies in scalar values between CPU and XPU computations, potentially due to differences in handling of special values or numerical precision.\",\n  \"root_causes\": [\n    \"Discrepancies in scalar value handling between CPU and XPU implementations.\",\n    \"Potential issues with numerical precision or special value handling in the argmin operation on XPU.\"\n  ],\n  \"suggested_solutions\": [\n    \"Review and align the XPU argmin implementation with CPU behavior, focusing on scalar value handling and numerical precision.\",\n    \"Adjust accuracy thresholds or add checks for special values if necessary to accommodate differences in XPU computation.\"\n  ]\n}\n```","audio":null},"finish_reason":"stop","metadata":null}],"usage":{"prompt_tokens":0,"total_tokens":0,"completion_tokens":0}}
+### Result: Unit test test_ops_xpu.py  test_compare_cpu_argmin_xpu_int64 returned failed returned: AssertionError: Scalars are not close!.
+
+```json
+{
+  "similar_issue_id": 222,
+  "similar_issue_state": "closed",
+  "issue_owner": "PenghuiCheng",
+  "issue_description": "The test case test_compare_cpu_argmin_xpu_int64 in test_ops_xpu.py is failing with an AssertionError indicating that scalars are not close. This suggests discrepancies in scalar values between CPU and XPU computations, potentially due to differences in handling of special values or numerical precision.",
+  "root_causes": [
+    "Discrepancies in scalar value handling between CPU and XPU implementations.",
+    "Potential issues with numerical precision or special value handling in the argmin operation on XPU."
+  ],
+  "suggested_solutions": [
+    "Review and align the XPU argmin implementation with CPU behavior, focusing on scalar value handling and numerical precision.",
+    "Adjust accuracy thresholds or add checks for special values if necessary to accommodate differences in XPU computation."
+  ]
+}
+```
+
+
+*** Latency: 129.2341387271881 s , avg: 146.0358729839325 s
+
+
+#######################################
+
+Status Code: 200
+Response Body: {"id":"chatcmpl-3HYxq7tXq3zYVqYiPhDvXM","object":"chat.completion","created":1746951187,"model":"chatqna","choices":[{"index":0,"message":{"role":"assistant","content":"Okay, so I need to figure out if the failed unit test in test_ops_xpu.py, specifically the test_compare_cpu_nn_functional_interpolate_bicubic_xpu_float64, is a known issue. The error message is \"RuntimeError: Non-uniform work-groups are not supported by the target device.\" \n\nFirst, I'll look at the search results provided. There are three merged results: 221, 666, and 327. \n\nStarting with issue 221: It's about enabling mode support for XPU devices causing runtime errors. The tests for reductions on XPU failed because mode only supported CPU and CUDA. The error message was similar, mentioning device type 'xpu' not recognized. However, the current issue's error is about non-uniform work-groups, which doesn't seem related to device type recognition. So, probably not the same issue.\n\nNext, issue 666: This one involves test failures in XPU OP Extended UT on Windows. It mentions multiple test failures, including test_ops_xpu.py. The errors include tensor comparisons, device context issues, and unsupported operations. The reporter mentioned some failures could be fixed by rebasing or setting an environment variable. The error message here is about non-uniform work-groups, which might relate to how the XPU handles certain operations, possibly in the context of Windows. But the issue is closed, so maybe it's a known problem but not directly the same as the current issue.\n\nLooking at issue 327: This is about hard-coded CPU/CUDA bias in aten::mode_out, leading to a RuntimeError when using mode() on XPU. The error message here is different, focusing on mode support, so it's not related to the current issue's work-group problem.\n\nSo, none of the search results directly mention non-uniform work-groups. The closest is issue 666, which does involve test_ops_xpu.py failures but for different reasons. Therefore, the similar issue isn't found, so similar_issue_id and similar_issue_state should be N/A.\n\nNow, for the current issue, the owner could be the person who handled XPU issues before, maybe Stonepia or daisyden. The description should mention the specific test failure and the error about non-uniform work-groups. The root cause likely relates to the XPU's limitations in handling certain compute operations, possibly in the interpolation functions. The solution might involve optimizing the code for XPU, maybe using fused operations or adjusting the grid/tile configurations to avoid non-uniform work-groups. Alternatively, adding fallbacks or workarounds for unsupported operations could help.\n</think>\n\n```json\n{\n  \"similar_issue_id\": \"N/A\",\n  \"similar_issue_state\": \"N/A\",\n  \"issue_owner\": \"Stonepia\",\n  \"issue_description\": \"The test_compare_cpu_nn_functional_interpolate_bicubic_xpu_float64 in test_ops_xpu.py failed with a RuntimeError indicating that non-uniform work-groups are not supported by the target device. This suggests an issue with how the XPU handles certain compute operations, particularly in the context of interpolation functions.\",\n  \"root_causes\": [\n    \"The XPU device does not support non-uniform work-groups, which are required for the interpolate_bicubic operation.\",\n    \"The current implementation of the interpolate_bicubic function may not be optimized for XPU's compute capabilities.\"\n  ],\n  \"suggested_solutions\": [\n    \"Optimize the interpolate_bicubic function to use fused operations that are compatible with XPU's capabilities.\",\n    \"Adjust the grid and tile configurations to ensure uniform work-group sizes during computation.\",\n    \"Implement fallback mechanisms or workarounds for operations that the XPU cannot handle natively.\"\n  ]\n}\n```","audio":null},"finish_reason":"stop","metadata":null}],"usage":{"prompt_tokens":0,"total_tokens":0,"completion_tokens":0}}
+### Result: Unit test test_ops_xpu.py  test_compare_cpu_nn_functional_interpolate_bicubic_xpu_float64 returned failed returned: RuntimeError: Non-uniform work-groups are not supported by the target device.
+
+```json
+{
+  "similar_issue_id": "N/A",
+  "similar_issue_state": "N/A",
+  "issue_owner": "Stonepia",
+  "issue_description": "The test_compare_cpu_nn_functional_interpolate_bicubic_xpu_float64 in test_ops_xpu.py failed with a RuntimeError indicating that non-uniform work-groups are not supported by the target device. This suggests an issue with how the XPU handles certain compute operations, particularly in the context of interpolation functions.",
+  "root_causes": [
+    "The XPU device does not support non-uniform work-groups, which are required for the interpolate_bicubic operation.",
+    "The current implementation of the interpolate_bicubic function may not be optimized for XPU's compute capabilities."
+  ],
+  "suggested_solutions": [
+    "Optimize the interpolate_bicubic function to use fused operations that are compatible with XPU's capabilities.",
+    "Adjust the grid and tile configurations to ensure uniform work-group sizes during computation.",
+    "Implement fallback mechanisms or workarounds for operations that the XPU cannot handle natively."
+  ]
+}
+```
+
+
+*** Latency: 164.62481951713562 s , avg: 149.13403073946634 s
+
+
+#######################################
+
+Status Code: 200
+Response Body: {"id":"chatcmpl-qX2rGXYAPef9gxuba2V7dz","object":"chat.completion","created":1746951321,"model":"chatqna","choices":[{"index":0,"message":{"role":"assistant","content":"Okay, so I need to figure out if the failed unit test `test_ops_xpu.py::TestCommonXPU::test_compare_cpu_grid_sampler_2d_xpu_float64` is a known issue. The error message is \"Fatal Python error: Illegal instruction.\" \n\nLooking at the search results, I see two relevant issues. The first is issue #1191, which mentions the same test case and the same error message. It's marked as closed, so maybe it's resolved. The second is issue #1173, which also involves the same test and the same error. It's still open, so perhaps it's the same underlying problem.\n\nIssue #645 talks about test failures with FP64 but doesn't mention the specific test or the \"Illegal instruction\" error. Issue #666 has multiple test failures but doesn't seem directly related to this specific test or error.\n\nSo, the main similar issues are 1191 and 1173. Since 1191 is closed, maybe the fix was applied there, but 1173 is still open. The root cause seems to be related to how pytest interacts with the XPU package when using float64. The solution might involve adjusting how pytest runs or fixing the XPU package's handling of float64.\n\nI should suggest assigning the issue to daisyden since they were the assignee in the related issues. The root cause likely involves a problem with the XPU package's float64 support when using pytest. The solution could be to modify the test setup or fix the package's handling of the data type.\n</think>\n\n```json\n{\n  \"similar_issue_id\": 1173,\n  \"similar_issue_state\": \"open\",\n  \"issue_owner\": \"daisyden\",\n  \"issue_description\": \"The error caused fatal error in extended UT when running `test_ops_xpu.py::TestCommonXPU::test_compare_cpu_grid_sampler_2d_xpu_float64`. The error message indicates a fatal Python error: Illegal instruction. This issue occurs specifically when using pytest with dtype float64 and is reproducible with the provided test case. It works when run directly but fails with pytest. The issue is present in both XPU package versions (20241202 and nightly build) but works with torch cpu package.\",\n  \"root_causes\": [\n    \"The issue arises when using pytest with float64 dtype, causing an illegal instruction error.\",\n    \"The problem is specific to the interaction between pytest and the XPU package's float64 handling.\"\n  ],\n  \"suggested_solutions\": [\n    \"Investigate the interaction between pytest and the XPU package's float64 handling.\",\n    \"Modify the test setup or the XPU package to handle float64 correctly when using pytest.\"\n  ]\n}\n```","audio":null},"finish_reason":"stop","metadata":null}],"usage":{"prompt_tokens":0,"total_tokens":0,"completion_tokens":0}}
+### Result: Unit test test_ops_xpu.py test_compare_cpu_grid_sampler_2d_xpu_float64 returned failed returned: Fatal Python error: Illegal instruction.
+
+```json
+{
+  "similar_issue_id": 1173,
+  "similar_issue_state": "open",
+  "issue_owner": "daisyden",
+  "issue_description": "The error caused fatal error in extended UT when running `test_ops_xpu.py::TestCommonXPU::test_compare_cpu_grid_sampler_2d_xpu_float64`. The error message indicates a fatal Python error: Illegal instruction. This issue occurs specifically when using pytest with dtype float64 and is reproducible with the provided test case. It works when run directly but fails with pytest. The issue is present in both XPU package versions (20241202 and nightly build) but works with torch cpu package.",
+  "root_causes": [
+    "The issue arises when using pytest with float64 dtype, causing an illegal instruction error.",
+    "The problem is specific to the interaction between pytest and the XPU package's float64 handling."
+  ],
+  "suggested_solutions": [
+    "Investigate the interaction between pytest and the XPU package's float64 handling.",
+    "Modify the test setup or the XPU package to handle float64 correctly when using pytest."
+  ]
+}
+```
+
+
+*** Latency: 133.9521460533142 s , avg: 146.96519007001604 s
+
+
+#######################################
+
+Status Code: 200
+Response Body: {"id":"chatcmpl-qyFaHpC6Bd2wRw8KiFgAFh","object":"chat.completion","created":1746951452,"model":"chatqna","choices":[{"index":0,"message":{"role":"assistant","content":"Okay, so I need to figure out if the failed unit test in test_meta_xpu.py is a known issue. The test that failed is test_dispatch_meta_outplace_nn_functional_scaled_dot_product_attention_xpu_bfloat16, and it's throwing a RuntimeError saying \"output 1: meta disagrees with real impl.\"\n\nLooking at the search results, there are two relevant issues. The first one is issue 1437, which also has a RuntimeError about meta data shape mismatch. The error message there mentions that the expected shape was [4,4,3] but got an empty shape. The root cause was a discrepancy between meta data and the actual implementation, possibly due to incorrect meta data generation or device type issues, especially with XPU.\n\nThe second issue is 601, which is broader, involving multiple test failures related to meta disagreements and unsupported functions. It mentions problems with functions like Pow, Addbmm, and others, and it's also about XPU device issues.\n\nThe current test failure is specifically about scaled_dot_product_attention on XPU with bfloat16. Comparing this to issue 1437, both involve the same type of error message and relate to the scaled_dot_product_attention function. The root cause in 1437 was a meta data shape mismatch, which seems similar to what's happening here.\n\nSo, it's likely that the current issue is a duplicate of 1437. The state of 1437 is closed, meaning it's been resolved. Therefore, the similar issue is 1437, and the state is closed.\n\nThe owner should probably be the same as in 1437, which is LuFinch. The issue description should mention the test failure and the error message. The root cause is the meta data shape mismatch, and the solution would involve fixing the meta data generation or ensuring the implementation handles XPU correctly.\n\nI should structure the JSON with these details, making sure not to repeat information and only include what's relevant.\n</think>\n\n```json\n{\n  \"similar_issue_id\": 1437,\n  \"similar_issue_state\": \"closed\",\n  \"issue_owner\": \"LuFinch\",\n  \"issue_description\": \"The test test_dispatch_meta_outplace_nn_functional_scaled_dot_product_attention_xpu_bfloat16 failed with a RuntimeError indicating a discrepancy between the meta data and the actual implementation's output shape for scaled dot product attention on XPU with bfloat16.\",\n  \"root_causes\": [\"Mismatch between meta data and actual implementation output shape for scaled dot product attention on XPU with bfloat16.\"],\n  \"suggested_solutions\": [\"Review and correct the meta data generation for scaled dot product attention on XPU to ensure it aligns with the actual implementation's output shape.\"]\n}\n```","audio":null},"finish_reason":"stop","metadata":null}],"usage":{"prompt_tokens":0,"total_tokens":0,"completion_tokens":0}}
+### Result: Unit test test_meta_xpu.py::TestMetaXPU test_dispatch_meta_outplace_nn_functional_scaled_dot_product_attention_xpu_bfloat16 returned failed returned: "RuntimeError: output 1: meta disagrees with real impl:.
+
+```json
+{
+  "similar_issue_id": 1437,
+  "similar_issue_state": "closed",
+  "issue_owner": "LuFinch",
+  "issue_description": "The test test_dispatch_meta_outplace_nn_functional_scaled_dot_product_attention_xpu_bfloat16 failed with a RuntimeError indicating a discrepancy between the meta data and the actual implementation's output shape for scaled dot product attention on XPU with bfloat16.",
+  "root_causes": ["Mismatch between meta data and actual implementation output shape for scaled dot product attention on XPU with bfloat16."],
+  "suggested_solutions": ["Review and correct the meta data generation for scaled dot product attention on XPU to ensure it aligns with the actual implementation's output shape."]
+}
+```
+
+
+*** Latency: 130.1526436805725 s , avg: 144.8636217713356 s
+
+
+#######################################
+
+Status Code: 200
+Response Body: {"id":"chatcmpl-abmc6BPwkAkLss3XUww33c","object":"chat.completion","created":1746951623,"model":"chatqna","choices":[{"index":0,"message":{"role":"assistant","content":"Okay, so I'm trying to figure out why this unit test is failing. The error message says that for element 1, the expected shape was [4, 4, 3] but the actual shape was empty, which is [ ]. Hmm, that's a problem because the shapes don't match, causing the test to fail.\n\nLooking at the search results, I see three issues related to scaled dot product attention. The first one, issue 1432, is about SDPA outputs being NaN when rows are fully masked. It mentions a shape mismatch between meta and real implementations on XPU. The error message there is similar but not exactly the same as the one I'm seeing. It's about the output shape not matching, which is the same kind of issue.\n\nThen there's issue 1556, which is a NotImplementedError about a missing sharding strategy. That seems different because it's about distributed tensors and mixing Tensor and DTensor types. My error isn't about sharding or distributed operations, so maybe this isn't related.\n\nThe third issue, 1437, has the same error message as what I'm seeing: a shape mismatch between meta and real implementations. The root cause mentioned is a discrepancy in meta data versus the actual output. This seems very similar to my problem. The state is closed, which might mean it's been fixed, but I'm still encountering it.\n\nSo, comparing my issue to these, the most similar is issue 1437 because both involve a shape mismatch in the scaled dot product attention function. The root cause likely relates to how the meta data is generated versus the actual computation, possibly due to device differences like XPU. The solution might involve aligning the meta data with the real implementation, maybe by adjusting how the operation handles different devices or data types.\n\nI should probably look into how the meta data is being handled in the scaled_dot_product_attention function. Maybe there's an inconsistency when using the meta device versus other devices. Also, checking if there are any recent changes in the codebase that might have affected this, especially around XPU support or OneDNN versions.\n\nAnother angle is to see if the tensors involved are correctly converted or handled when on the meta device. Perhaps the function expects a certain shape but isn't getting it because of how the meta device processes the data. Testing with different device types or ensuring that the meta data aligns with real data might help.\n\nIn summary, the issue is likely due to a shape mismatch between the expected and actual outputs in the scaled dot product attention function, possibly related to device-specific handling. The solution would involve ensuring that the meta data correctly reflects the actual output shapes, maybe by updating how the function handles different devices or tensors.\n</think>\n\n```json\n{\n  \"similar_issue_id\": 1437,\n  \"similar_issue_state\": \"closed\",\n  \"issue_owner\": \"LuFinch\",\n  \"issue_description\": \"The unit test failure is due to a shape mismatch between the meta implementation and the real implementation in the scaled dot product attention function. The expected shape was [4, 4, 3] but the actual shape was empty ([]), indicating a discrepancy in how the operation handles different data types or device types.\",\n  \"root_causes\": [\n    \"Discrepancy between meta data and actual output shape in scaled dot product attention function.\",\n    \"Potential issues with device-specific handling, such as XPU support.\"\n  ],\n  \"suggested_solutions\": [\n    \"Ensure that the meta data correctly reflects the actual output shapes, especially when handling different devices or data types.\",\n    \"Review and adjust how the function handles tensors on the meta device to align with real implementation outputs.\",\n    \"Check for any recent code changes affecting meta data generation or device handling in the scaled_dot_product_attention function.\"\n  ]\n}\n```","audio":null},"finish_reason":"stop","metadata":null}],"usage":{"prompt_tokens":0,"total_tokens":0,"completion_tokens":0}}
+### Result: Unit test aten._scaled_dot_product_fused_attention_overrideable.default(tensor(...  device='meta' returned failed returned:  4 3 8)) stride=(96 24 8 1)   tensor(... device='meta' size=(4 4 6 8)) stride=(192 48 8 1)  tensor(... device='meta' size=(4 4 6 8)) stride=(192 48 8 1)  None  0.0  True ) = ( (tensor(... device='meta' size=(4 4 3 8)) stride=(96 24 8 1) tensor(... device='meta' size=(4 4 3)) stride=(12 3 1) None None 3 6 tensor(... device='meta' size=() dtype=torch.int64) stride=() tensor(... device='meta' size=() dtype=torch.int64) stride=() None)) for element 1 was torch.Size([4 4 3]) but real shape was torch.Size([])".
+
+```json
+{
+  "similar_issue_id": 1437,
+  "similar_issue_state": "closed",
+  "issue_owner": "LuFinch",
+  "issue_description": "The unit test failure is due to a shape mismatch between the meta implementation and the real implementation in the scaled dot product attention function. The expected shape was [4, 4, 3] but the actual shape was empty ([]), indicating a discrepancy in how the operation handles different data types or device types.",
+  "root_causes": [
+    "Discrepancy between meta data and actual output shape in scaled dot product attention function.",
+    "Potential issues with device-specific handling, such as XPU support."
+  ],
+  "suggested_solutions": [
+    "Ensure that the meta data correctly reflects the actual output shapes, especially when handling different devices or data types.",
+    "Review and adjust how the function handles tensors on the meta device to align with real implementation outputs.",
+    "Check for any recent code changes affecting meta data generation or device handling in the scaled_dot_product_attention function."
+  ]
+}
+```
+
+
+*** Latency: 171.14785361289978 s , avg: 147.78409197595386 s
+
+
+#######################################
+
+Status Code: 200
+Response Body: {"id":"chatcmpl-uceraUwuXQ5KxbjuhYMwGA","object":"chat.completion","created":1746951777,"model":"chatqna","choices":[{"index":0,"message":{"role":"assistant","content":"Okay, so I'm trying to figure out why the unit test `test_ops_xpu.py::TestCommonXPU.test_dtypes_view_as_complex_xpu` is failing with the error `RuntimeError: value cannot be converted to type float without overflow`. Let me start by understanding the error message. It says there's an overflow when trying to convert a value to a float. That makes me think about data type handling, maybe something is trying to fit into a float when it's too big or not compatible.\n\nLooking at the search results, I see a few issues that mention similar errors. For example, issue 683 had a `RuntimeError` about converting a value to float without overflow in some complex tests. The root cause there was an explicit cast to float in MKLDNN's addbmm implementation. They fixed it by removing that cast and handling complex numbers properly. That seems relevant because the current issue also involves complex data types and a float conversion error.\n\nAnother issue, 436, talks about MKLDNN's addbmm not supporting complex and real data types. The error was similar, and the fix involved handling beta as a complex number instead of casting it to float. This aligns with the current problem, suggesting that the issue might be in how complex numbers are being handled in some operation, possibly involving MKLDNN.\n\nIssue 1198 dealt with dtype mismatches in the `pow` operation, but that's more about Float to Long conversions, which doesn't seem directly related here. Issues 676 and 435 are about other operations and might not be as relevant since they don't mention complex to float overflows.\n\nSo, putting this together, the current issue is likely due to improper handling of complex numbers being cast to float, causing overflow. The root cause is probably in how the data types are managed in the MKLDNN implementation, similar to issues 683 and 436. The solution would involve reviewing the code where complex numbers are being cast to float, ensuring that such casts are handled correctly or avoided when they can cause overflows.\n\nI should suggest looking into the MKLDNN implementation, specifically where complex data types are processed, to see if there's an explicit cast to float that's causing the overflow. Removing such casts or modifying how complex numbers are handled might resolve the issue. Assigning this to someone who works on MKLDNN, like ZhiweiYan-96, makes sense based on previous assignments.\n\nIn summary, the issue is likely due to improper type handling in MKLDNN when dealing with complex numbers, leading to a float overflow. The solution would involve correcting how these types are managed in the relevant code.\n</think>\n\n```json\n{\n  \"similar_issue_id\": 683,\n  \"similar_issue_state\": \"closed\",\n  \"issue_owner\": \"ZhiweiYan-96\",\n  \"issue_description\": \"TestMathBitsXPU failed with RuntimeError due to value overflow when converting complex numbers to float in addbmm operations.\",\n  \"root_causes\": [\n    \"Improper handling of complex numbers leading to float overflow during type conversion in MKLDNN's addbmm implementation.\"\n  ],\n  \"suggested_solutions\": [\n    \"Review and correct the type handling in MKLDNN's addbmm implementation to properly manage complex numbers, avoiding explicit float casts that cause overflow.\"\n  ]\n}\n```","audio":null},"finish_reason":"stop","metadata":null}],"usage":{"prompt_tokens":0,"total_tokens":0,"completion_tokens":0}}
+### Result: Unit test test_ops_xpu.py::TestCommonXPU test_dtypes_view_as_complex_xpu returned failed returned: RuntimeError: value cannot be converted to type float without overflow.
+
+```json
+{
+  "similar_issue_id": 683,
+  "similar_issue_state": "closed",
+  "issue_owner": "ZhiweiYan-96",
+  "issue_description": "TestMathBitsXPU failed with RuntimeError due to value overflow when converting complex numbers to float in addbmm operations.",
+  "root_causes": [
+    "Improper handling of complex numbers leading to float overflow during type conversion in MKLDNN's addbmm implementation."
+  ],
+  "suggested_solutions": [
+    "Review and correct the type handling in MKLDNN's addbmm implementation to properly manage complex numbers, avoiding explicit float casts that cause overflow."
+  ]
+}
+```
+
+
+*** Latency: 153.98951721191406 s , avg: 148.40463449954987 s
+
+
+#######################################
+
+Status Code: 200
+Response Body: {"id":"chatcmpl-9AKB4Vo6kWrKuDiZC5LD3D","object":"chat.completion","created":1746951969,"model":"chatqna","choices":[{"index":0,"message":{"role":"assistant","content":"Okay, so I'm trying to figure out why the unit test `test_ops_xpu.py test_dtypes_fft_fft2_xpu` is failing with the error message about `torch.bfloat16` not working in backward but being listed by OpInfo. Let me break this down step by step.\n\nFirst, I know that `test_ops_xpu.py` is a test file for PyTorch's XPU operations. The specific test `test_dtypes_fft_fft2_xpu` is probably testing the Fast Fourier Transform (FFT) operations on the XPU backend. The error message mentions that `torch.bfloat16` isn't working correctly during backpropagation, even though OpInfo lists it as supported.\n\nLooking at the search results, I see a few related issues. For example, issue 264 mentions problems with the XPU backend, including issues with data types and operations like sparse tensor creation. It also talks about `eq_xpu` not being implemented for `UInt16`, which caused some tests to fail. Another issue, 155, was about `index_add` returning the wrong dtype on XPU, which was fixed by ensuring the boolean dtype was preserved.\n\nIn the current problem, the issue is with `torch.bfloat16` not working in backward passes. Bfloat16 is a data type used for machine learning computations, and it's important that operations support it correctly, especially during backpropagation where gradients are computed.\n\nI think the root cause here might be that the FFT operations on XPU haven't been properly implemented or tested for `torch.bfloat16`. Maybe the backward pass for FFT isn't handling this data type correctly, or there's a missing implementation in the XPU backend for `fft.fft2` with `bfloat16`.\n\nLooking at the previous issues, like issue 264, the solution involved implementing missing operations and ensuring proper data type handling. Similarly, for this issue, the solution might involve adding support for `bfloat16` in the FFT operations on XPU. This could mean updating the ATen kernels or the dispatch stubs to handle `bfloat16` correctly during both forward and backward passes.\n\nI should also consider if there are any existing PRs or issues related to FFT operations on XPU. If not, perhaps the next step is to implement the necessary functions for `fft.fft2` with `bfloat16` and ensure that the backward pass is correctly handled. Additionally, adding tests to verify that `bfloat16` works as expected during backpropagation would be important to prevent similar issues in the future.\n\nSo, putting it all together, the issue is likely due to incomplete support for `bfloat16` in the FFT operations on XPU, leading to failures during the backward pass. The solution would involve enhancing the XPU backend's FFT implementation to correctly handle `bfloat16` and ensuring that all necessary operations are properly implemented and tested.\n</think>\n\n```json\n{\n  \"similar_issue_id\": \"N/A\",\n  \"similar_issue_state\": \"N/A\",\n  \"issue_owner\": \"fengyuan14\",\n  \"issue_description\": \"The unit test `test_ops_xpu.py test_dtypes_fft_fft2_xpu` is failing because `torch.bfloat16` does not work correctly during the backward pass, despite being listed as supported by OpInfo. This indicates an issue with the XPU backend's support for `bfloat16` in FFT operations, particularly during backpropagation.\",\n  \"root_causes\": [\n    \"Incomplete or incorrect implementation of FFT operations for `bfloat16` on the XPU backend.\",\n    \"Missing or incorrect handling of `bfloat16` during the backward pass for `fft.fft2` operations.\"\n  ],\n  \"suggested_solutions\": [\n    \"Implement the necessary FFT operations for `bfloat16` on the XPU backend, ensuring both forward and backward passes are supported.\",\n    \"Update the XPU backend's ATen kernels or dispatch stubs to correctly handle `bfloat16` in FFT operations.\",\n    \"Add tests to verify the correct behavior of `bfloat16` during both forward and backward passes for FFT operations.\"\n  ]\n}\n```","audio":null},"finish_reason":"stop","metadata":null}],"usage":{"prompt_tokens":0,"total_tokens":0,"completion_tokens":0}}
+### Result: Unit test test_ops_xpu.py test_dtypes_fft_fft2_xpu returned failed returned: The following dtypes did not work in backward but are listed by the OpInfo: {torch.bfloat16}..
+
+```json
+{
+  "similar_issue_id": "N/A",
+  "similar_issue_state": "N/A",
+  "issue_owner": "fengyuan14",
+  "issue_description": "The unit test `test_ops_xpu.py test_dtypes_fft_fft2_xpu` is failing because `torch.bfloat16` does not work correctly during the backward pass, despite being listed as supported by OpInfo. This indicates an issue with the XPU backend's support for `bfloat16` in FFT operations, particularly during backpropagation.",
+  "root_causes": [
+    "Incomplete or incorrect implementation of FFT operations for `bfloat16` on the XPU backend.",
+    "Missing or incorrect handling of `bfloat16` during the backward pass for `fft.fft2` operations."
+  ],
+  "suggested_solutions": [
+    "Implement the necessary FFT operations for `bfloat16` on the XPU backend, ensuring both forward and backward passes are supported.",
+    "Update the XPU backend's ATen kernels or dispatch stubs to correctly handle `bfloat16` in FFT operations.",
+    "Add tests to verify the correct behavior of `bfloat16` during both forward and backward passes for FFT operations."
+  ]
+}
+```
+
+
+*** Latency: 192.54373931884766 s , avg: 152.4172803922133 s
+
+
+#######################################
+
+Status Code: 200
+Response Body: {"id":"chatcmpl-L2mmMxgGDwCM4GCpgQgGzf","object":"chat.completion","created":1746952156,"model":"chatqna","choices":[{"index":0,"message":{"role":"assistant","content":"Okay, so I'm trying to figure out why the unit test `test_compiled_autograd_ctx` is failing with the error `torch._dynamo.exc.Unsupported: Attempted to call function marked as skipped`. Let me break this down step by step.\n\nFirst, I remember that this error message is related to PyTorch's Dynamo, which is a compiler for PyTorch graphs. When Dynamo encounters a function that it's marked as skipped, it can't compile that function, leading to this error. So, the test is failing because somewhere in the code, a function that's supposed to be skipped by Dynamo is being called, and that's causing an issue during the test.\n\nLooking at the search results, there's an existing issue number 1618 that's very similar. The description mentions that the error occurs in the same test case, `test_compiled_autograd_ctx`, and the error message is exactly the same. The issue is about the function `current_stream` in `torch/xpu/__init__.py` being skipped by Dynamo, which leads to an exception during backpropagation. The reporter is zxd1997066, and the assignee is guangyey. The issue is still open, so it hasn't been resolved yet.\n\nIn the comments of that issue, Daisyden suggested checking whether `torch.xpu.current_stream()` needs to be skipped during tracing. Guangyey agreed and proposed adding `torch.xpu.current_stream` to `torch_non_c_binding_in_graph_functions` in `trace_rules.py` to resolve the issue. This makes sense because if the function is added to that list, Dynamo would know to skip it, preventing the error.\n\nSo, the current issue I'm looking at seems to be the same as issue 1618. Both involve the same test failing with the same error message, and the root cause is the same function being skipped by Dynamo. The fact that the issue is still open means that it hasn't been fixed yet, so the test is failing because of this unresolved problem.\n\nI should consider who the owner of this issue is. From the search results, the assignee is guangyey, so that's likely the person responsible for fixing this. The issue description should mention that the test fails when trying to call a skipped function, and the root cause is that `current_stream` is marked as skipped, causing an exception during backpropagation.\n\nThe suggested solution, as per the comments, is to add `torch.xpu.current_stream` to the list of functions that Dynamo should skip. This would involve modifying `trace_rules.py` to include this function in `torch_non_c_binding_in_graph_functions`. This change would tell Dynamo to skip tracing this function, preventing the error during the test.\n\nI don't see any other issues that are similar to this one. The other search result, issue 1581, is about a segmentation fault in a different test, so it's unrelated. Therefore, the only similar issue is 1618, which is still open.\n\nIn summary, the failed test is a known issue, and the solution involves modifying the Dynamo configuration to skip the problematic function. The owner should be contacted to address this change.\n</think>\n\n```json\n{\n  \"similar_issue_id\": 1618,\n  \"similar_issue_state\": \"open\",\n  \"issue_owner\": \"guangyey\",\n  \"issue_description\": \"The test `test_compiled_autograd_ctx` fails due to an error when calling a function marked as skipped by PyTorch's Dynamo. The error occurs in `torch/xpu/__init__.py` where `current_stream` is skipped, leading to an exception during backpropagation.\",\n  \"root_causes\": [\n    \"The `current_stream` function is intentionally skipped by Dynamo, causing an exception during the backward pass in the test.\"\n  ],\n  \"suggested_solutions\": [\n    \"Add `torch.xpu.current_stream` to `torch_non_c_binding_in_graph_functions` in `trace_rules.py` to allow proper tracing and skip the function during Dynamo's compilation.\"\n  ]\n}\n```","audio":null},"finish_reason":"stop","metadata":null}],"usage":{"prompt_tokens":0,"total_tokens":0,"completion_tokens":0}}
+### Result: Unit test test.distributed._composable.fsdp.test_fully_shard_compile.TestFullyShardCompile test_compiled_autograd_ctx returned failed returned: torch._dynamo.exc.Unsupported: Attempted to call function marked as skipped.
+
+```json
+{
+  "similar_issue_id": 1618,
+  "similar_issue_state": "open",
+  "issue_owner": "guangyey",
+  "issue_description": "The test `test_compiled_autograd_ctx` fails due to an error when calling a function marked as skipped by PyTorch's Dynamo. The error occurs in `torch/xpu/__init__.py` where `current_stream` is skipped, leading to an exception during backpropagation.",
+  "root_causes": [
+    "The `current_stream` function is intentionally skipped by Dynamo, causing an exception during the backward pass in the test."
+  ],
+  "suggested_solutions": [
+    "Add `torch.xpu.current_stream` to `torch_non_c_binding_in_graph_functions` in `trace_rules.py` to allow proper tracing and skip the function during Dynamo's compilation."
+  ]
+}
+```
+
+
+*** Latency: 186.34960317611694 s , avg: 155.2449739575386 s
+
+
+#######################################
+
+Status Code: 200
+Response Body: {"id":"chatcmpl-ss26vqBjtP485QzWwq3kwi","object":"chat.completion","created":1746952319,"model":"chatqna","choices":[{"index":0,"message":{"role":"assistant","content":"Okay, so I need to figure out if the failed unit test in PyTorch is a known issue. The test that failed is `test/distributed/test_inductor_collectives.py::TestCollectivesInductor::test_dynamo_rewrite_dist_all_gather`, and it's returning a fatal Python error: Segmentation fault. \n\nFirst, I'll look at the search results provided. There are three merged results: 1581, 861, and 1527. \n\nStarting with issue 1581, the description mentions a segmentation fault during the test `test_eager_async_allreduce_inductor_wait`. The error occurs in `test_inductor_collectives.py` at line 335, which is the same file as the current test. The issue involves a fatal Python error and mentions problems with distributed collective operations, C10D functional operations, and autograd issues. The root cause is likely improper handling of collective operations leading to segmentation faults.\n\nNext, issue 861 is about a segmentation fault in `test_torch_xpu.py::test_to_with_tensor`. It involves the TensorImpl destructor and tensor operations, especially in non-blocking mode. The reporter and assignee are mentioned, but the fix isn't detailed. This seems more related to XPU devices and tensor operations, which might not be directly related to the current test in distributed.py.\n\nIssue 1527 deals with an AttributeError related to `__enter__` in the contextlib module during distributed testing. It's about Dynamo failing to trace certain operators, which doesn't seem to directly relate to the segmentation fault in the current issue.\n\nThe current test failure is in `test_inductor_collectives.py`, which is the same file as issue 1581. Both involve distributed collective operations and segmentation faults. The current test is `test_dynamo_rewrite_dist_all_gather`, which might involve similar distributed operations as the allreduce test in issue 1581. The root cause in 1581 was improper handling of collective operations, leading to a segmentation fault. \n\nTherefore, it's reasonable to conclude that the current issue is similar to issue 1581. The root cause likely involves issues with how collective operations are handled in the distributed testing framework, possibly related to C10D or autograd. The suggested solution would involve reviewing the handling of these operations, ensuring proper synchronization, and checking for any unhandled exceptions or improper resource management that could lead to segmentation faults.\n</think>\n\n```json\n{\n  \"similar_issue_id\": 1581,\n  \"similar_issue_state\": \"Open\",\n  \"issue_owner\": \"daniekap\",\n  \"issue_description\": \"Fatal Python error: Segmentation fault occurred during the execution of test_dynamo_rewrite_dist_all_gather in test/distributed/test_inductor_collectives.py. The test fails due to improper handling of distributed collective operations, leading to a segmentation fault. The error is related to C10D functional operations and potential autograd issues.\",\n  \"root_causes\": [\n    \"Improper handling of collective operations in distributed environments.\",\n    \"Potential issues with C10D functional operations and autograd support.\",\n    \"Unhandled exceptions or resource management problems during test execution.\"\n  ],\n  \"suggested_solutions\": [\n    \"Review and ensure proper handling of collective operations in the distributed testing framework.\",\n    \"Check for synchronization issues and ensure all operations are properly managed to prevent segmentation faults.\",\n    \"Investigate and address any unregistered autograd kernels that might be causing deprecated behavior warnings.\"\n  ]\n}\n```","audio":null},"finish_reason":"stop","metadata":null}],"usage":{"prompt_tokens":0,"total_tokens":0,"completion_tokens":0}}
+### Result: Unit test test/distributed/test_inductor_collectives.py::TestCollectivesInductor test_dynamo_rewrite_dist_all_gather returned failed returned: Fatal Python error: Segmentation fault.
+
+```json
+{
+  "similar_issue_id": 1581,
+  "similar_issue_state": "Open",
+  "issue_owner": "daniekap",
+  "issue_description": "Fatal Python error: Segmentation fault occurred during the execution of test_dynamo_rewrite_dist_all_gather in test/distributed/test_inductor_collectives.py. The test fails due to improper handling of distributed collective operations, leading to a segmentation fault. The error is related to C10D functional operations and potential autograd issues.",
+  "root_causes": [
+    "Improper handling of collective operations in distributed environments.",
+    "Potential issues with C10D functional operations and autograd support.",
+    "Unhandled exceptions or resource management problems during test execution."
+  ],
+  "suggested_solutions": [
+    "Review and ensure proper handling of collective operations in the distributed testing framework.",
+    "Check for synchronization issues and ensure all operations are properly managed to prevent segmentation faults.",
+    "Investigate and address any unregistered autograd kernels that might be causing deprecated behavior warnings."
+  ]
+}
+```
+
+
+*** Latency: 163.6296901702881 s , avg: 155.8899521277501 s
+
+
+#######################################
+
+Status Code: 200
+Response Body: {"id":"chatcmpl-Pu8jwGSTKJjvBLovZsNFSX","object":"chat.completion","created":1746952471,"model":"chatqna","choices":[{"index":0,"message":{"role":"assistant","content":"Okay, so I'm trying to figure out why the unit test `test_fuse_matmul_reduce_scatter_A_dims_3_scatter_dim_2` is failing with a `NotImplementedError` related to the operator `symm_mem::fused_matmul_reduce_scatter` on the XPU device. Let me start by understanding the error message and then look into the provided search results to see if this is a known issue.\n\nThe error message says that the operator isn't implemented for XPU, which means the code is trying to use this operator on an XPU device but it's not available there. This is causing the test to fail because it can't proceed as expected. The test is part of the `MicroPipelineTPTest` class, which suggests it's related to distributed tensor parallelism, a common area for such issues.\n\nLooking at the search results, there are two relevant issues: 1551 and 1547. Both involve similar errors with operators not being implemented on XPU. Issue 1551 mentions `fused_scaled_matmul_reduce_scatter`, while issue 1547 is about `fused_matmul_reduce_scatter`. The current test failure is for `fused_matmul_reduce_scatter`, which matches issue 1547 exactly.\n\nIn issue 1547, the problem is that the operator isn't implemented for XPU, leading to test failures in distributed tensor parallelism tests. The assignee is Chao1Han, and the issue is still open. The root cause is the missing implementation of the operator on XPU, which causes the tests to fallback to CPU, affecting performance.\n\nSo, putting this together, the current test failure is a duplicate of issue 1547. The operator in question isn't implemented for XPU, leading to the same kind of test failures as previously documented. The state of the issue is open, meaning it hasn't been resolved yet.\n\nTo summarize, the failed test is encountering a known issue where the required operator isn't supported on XPU. The issue is being tracked, and the solution would involve implementing the operator for XPU devices to prevent the fallback to CPU, which in turn should fix the test failures.\n</think>\n\n```json\n{\n  \"similar_issue_id\": 1547,\n  \"similar_issue_state\": \"open\",\n  \"issue_owner\": \"Chao1Han\",\n  \"issue_description\": \"NotImplementedError: The operator 'symm_mem::fused_matmul_reduce_scatter' is not currently implemented for the XPU device. This error occurs during tests related to distributed tensor parallelism, such as `MicroPipelineTPTest.test_dtensor_seq_par_shard_dim_0` and `MicroPipelineTPTest.test_dtensor_seq_par_shard_dim_1`. The issue is due to the missing implementation of the operator on XPU, causing test failures and fallback to CPU, which may impact performance.\",\n  \"root_causes\": [\n    \"The 'fused_matmul_reduce_scatter' operator is not implemented for XPU, leading to test failures in distributed tensor parallelism scenarios.\"\n  ],\n  \"suggested_solutions\": [\n    \"Implement the 'fused_matmul_reduce_scatter' operator for XPU to resolve the issue and prevent fallback to CPU.\"\n  ]\n}\n```","audio":null},"finish_reason":"stop","metadata":null}],"usage":{"prompt_tokens":0,"total_tokens":0,"completion_tokens":0}}
+### Result: Unit test test/distributed/tensor/parallel/test_micro_pipeline_tp.py::MicroPipelineTPTest test_fuse_matmul_reduce_scatter_A_dims_3_scatter_dim_2 returned failed returned: NotImplementedError: The operator 'symm_mem::fused_matmul_reduce_scatter' is not currently implemented for the XPU device.
+
+```json
+{
+  "similar_issue_id": 1547,
+  "similar_issue_state": "open",
+  "issue_owner": "Chao1Han",
+  "issue_description": "NotImplementedError: The operator 'symm_mem::fused_matmul_reduce_scatter' is not currently implemented for the XPU device. This error occurs during tests related to distributed tensor parallelism, such as `MicroPipelineTPTest.test_dtensor_seq_par_shard_dim_0` and `MicroPipelineTPTest.test_dtensor_seq_par_shard_dim_1`. The issue is due to the missing implementation of the operator on XPU, causing test failures and fallback to CPU, which may impact performance.",
+  "root_causes": [
+    "The 'fused_matmul_reduce_scatter' operator is not implemented for XPU, leading to test failures in distributed tensor parallelism scenarios."
+  ],
+  "suggested_solutions": [
+    "Implement the 'fused_matmul_reduce_scatter' operator for XPU to resolve the issue and prevent fallback to CPU."
+  ]
+}
+```
+
+
+*** Latency: 151.74564290046692 s , avg: 155.59393004008703 s
+
+
+#######################################
+
+Status Code: 200
+Response Body: {"id":"chatcmpl-PmW85yv2E5fsvaqLJiuVPq","object":"chat.completion","created":1746952623,"model":"chatqna","choices":[{"index":0,"message":{"role":"assistant","content":"Okay, so I'm trying to figure out why the unit test `test_gather_object_cpu` is failing with a `RuntimeError` about process 0 timing out. Let me start by looking at the information provided.\n\nFirst, the error message is `RuntimeError: Process 0 terminated or timed out after 300.09047198295593 seconds`. That suggests the test is taking too long or something is causing it to hang. The test in question is part of the distributed testing, specifically involving object collectives on CPU.\n\nLooking at the search results, there's a similar issue with issue number 1535. The description mentions a `RuntimeError` related to process termination or timeout, specifically in distributed testing with oneCCL. The problem was traced back to the Gather OP, where the output didn't match expected values, leading to assertion errors. The solution involved updating to the latest oneCCL master and adjusting the test environment.\n\nAnother relevant result is issue 1598, which had an `UR_RESULT_ERROR_OUT_OF_DEVICE_MEMORY` error. However, that was resolved by updating memory management in distributed collectives, which might not be directly related to the timeout issue.\n\nIssue 1581 involved a segmentation fault during a test, but that's a different kind of error, so probably not related here.\n\nSo, focusing on issue 1535, the root cause was a bug in the Gather operation when using the latest oneCCL master. The fix was to update oneCCL and adjust the environment. Since the current issue is also a timeout in a gather operation, it's likely related.\n\nI should consider that the Gather OP might have a regression in the oneCCL master branch, causing the test to hang or take too long. The test passes with the gold release but fails with the master, which points to a recent change causing the issue.\n\nThe owner for issue 1535 was `ratnampa`, so it's reasonable to assign this new issue to them as well. The root cause would be a similar problem with the Gather OP in the distributed environment, possibly due to synchronization issues or incorrect memory handling.\n\nTo fix this, updating to the latest oneCCL master and ensuring the test environment is correctly set up should help. Additionally, checking for any recent changes in the Gather OP implementation that might have introduced this regression would be important.\n</think>\n\n```json\n{\n  \"similar_issue_id\": 1535,\n  \"similar_issue_state\": \"open\",\n  \"issue_owner\": \"ratnampa\",\n  \"issue_description\": \"The test `test_gather_object_cpu` is failing due to a timeout error, likely related to the Gather operation in distributed testing with oneCCL. The issue may stem from a regression in the Gather OP implementation when using the latest oneCCL master branch.\",\n  \"root_causes\": [\n    \"Regression in the Gather operation implementation in the latest oneCCL master branch.\",\n    \"Potential synchronization issues or incorrect memory handling in distributed environments.\"\n  ],\n  \"suggested_solutions\": [\n    \"Update to the latest oneCCL master branch to ensure compatibility and resolve Gather OP issues.\",\n    \"Review recent changes in the Gather OP implementation to identify and correct any regressions.\",\n    \"Adjust the test environment variables to optimize performance and prevent timeouts.\"\n  ]\n}\n```","audio":null},"finish_reason":"stop","metadata":null}],"usage":{"prompt_tokens":0,"total_tokens":0,"completion_tokens":0}}
+### Result: Unit test test/distributed/test_c10d_object_collectives.py::TestObjectCollectivesCPU test_gather_object_cpu returned failed returned: RuntimeError: Process 0 terminated or timed out after 300.09047198295593 seconds.
+
+```json
+{
+  "similar_issue_id": 1535,
+  "similar_issue_state": "open",
+  "issue_owner": "ratnampa",
+  "issue_description": "The test `test_gather_object_cpu` is failing due to a timeout error, likely related to the Gather operation in distributed testing with oneCCL. The issue may stem from a regression in the Gather OP implementation when using the latest oneCCL master branch.",
+  "root_causes": [
+    "Regression in the Gather operation implementation in the latest oneCCL master branch.",
+    "Potential synchronization issues or incorrect memory handling in distributed environments."
+  ],
+  "suggested_solutions": [
+    "Update to the latest oneCCL master branch to ensure compatibility and resolve Gather OP issues.",
+    "Review recent changes in the Gather OP implementation to identify and correct any regressions.",
+    "Adjust the test environment variables to optimize performance and prevent timeouts."
+  ]
+}
+```
+
+
+*** Latency: 151.87247610092163 s , avg: 155.34583311080934 s
+
+
+#######################################
+
+Status Code: 200
+Response Body: {"id":"chatcmpl-d4M72w7mGwNzE3DaMAvxfs","object":"chat.completion","created":1746952786,"model":"chatqna","choices":[{"index":0,"message":{"role":"assistant","content":"Okay, so I'm trying to figure out why this unit test is failing. The error message says something about oneCCL not supporting the average operation for the scheduler path. Hmm, I've seen similar errors before. Let me think through this step by step.\n\nFirst, the error message is a RuntimeError pointing to oneCCL's coll_param.cpp file. It mentions that the average operation isn't supported in the scheduler path. That sounds familiar. I remember there were some issues in the past where certain operations weren't supported, leading to test failures.\n\nLooking at the search results, there are a couple of similar issues. Issue 1559 and 1508 both have the same error message. Both are related to the average operation not being supported. Issue 1559 is closed, which probably means it was fixed. Issue 1508 is still open but mentions problems with INT64 dtype and average operations. The resolution for 1508 involved updating to the latest oneCCL master, which suggests that the issue might have been fixed in a newer version.\n\nThe current test failure is in test/distributed/_tools/test_fsdp2_mem_tracker.py, specifically when using activation checkpointing. The error is the same as in the past issues, so it's likely related to the same root cause.\n\nSo, the root cause seems to be that the average operation isn't implemented or supported in the scheduler path of oneCCL. This could be because the scheduler path doesn't handle average operations, maybe due to missing code or an incomplete implementation.\n\nNow, thinking about the solution. Since issue 1508 was resolved by updating to the latest oneCCL master, maybe the same approach would work here. Updating the oneCCL library might include fixes for the average operation support. Alternatively, there might be a way to adjust the test to avoid using the unsupported path, but that's probably less ideal.\n\nI should also consider if there are any workarounds or alternative approaches. Maybe the test can be modified to use a different collective operation that's supported, but that might require changes in the test code itself.\n\nIn terms of ownership, the assignees from the past issues were daisyden and ratnampa. It might be best to assign this to one of them, perhaps ratnampa since they handled a similar issue before.\n\nPutting it all together, the issue is likely a known problem related to oneCCL's support for average operations. The solution would involve updating the oneCCL library to the latest version where this issue has been fixed. Alternatively, if that's not possible, adjusting the test to avoid the problematic operation might be necessary.\n</think>\n\n```json\n{\n  \"similar_issue_id\": 1508,\n  \"similar_issue_state\": \"open\",\n  \"issue_owner\": \"ratnampa\",\n  \"issue_description\": \"RuntimeError: oneCCL: coll_param.cpp:455 validate: EXCEPTION: average operation is not supported for the scheduler path\",\n  \"root_causes\": [\"The average operation is not implemented or supported in the scheduler path of the oneCCL library used by PyTorch's distributed functions. This could be due to missing or incomplete implementation of the average operation in the scheduler path, leading to runtime errors when such operations are attempted. The issue also involves problems with INT64 dtype in oneCCL collectives.\"],\n  \"suggested_solutions\": [\"Update to the latest oneCCL master to utilize a fallback mechanism that handles unsupported INT64 and AVG operations without errors. If updating is not feasible, consider modifying the test to avoid using the unsupported average operation in the scheduler path.\"]\n}\n```","audio":null},"finish_reason":"stop","metadata":null}],"usage":{"prompt_tokens":0,"total_tokens":0,"completion_tokens":0}}
+### Result: Unit test test/distributed/_tools/test_fsdp2_mem_tracker.py::TestTrackerFullyShard1DTrainingCompose test_tracker_with_activation_checkpointing returned failed returned: RuntimeError: oneCCL: coll_param.cpp:455 validate: EXCEPTION: average operation is not supported for the scheduler pathRuntimeError: oneCCL: coll_param.cpp:455 validate: EXCEPTION: average operation is not supported for the scheduler path.
+
+```json
+{
+  "similar_issue_id": 1508,
+  "similar_issue_state": "open",
+  "issue_owner": "ratnampa",
+  "issue_description": "RuntimeError: oneCCL: coll_param.cpp:455 validate: EXCEPTION: average operation is not supported for the scheduler path",
+  "root_causes": ["The average operation is not implemented or supported in the scheduler path of the oneCCL library used by PyTorch's distributed functions. This could be due to missing or incomplete implementation of the average operation in the scheduler path, leading to runtime errors when such operations are attempted. The issue also involves problems with INT64 dtype in oneCCL collectives."],
+  "suggested_solutions": ["Update to the latest oneCCL master to utilize a fallback mechanism that handles unsupported INT64 and AVG operations without errors. If updating is not feasible, consider modifying the test to avoid using the unsupported average operation in the scheduler path."]
+}
+```
+
+
+*** Latency: 162.97892093658447 s , avg: 155.82290109992027 s
+
+
+#######################################
+
+Status Code: 200
+Response Body: {"id":"chatcmpl-Gp8w4scoopNbEg3p8DrtEA","object":"chat.completion","created":1746952921,"model":"chatqna","choices":[{"index":0,"message":{"role":"assistant","content":"Okay, so I need to figure out if the failed unit test `test_distributions_xpu.py::TestDistributionsXPU::test_gamma_gpu_sample_xpu` is a known issue. The error message is an AssertionError saying that `-0.06743384440339613` is not less than `-0.259`, which relates to the Gamma distribution's sample being biased.\n\nLooking at the search results, there are three issues mentioned: 1193, 780, and 184. \n\nStarting with issue 1193, the description mentions that some tests failed on the rolling driver but passed on the LTS driver. Specifically, `test_gamma_gpu_sample_xpu` was one of them. The resolution was adding the 'clang::optnone' label, which fixed the issue. The state is closed, so this seems directly related.\n\nIssue 780 is about a dtype mismatch between XPU and CPU outputs for the `native_layer_norm` function. The error is about float32 vs bfloat16, which doesn't seem related to the Gamma distribution test failure.\n\nIssue 184 deals with accuracy issues in various XPU operations, including complex numbers and bfloat16. While it's about XPU accuracy, the specific test failures here are about different operations like tanh, rsqrt, etc., not the Gamma distribution.\n\nSo, the most relevant issue is 1193, which directly mentions the same test failing on the rolling driver. The root cause there was a compiler optimization setting, and the solution was adding a specific label. Since the current issue's test is the same, it's likely a duplicate or related to the same root cause.\n\nTherefore, the similar issue is 1193, which is closed. The issue owner would be the reporter from that issue, possibly PenghuiCheng. The root cause is related to compiler settings, and the solution is to apply the 'clang::optnone' label.\n</think>\n\n```json\n{\n  \"similar_issue_id\": 1193,\n  \"similar_issue_state\": \"closed\",\n  \"issue_owner\": \"PenghuiCheng\",\n  \"issue_description\": \"UT cases which failed on rolling driver and passed on lts driver: test_distributions_xpu.py::TestDistributionsXPU::test_gamma_gpu_sample_xpu test_ops_xpu.py::TestCommonXPU::test_python_ref__refs_div_trunc_rounding_xpu_float64 for test_gamma_gpu_sample_xpu, it will also pass on rolling driver to add 'clang::optnone' label.\",\n  \"root_causes\": [\"The failure was related to the compiler optimization settings; specifically, the absence of 'clang::optnone' label caused the tests to fail on the rolling driver.\"],\n  \"suggested_solutions\": [\"Adding 'clang::optnone' label resolved the issue for test_gamma_gpu_sample_xpu.\"]\n}\n```","audio":null},"finish_reason":"stop","metadata":null}],"usage":{"prompt_tokens":0,"total_tokens":0,"completion_tokens":0}}
+### Result: Unit test test_distributions_xpu.py::TestDistributionsXPU test_gamma_gpu_sample_xpu returned failed returned: "AssertionError: -0.06743384440339613 not less than -0.259 : Gamma(alpha=1.0 beta=0.1).sample() is biased:".
+
+```json
+{
+  "similar_issue_id": 1193,
+  "similar_issue_state": "closed",
+  "issue_owner": "PenghuiCheng",
+  "issue_description": "UT cases which failed on rolling driver and passed on lts driver: test_distributions_xpu.py::TestDistributionsXPU::test_gamma_gpu_sample_xpu test_ops_xpu.py::TestCommonXPU::test_python_ref__refs_div_trunc_rounding_xpu_float64 for test_gamma_gpu_sample_xpu, it will also pass on rolling driver to add 'clang::optnone' label.",
+  "root_causes": ["The failure was related to the compiler optimization settings; specifically, the absence of 'clang::optnone' label caused the tests to fail on the rolling driver."],
+  "suggested_solutions": ["Adding 'clang::optnone' label resolved the issue for test_gamma_gpu_sample_xpu."]
+}
+```
+
+
+*** Latency: 135.22798705101013 s , avg: 154.61143556763145 s
+
+
+#######################################
+
+Traceback (most recent call last):
+  File "/home/sdp/daisyden/ds/opea_rag/ai_for_validation/experiments/extraction/vllm/benchmark.py", line 57, in <module>
+    test_case = row[0] + " " + row[1]
+IndexError: list index out of range

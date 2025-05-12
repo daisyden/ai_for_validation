@@ -32,13 +32,27 @@ def upload_rag_file(rag_file, host_ip=DEFAULT_HOST_IP):
 
     return response
 
+
 delete_rag_file("all")
 upload_rag_file("results.txt")
 
+import argparse
+
+#parser = argparse.ArgumentParser(description='PR UT failure triage')
+#parser.add_argument('--artifact-name', required=True, default='Inductor-XPU-E2E-Data', help='Name of the failure list artifact to triage')
+#parser.add_argument('--output-dir', default='./artifacts', help='Output directory for downloaded artifacts')
+#parser.add_argument('--pr', type=int, help='The PR number')
+
+#args = parser.parse_args()
+latencies = []
+
+#failure_list = f"{args.output_dir}/PR_{str(args.pr)}/{args.artifact_name}-{args.pr}-run-"
 import csv
 with open('test_case.csv', 'r') as csvfile:
     _reader = csv.reader(csvfile, quotechar=',')
+    import time
     for row in _reader:
+        start = time.time()
         print("#######################################\n")
         test_case = row[0] + " " + row[1]
         result = row[2]
@@ -50,7 +64,6 @@ with open('test_case.csv', 'r') as csvfile:
                 "messages": message,
                 "stream": False,
                 "top_n": 3,
-                "max_tokens": 5000,
             }
         
         QnA_response=QnA(request)
@@ -61,4 +74,9 @@ with open('test_case.csv', 'r') as csvfile:
         if QnA_response.status_code==200:
             result=QnA_response.json()["choices"][0]["message"]["content"]
             answer = result.split("</think>")[-1].strip()
-            print("### Result: " + message + "\n" + answer)
+            print("### Result: " + message + "\n\n" + answer)
+
+            end = time.time()
+            latencies.append(end - start)
+            print("\n\n*** Latency: {} s , avg: {} s\n\n".format(end - start, sum(latencies) / len(latencies)))
+
