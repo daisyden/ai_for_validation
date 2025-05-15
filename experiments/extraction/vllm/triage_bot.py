@@ -36,7 +36,7 @@ def main():
             pr_number = issue.number
             #owner = issue.login
             #for testing
-            if pr_number != 1630:
+            if pr_number != 1672:
                 continue
     
             runs = github_issue.get_workflow_runs_for_pr(pr_number, token)
@@ -47,7 +47,7 @@ def main():
                 continue
     
             artifact_found = False
-            artifact_name = args.artifact_name + '-' + str(pr_number)
+            artifact_name = args.artifact_name + '-' + str(pr_number) + "-op_regression-op_regression_dev1-op_transformers-op_extended-op_ut-xpu_distributed"
 
             if len(runs):
                 run = runs[0]
@@ -55,42 +55,34 @@ def main():
                 extract_path = os.path.join(pr_dir, f"{artifact_name}-run-{run['id']}")
                 failure_list_path = os.path.join(extract_path, "ut_failure_list.csv")
 
-                #if os.path.isfile(failure_list_path):
-                #    print(failure_list_path + " exists, skip downloading!")
-                #    continue
-
-                #artifact = github_issue.get_artifact(run['id'], artifact_name, token)
-                #if artifact:
-                #    total_artifacts += 1
-                #    if github_issue.download_and_extract_artifact(
-                #        artifact['id'], artifact_name,
-                #        pr_number, run['id'], args.token, args.output_dir
-                #    ):
-                #        successful_downloads += 1
-                #        artifact_found = True
-
                 if os.path.isfile(failure_list_path):
+                    print(failure_list_path + " exists, skip downloading!")
+                    continue
+
+                artifact = github_issue.get_artifact(run['id'], artifact_name, token)
+                if artifact:
+                    total_artifacts += 1
+                    if github_issue.download_and_extract_artifact(
+                        artifact['id'], artifact_name,
+                        pr_number, run['id'], args.token, args.output_dir
+                    ):
+                        successful_downloads += 1
+                        artifact_found = True
+
+                if artifact_found and os.path.isfile(failure_list_path):
                     responses = submit_triage_request(failure_list_path, pr_number)
                     result = ""
                     no = 1
                     for response in responses:
-                        import json
-                        try:
-                            data = json.loads(response[7])
-                            triage_result = data
-                        except:
-                            print("triage result is invalid json\n")
-                            triage_result = "N/A"
-                        result = f"{result}\n{no}. {response[1]}.{response[2]} got {response[3]} with {response[4]}, triage_bot result:\n```\n{triage_result}\n```\n"
+                        result = f"{result}\n{no}. {response[1]} {response[2]} got {response[3]} with error message \n```\n{response[4]}\n```\n triage bot result:\n{response[7]}\n"
                         no = no + 1
                         
-                    body = "Xpu-ops triage bot UT analaysis result for your reference, only analyzed unique errors:\n" + result
+                    body = "Triage bot UT analaysis result for reference only, please note unique error message only report once:\n" + result
                     github_issue.add_comment(body, pr_number)
 
                     time.sleep(args.delay)
-                    
-                #if not artifact_found:
-                #    print(f"No '{args.artifact_name}' artifacts found for PR #{pr_number}")
+                else:
+                    print(f"No '{args.artifact_name}' artifacts found for PR #{pr_number}")
     
 if __name__ == '__main__':
     main()
