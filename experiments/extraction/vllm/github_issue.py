@@ -148,7 +148,7 @@ class Github_Issue:
         pull.create_issue_comment(body=body) 
 
 
-    def parse_github_issue_attachement(self, content, output_dir):
+    def parse_github_issue_attachment(self, content, output_dir):
         """
         Download attachment from GitHub issue comment, transform into text if it is a picture and return the merged comment. 
         """
@@ -156,7 +156,8 @@ class Github_Issue:
         os.makedirs(output_dir, exist_ok=True)
 
         # Process issue body (first comment)
-        content = self._process_content_with_attachments(content, output_dir)
+        if content != None and content != "":
+            content = self._process_content_with_attachments(content, output_dir)
  
         print(f"Download complete. Files saved in {output_dir}/")
 

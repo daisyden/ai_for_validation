@@ -56,7 +56,7 @@ for issue in issues:
 
         # request issue contents
         issue_contents = issue.body if issue.body != None else ""
-        issue_contents = github_issue.parse_github_issue_attachement(issue_contents, "./attachment")
+        issue_contents = github_issue.parse_github_issue_attachment(issue_contents, "./attachment")
 
         # Remove version information that is with less information and could impact model result
         where_version = issue_contents.find("### Versions")
@@ -66,6 +66,7 @@ for issue in issues:
 
         # request comments content
         comments_page_content = github_issue.get_comments(issue.number)
+        comments_page_content = github_issue.parse_github_issue_attachment(comments_page_content, "./attachment")
         comments_contents = ""
         if comments_page_content == "":
             print("Issue {} has no comments\n".format(issue.number))
