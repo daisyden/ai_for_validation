@@ -104,7 +104,6 @@ class Github_Issue:
             return None
     
     def download_and_extract_artifact(self, artifact_id, artifact_name, pr_number, run_id, token, output_dir):
-        return True
         """Download and extract a specific artifact"""
         url = f"https://api.github.com/repos/{self.repo_name}/actions/artifacts/{artifact_id}/zip"
         headers = {
