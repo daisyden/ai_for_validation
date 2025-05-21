@@ -1,0 +1,89 @@
+https://github.com/intel/torch-xpu-ops/issues/1679 | @RUIJIEZHONG66166, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version |  | @chuanqiw, please help to set owner , ,
+https://github.com/intel/torch-xpu-ops/issues/1678 |  |  | @chuanqiw, please help to set owner, module:Core , ,
+https://github.com/intel/torch-xpu-ops/issues/1645 | @mengfei25, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version, impact |  | @chuanqiw, please help to set module:UT , ,
+https://github.com/intel/torch-xpu-ops/issues/1641 | @xytintel, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version, impact |  | 
+https://github.com/intel/torch-xpu-ops/issues/1636 |  | @zhangxiaoli73, please help to follow up the issue as it is only updated on 2025-05-06 | 
+https://github.com/intel/torch-xpu-ops/issues/1634 | @daisyden, please help to improve reproduce_platform, reproduce_software_version |  | 
+https://github.com/intel/torch-xpu-ops/issues/1626 | @ZhaoqiongZ, please help to improve impact |  | @chuanqiw, please help to set module:UT , ,
+https://github.com/intel/torch-xpu-ops/issues/1624 | @RUIJIEZHONG66166, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version, impact | @, please help to follow up the issue as it is only updated on 2025-04-29 | @chuanqiw, please help to set owner, module:distributions , ,
+https://github.com/intel/torch-xpu-ops/issues/1623 | @zxd1997066, please help to improve error_message, reproduce_steps, impact | @fengyuan14, please help to follow up the issue as it is only updated on 2025-04-28 | 
+https://github.com/intel/torch-xpu-ops/issues/1614 |  | @LuFinch, please help to follow up the issue as it is only updated on 2025-04-29 | 
+https://github.com/intel/torch-xpu-ops/issues/1612 | @mengfei25, please help to improve reproduce_software_version |  | 
+https://github.com/intel/torch-xpu-ops/issues/1606 | @mengfei25, please help to improve error_message | @LuFinch, please help to follow up the issue as it is only updated on 2025-04-24 | 
+https://github.com/intel/torch-xpu-ops/issues/1604 | @ratnampa, please help to improve reproduce_steps, impact |  | 
+https://github.com/intel/torch-xpu-ops/issues/1597 | @jianyizh, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version | @, please help to follow up the issue as it is only updated on 2025-04-23 | @chuanqiw, please help to set owner , ,
+https://github.com/intel/torch-xpu-ops/issues/1592 |  | @zxd1997066, please help to follow up the issue as it is only updated on 2025-04-22 | 
+https://github.com/intel/torch-xpu-ops/issues/1587 | @xytintel, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version, impact | @xytintel, please help to follow up the issue as it is only updated on 2025-04-21 | 
+https://github.com/intel/torch-xpu-ops/issues/1574 | @githubsgi, please help to improve reproduce_steps, impact | @ZhiweiYan-96, please help to follow up the issue as it is only updated on 2025-04-17 | 
+https://github.com/intel/torch-xpu-ops/issues/1556 | @PenghuiCheng, please help to improve reproduce_platform, reproduce_software_version |  | 
+https://github.com/intel/torch-xpu-ops/issues/1555 | @PenghuiCheng, please help to improve reproduce_steps, reproduce_platform, reproduce_software_version | @githubsgi, please help to follow up the issue as it is only updated on 2025-04-24 | 
+https://github.com/intel/torch-xpu-ops/issues/1554 | @chunhuanMeng, please help to improve impact | @chunhuanMeng, please help to follow up the issue as it is only updated on 2025-04-23 | 
+https://github.com/intel/torch-xpu-ops/issues/1551 |  | @Chao1Han, please help to follow up the issue as it is only updated on 2025-04-07 | 
+https://github.com/intel/torch-xpu-ops/issues/1550 | @PenghuiCheng, please help to improve reproduce_platform, reproduce_software_version |  | 
+https://github.com/intel/torch-xpu-ops/issues/1549 | @PenghuiCheng, please help to improve reproduce_steps, reproduce_platform, reproduce_software_version | @Chao1Han, please help to follow up the issue as it is only updated on 2025-04-07 | 
+https://github.com/intel/torch-xpu-ops/issues/1548 | @PenghuiCheng, please help to improve reproduce_steps, reproduce_platform, reproduce_software_version | @Chao1Han, please help to follow up the issue as it is only updated on 2025-04-07 | 
+https://github.com/intel/torch-xpu-ops/issues/1547 | @PenghuiCheng, please help to improve reproduce_platform, reproduce_software_version | @Chao1Han, please help to follow up the issue as it is only updated on 2025-04-07 | 
+https://github.com/intel/torch-xpu-ops/issues/1543 | @airMeng, please help to improve reproduce_platform, reproduce_software_version |  | 
+https://github.com/intel/torch-xpu-ops/issues/1513 | @RUIJIEZHONG66166, please help to improve reproduce_steps, reproduce_platform, reproduce_software_version | @RUIJIEZHONG66166, please help to follow up the issue as it is only updated on 2025-04-17 | 
+https://github.com/intel/torch-xpu-ops/issues/1512 | @ZhaoqiongZ, please help to improve error_message | @LuFinch, please help to follow up the issue as it is only updated on 2025-04-21 | 
+https://github.com/intel/torch-xpu-ops/issues/1510 |  | @Stonepia, please help to follow up the issue as it is only updated on 2025-04-23 | 
+https://github.com/intel/torch-xpu-ops/issues/1509 |  | @syedshahbaaz, please help to follow up the issue as it is only updated on 2025-04-23 | 
+https://github.com/intel/torch-xpu-ops/issues/1506 | @libohao1201, please help to improve error_message, impact | @Stonepia, please help to follow up the issue as it is only updated on 2025-03-25 | 
+https://github.com/intel/torch-xpu-ops/issues/1505 | @libohao1201, please help to improve error_message | @, please help to follow up the issue as it is only updated on 2025-03-25 | @chuanqiw, please help to set owner , ,
+https://github.com/intel/torch-xpu-ops/issues/1504 | @daisyden, please help to improve reproduce_software_version | @zhangxiaoli73, please help to follow up the issue as it is only updated on 2025-03-27 | 
+https://github.com/intel/torch-xpu-ops/issues/1502 | @libohao1201, please help to improve error_message | @, please help to follow up the issue as it is only updated on 2025-03-25 | @chuanqiw, please help to set owner , ,
+https://github.com/intel/torch-xpu-ops/issues/1500 |  | @ZhiweiYan-96, please help to follow up the issue as it is only updated on 2025-03-24 | @chuanqiw, please help to set module:transformers , ,
+https://github.com/intel/torch-xpu-ops/issues/1498 |  | @gaopengff, please help to follow up the issue as it is only updated on 2025-03-24 | 
+https://github.com/intel/torch-xpu-ops/issues/1496 |  | @, please help to follow up the issue as it is only updated on 2025-03-21 | @chuanqiw, please help to set owner , ,
+https://github.com/intel/torch-xpu-ops/issues/1475 |  | @daisyden, please help to follow up the issue as it is only updated on 2025-04-15 | 
+https://github.com/intel/torch-xpu-ops/issues/1468 | @daisyden, please help to improve error_message | @Stonepia, please help to follow up the issue as it is only updated on 2025-04-16 | 
+https://github.com/intel/torch-xpu-ops/issues/1465 | @daisyden, please help to improve impact | @xytintel, please help to follow up the issue as it is only updated on 2025-03-14 | 
+https://github.com/intel/torch-xpu-ops/issues/1453 | @libohao1201, please help to improve impact | @Stonepia, please help to follow up the issue as it is only updated on 2025-04-16 | 
+https://github.com/intel/torch-xpu-ops/issues/1432 |  | @LuFinch, please help to follow up the issue as it is only updated on 2025-03-06 | @chuanqiw, please help to set module:transformers , ,
+https://github.com/intel/torch-xpu-ops/issues/1401 | @huaiyuzh, please help to improve reproduce_software_version | @daisyden, please help to follow up the issue as it is only updated on 2025-02-24 | 
+https://github.com/intel/torch-xpu-ops/issues/1400 |  | @PenghuiCheng, please help to follow up the issue as it is only updated on 2025-02-28 | 
+https://github.com/intel/torch-xpu-ops/issues/1381 | @huaiyuzh, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version |  | 
+https://github.com/intel/torch-xpu-ops/issues/1352 |  | @Stonepia, please help to follow up the issue as it is only updated on 2025-04-16 | 
+https://github.com/intel/torch-xpu-ops/issues/1329 |  | @ZhiweiYan-96, please help to follow up the issue as it is only updated on 2025-02-27 | 
+https://github.com/intel/torch-xpu-ops/issues/1324 |  | @guangyey, please help to follow up the issue as it is only updated on 2025-03-19 | 
+https://github.com/intel/torch-xpu-ops/issues/1305 |  | @Stonepia, please help to follow up the issue as it is only updated on 2025-04-02 | 
+https://github.com/intel/torch-xpu-ops/issues/1276 |  | @LuFinch, please help to follow up the issue as it is only updated on 2025-02-27 | 
+https://github.com/intel/torch-xpu-ops/issues/1261 |  | @tye1, please help to follow up the issue as it is only updated on 2025-04-22 | 
+https://github.com/intel/torch-xpu-ops/issues/1214 |  | @daisyden, please help to follow up the issue as it is only updated on 2025-03-20 | 
+https://github.com/intel/torch-xpu-ops/issues/1195 |  | @Stonepia, please help to follow up the issue as it is only updated on 2024-12-23 | 
+https://github.com/intel/torch-xpu-ops/issues/1171 |  | @gaopengff, please help to follow up the issue as it is only updated on 2025-04-23 | 
+https://github.com/intel/torch-xpu-ops/issues/1165 | @dvrogozh, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version, impact | @RUIJIEZHONG66166, please help to follow up the issue as it is only updated on 2024-12-19 | 
+https://github.com/intel/torch-xpu-ops/issues/1159 |  | @Stonepia, please help to follow up the issue as it is only updated on 2025-02-24 | @chuanqiw, please help to set module:transformers , ,
+https://github.com/intel/torch-xpu-ops/issues/1129 | @jianyizh, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version | @jianyizh, please help to follow up the issue as it is only updated on 2025-02-08 | 
+https://github.com/intel/torch-xpu-ops/issues/1124 | @daisyden, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version | @daisyden, please help to follow up the issue as it is only updated on 2025-04-22 | @chuanqiw, please help to set module:UT , ,
+https://github.com/intel/torch-xpu-ops/issues/1121 | @fengyuan14, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version, impact |  | 
+https://github.com/intel/torch-xpu-ops/issues/1059 | @fengyuan14, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version, impact |  | 
+https://github.com/intel/torch-xpu-ops/issues/1016 | @fengyuan14, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version | @majing921201, please help to follow up the issue as it is only updated on 2024-10-23 | 
+https://github.com/intel/torch-xpu-ops/issues/1009 | @riverliuintel, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version |  | 
+https://github.com/intel/torch-xpu-ops/issues/1005 | @riverliuintel, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version, impact |  | 
+https://github.com/intel/torch-xpu-ops/issues/970 | @fengyuan14, please help to improve reproduce_steps, reproduce_platform, reproduce_software_version | @majing921201, please help to follow up the issue as it is only updated on 2024-10-29 | 
+https://github.com/intel/torch-xpu-ops/issues/969 | @fengyuan14, please help to improve reproduce_steps, reproduce_platform, reproduce_software_version | @majing921201, please help to follow up the issue as it is only updated on 2024-10-23 | 
+https://github.com/intel/torch-xpu-ops/issues/964 | @xytintel, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version, impact | @daisyden, please help to follow up the issue as it is only updated on 2024-10-15 | 
+https://github.com/intel/torch-xpu-ops/issues/954 | @gglin001, please help to improve reproduce_steps, reproduce_platform, reproduce_software_version | @fengyuan14, please help to follow up the issue as it is only updated on 2024-10-15 | 
+https://github.com/intel/torch-xpu-ops/issues/939 | @fengyuan14, please help to improve reproduce_steps, reproduce_platform, reproduce_software_version, impact | @majing921201, please help to follow up the issue as it is only updated on 2024-10-17 | 
+https://github.com/intel/torch-xpu-ops/issues/781 |  | @daisyden, please help to follow up the issue as it is only updated on 2025-02-27 | @chuanqiw, please help to set module:UT , ,
+https://github.com/intel/torch-xpu-ops/issues/772 | @PenghuiCheng, please help to improve reproduce_platform, reproduce_software_version | @ZhiweiYan-96, please help to follow up the issue as it is only updated on 2024-10-15 | 
+https://github.com/intel/torch-xpu-ops/issues/761 | @PenghuiCheng, please help to improve reproduce_platform | @PenghuiCheng, please help to follow up the issue as it is only updated on 2024-10-15 | @chuanqiw, please help to set module:transformers , ,
+https://github.com/intel/torch-xpu-ops/issues/754 | @daisyden, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version, impact | @daisyden, please help to follow up the issue as it is only updated on 2025-04-22 | 
+https://github.com/intel/torch-xpu-ops/issues/725 |  | @retonym, please help to follow up the issue as it is only updated on 2024-11-19 | 
+https://github.com/intel/torch-xpu-ops/issues/711 |  | @ZhiweiYan-96, please help to follow up the issue as it is only updated on 2024-11-18 | 
+https://github.com/intel/torch-xpu-ops/issues/685 | @fengyuan14, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version, impact | @xytintel, please help to follow up the issue as it is only updated on 2025-03-12 | 
+https://github.com/intel/torch-xpu-ops/issues/632 |  | @retonym, please help to follow up the issue as it is only updated on 2025-01-17 | 
+https://github.com/intel/torch-xpu-ops/issues/544 | @fengyuan14, please help to improve reproduce_steps, reproduce_platform, reproduce_software_version | @fengyuan14, please help to follow up the issue as it is only updated on 2025-02-27 | 
+https://github.com/intel/torch-xpu-ops/issues/506 |  | @jianyizh, please help to follow up the issue as it is only updated on 2025-04-23 | 
+https://github.com/intel/torch-xpu-ops/issues/492 |  | @weishi-deng, please help to follow up the issue as it is only updated on 2025-03-12 | 
+https://github.com/intel/torch-xpu-ops/issues/461 | @fengyuan14, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version, impact | @fengyuan14, please help to follow up the issue as it is only updated on 2024-07-16 | 
+https://github.com/intel/torch-xpu-ops/issues/322 | @yuchengliu1, please help to improve reproduce_steps, reproduce_software_version | @liangan1, please help to follow up the issue as it is only updated on 2024-10-15 | 
+https://github.com/intel/torch-xpu-ops/issues/275 |  | @ZhiweiYan-96, please help to follow up the issue as it is only updated on 2024-07-15 | 
+https://github.com/intel/torch-xpu-ops/issues/264 |  | @ZhiweiYan-96, please help to follow up the issue as it is only updated on 2025-01-14 | 
+https://github.com/intel/torch-xpu-ops/issues/253 | @daisyden, please help to improve reproduce_platform, reproduce_software_version |  | 
+https://github.com/intel/torch-xpu-ops/issues/208 | @fengyuan14, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version | @fengyuan14, please help to follow up the issue as it is only updated on 2024-10-15 | 
+https://github.com/intel/torch-xpu-ops/issues/184 |  | @huaiyuzh, please help to follow up the issue as it is only updated on 2024-07-22 | @chuanqiw, please help to set module:OP impl , ,
+https://github.com/intel/torch-xpu-ops/issues/146 | @fengyuan14, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version, impact | @fengyuan14, please help to follow up the issue as it is only updated on 2024-10-15 | 
+https://github.com/intel/torch-xpu-ops/issues/126 | @fengyuan14, please help to improve error_message, reproduce_steps, reproduce_platform, reproduce_software_version, impact | @fengyuan14, please help to follow up the issue as it is only updated on 2024-10-15 | 
+mail to RUIJIEZHONG66166, chuanqiw, mengfei25, xytintel, zhangxiaoli73, daisyden, ZhaoqiongZ, , zxd1997066, fengyuan14, LuFinch, ratnampa, jianyizh, githubsgi, ZhiweiYan-96, PenghuiCheng, chunhuanMeng, Chao1Han, airMeng, Stonepia, syedshahbaaz, libohao1201, gaopengff, huaiyuzh, guangyey, tye1, dvrogozh, majing921201, riverliuintel, gglin001, retonym, weishi-deng, yuchengliu1, liangan1
