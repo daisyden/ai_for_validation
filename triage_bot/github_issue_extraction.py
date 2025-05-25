@@ -24,6 +24,7 @@ client = OpenAI(
 class IssueDescription(BaseModel):
     issue_number: int 
     issue_description: str
+    test_cases: str
     error_message: str
     reporter: str
     assignee: str
@@ -49,9 +50,17 @@ for issue in issues:
         import time
         extraction_start = time.time()
 
+        #if issue.number != 1681:
+        #   continue
+
         # skip pull requests 
         if issue.pull_request != None:
             print("\n### Drop the issue becuase it is pull request : " + str(issue.number))
+            continue
+
+        labels = [ label.name for label in issue.labels ]
+
+        if "enhancement" in labels or "wontfix" in labels or "module: infra" in labels :
             continue
 
         # request issue contents
@@ -100,7 +109,7 @@ for issue in issues:
                 value = item1[1]
                     
                 if key in json2.keys():
-                    if key in [ "issue_description", "resolution", "root_cuase" ]:
+                    if key in [ "issue_description", "resolution", "root_cuase", "error_message", "test_cases" ]:
                         if json2[key] not in value:
                            value = value + "\n" + json2[key]
 
@@ -117,8 +126,8 @@ for issue in issues:
         def extract_description(texts):
             output_json = None
 
-            max_split = 5
-            for text in texts[0:max_split-1]:
+            max_split = min(5, len(texts))
+            for text in texts[0:max_split]:
                 prompt = f""" 
                     This is a github issue link https://github.com/{repo}/issues/{issue_number}. 
                     The reporter of the issue is {user}, 
@@ -126,7 +135,7 @@ for issue in issues:
                     and the state of the issue is {state}.
                     \nThis is the github issue title {issue.title},
                     and issue body {text}, 
-                    Extract the github issue description with error message information from issue tile and issue body,
+                    Extract the github issue description, test cases, and error message information from issue tile and issue body,
                     if possible also extract the resolution and root cause information. 
                     \nnPlease generate a valid json for the information collected in English only. Please provide details and don't generate unrelated informations not addressed in the prompt. If the information is not collected succussfully, just return 0 for integer dtype or "" for string dtype as the json value. Please ensure the generated output is a valid json and without repeated information. 
                     """
@@ -163,7 +172,8 @@ for issue in issues:
         def extract_comments(comments_texts):
             output_json = None
 
-            for text in comments_texts:
+            max_split = min(5, len(texts))
+            for text in comments_texts[0:max_split]:
                 print("\n********* comments {}\n".format(text))
 
                 prompt = f""" 
@@ -173,7 +183,7 @@ for issue in issues:
                     and the state of the issue is {state}.
                     \nAnd this is the comments for this github issue {text}, 
                     Extract the resolution and root cause information from it. 
-                    \nnPlease generate a json for the information collected in English only. Please provide details and don't generate unrelated informations not addressed in the prompt. If the information is not collected succussfully, just return 0 for integer dtype or "" for string dtype as the json value. Please ensure the generated output is a valid json and without repeated information. 
+                    \nnPlease generate a json for the information collected in English only. Please don't generate unrelated informations not addressed in the prompt. If the information is not collected succussfully, just return 0 for integer dtype or "" for string dtype as the json value. Please ensure the generated output is a valid json and without repeated information. 
                     """
 
                 completion = client.chat.completions.create(
