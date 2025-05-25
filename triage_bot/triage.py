@@ -2,7 +2,7 @@ import requests
 import os
 import csv
 
-DEFAULT_HOST_IP = "10.112.100.138"
+DEFAULT_HOST_IP = "10.7.180.119"
 
 
 def QnA(request, host_ip=DEFAULT_HOST_IP):
@@ -40,14 +40,36 @@ def delete_rag_file(rag_file, host_ip=DEFAULT_HOST_IP):
 def upload_rag_file(rag_file, host_ip=DEFAULT_HOST_IP):
     url = f"http://{host_ip}:6007/v1/dataprep/ingest"
 
+    proxy = os.environ["http_proxy"]
+    os.environ["http_proxy"] = ""
+    os.environ["https_proxy"] = ""
+
     with open(rag_file, "rb") as f:
         files = {"files": f}
         response = requests.post(url, files=files)
 
+    os.environ["http_proxy"] = proxy
+    os.environ["https_proxy"] = proxy
+
     return response
 
-#delete_rag_file("all")
-#upload_rag_file("results_0418.txt")
+def upload_rag_file(rag_file, host_ip=DEFAULT_HOST_IP):
+    url = f"http://{host_ip}:6007/v1/dataprep/ingest"
+
+    proxy = os.environ["http_proxy"]
+    os.environ["http_proxy"] = ""
+    os.environ["https_proxy"] = ""
+
+    with open(rag_file, "rb") as f:
+        files = {"files": f}
+        response = requests.post(url, files=files)
+
+    os.environ["http_proxy"] = proxy
+    os.environ["https_proxy"] = proxy
+
+
+    return response
+
 
 def submit_triage_request(fail_list_path, pr_number):
     import csv
@@ -65,11 +87,11 @@ def submit_triage_request(fail_list_path, pr_number):
             else:
                 err_msgs.append(err_msg)
 
-            message = f"Unit test {test_case} returned failed returned: {err_msg}."
+            message = f"Torch-xpu-ops pull request {pr_number} CI unit test {test_case} returned failure with error message: {err_msg}. No edidence it is a random issue."
             request = {
                     "messages": message,
                     "stream": False,
-                    "top_n": 3,
+                    "top_n": 5,
                     "max_tokens": 5000,
                 }
             
