@@ -193,7 +193,7 @@ for issue in issues:
                     \nThis is the github issue title {issue.title},
                     and issue body {text}. 
                     As an expert of software quality control, please help to extract the issue number, reproter, assignee and state, and check whether the issue have concise information about issue_description, error message, impact of the issue, reproduce steps of the issue including python, pytest or shell commands (for example pytest test*.py or python *.py or shell commands), pytorch version and platform information, provide a score and evidence for each information, 2 is with the information and concise and clear, 1 is with the information but not so clear, and 0 is missing the information. Please also extract the module from issue label and also predict a module for the issue base on the issue description espcially the test case classifications, possible modules include core, transformers, UT, distributions, op_imp, and quantization, denpendency, also please provide evidence, if no module can be predicted return na. If possible also score the resolution and root cause information and provide evidence. In order to identify the issue without response for a long time, please also extract the date the issue is created. 
-                    \nnPlease generate a valid formatted json for the information collected in English only. Please provide details and don't generate unrelated informations not addressed in the prompt. If the information is not collected succussfully, just return 0 for integer dtype or "" for string dtype as the json value. Please ensure the generated output is a valid json and without repeated information. 
+                    \nPlease generate a valid formatted json for the information collected in English only. Please provide details and don't generate unrelated informations not addressed in the prompt. If the information is not collected succussfully, just return 0 for integer dtype or "" for string dtype as the json value. Please ensure the generated output is a valid json and without repeated information.
                     """
                 print(prompt)
 
@@ -238,7 +238,7 @@ for issue in issues:
                     and the state of the issue is {state}.
                     \nAnd this is the comments for this github issue {text}, 
                     As an expert of software quanlity control, please check whether the comments provided concise information about resolution and root cause. If the information is concise and clear return 2, if has the inforamtion but not so concise return 1, if no information return 0, please also provide evidence. In order to identify the issue without response for a long time, please also extract the last updated date.
-                    \nnPlease generate a valid formatted json for the information collected in English only. Please provide details and don't generate unrelated informations not addressed in the prompt. If the information is not collected succussfully, just return 0 for integer dtype or "" for string dtype as the json value. Please ensure the generated output is a valid json and without repeated information. 
+                    \nPlease generate a valid formatted json for the information collected in English only. Please provide details and don't generate unrelated informations not addressed in the prompt. If the information is not collected succussfully, just return 0 for integer dtype or "" for string dtype as the json value. Please ensure the generated output is a valid json and without repeated information.
                     """
 
                 completion = client.chat.completions.create(
@@ -278,8 +278,9 @@ for issue in issues:
         latencies.append(extraction_end - extraction_start)
         print("\n\n*** Latency: {} s , avg: {} s\n\n".format(extraction_end - extraction_start, sum(latencies) / len(latencies)))
  
-    except:
+    except Exception as e:
         print("\n### Result:" + str(issue.number) + " failed to extract") 
+        print(repr(e))
         with open("results.txt", 'a') as f:
-            f.write("\n### Result:" + str(issue.number) + " failed to extract\n")
+            f.write("\n### Result:" + str(issue.number) + f" failed to extract\n    {repr(e)}\n")
 

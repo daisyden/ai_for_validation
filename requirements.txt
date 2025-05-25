@@ -1,0 +1,8 @@
+github
+PyGithub
+openai
+requests
+langchain_community
+tiktoken
+python-magic
+python-magic-bin;platform_system=="Windows"
