@@ -1,7 +1,7 @@
 import os
 import argparse
 from github_issue import Github_Issue 
-from triage import submit_triage_request
+from triage import submit_triage_request, delete_rag_file, upload_rag_file
 import time
 # Collect all the issues
 
@@ -13,7 +13,7 @@ def main():
     parser.add_argument('--artifact-name', required=True, help='Name of the artifact to download')
     parser.add_argument('--token', required=True, help='GitHub personal access token')
     parser.add_argument('--output-dir', default='./artifacts', help='Output directory for downloaded artifacts')
-    parser.add_argument('--delay', type=float, default=60, 
+    parser.add_argument('--delay', type=float, default=10, 
                        help='Delay between API requests in seconds (to avoid rate limiting)')
     
     args = parser.parse_args()
@@ -27,7 +27,10 @@ def main():
 
     github_issue = Github_Issue(owner + '/' + repo, token)
     issues = github_issue.get_issues("all")
-    
+
+    delete_rag_file("all")
+    upload_rag_file("results.txt")
+
     total_artifacts = 0
     successful_downloads = 0
     for issue in issues:
@@ -36,8 +39,8 @@ def main():
             pr_number = issue.number
             #owner = issue.login
             #for testing
-            if pr_number != 1672:
-                continue
+            #if pr_number != 1696:
+            #    continue
     
             runs = github_issue.get_workflow_runs_for_pr(pr_number, token)
             time.sleep(args.delay)
@@ -68,17 +71,32 @@ def main():
                     ):
                         successful_downloads += 1
                         artifact_found = True
+                        print("Found failure list for {}\n".format(pr_number))
 
                 if artifact_found and os.path.isfile(failure_list_path):
                     responses = submit_triage_request(failure_list_path, pr_number)
                     result = ""
                     no = 1
                     for response in responses:
-                        result = f"{result}\n{no}. {response[1]} {response[2]} got {response[3]} with error message \n```\n{response[4]}\n```\n triage bot result:\n{response[7]}\n"
+                        result = f"{result}\n{no}. {response[1]} {response[2]} got {response[3]} with error message \n```\n{response[4]}\n```\n Triage bot response:\n{response[7]}\n"
                         no = no + 1
                         
                     body = "Triage bot UT analaysis result for reference only, please note unique error message only report once:\n" + result
-                    github_issue.add_comment(body, pr_number)
+
+                    try:
+                        import json
+                        import pdb
+                        pdb.set_trace()
+                        data = json.loads(response[7].split("```json")[1].split("```")[0])
+                        #if data["similar_issue_id"] != "N/A":
+                        if True:
+                            details = f"<details>\n<summary>@sys_pytorchxpubot triage result for run {run['id']}</summary>{body}</details>"
+                            github_issue.add_comment(details, pr_number)
+                            print("############ similar issue detected {}: {}\n".format(pr_number, body))
+                        else:
+                            print("############ no similar issue found {}: {}\n".format(pr_number, body))
+                    except:
+                        print("Error: PR {} traige response is invalid json\n".format(pr_number))
 
                     time.sleep(args.delay)
                 else:
