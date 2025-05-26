@@ -9,7 +9,16 @@ from pydantic import BaseModel
 
 #from vllm import LLM, SamplingParams
 #from vllm.sampling_params import GuidedDecodingParams
-from github_issue import Github_Issue 
+import sys
+from pathlib import Path
+
+# Get the parent directory (one level up)
+parent_dir = Path(__file__).resolve().parent.parent
+
+# Add it to Python path
+sys.path.append(str(parent_dir))
+
+from github_issue.github_issue import Github_Issue 
 from enum import Enum, IntEnum
 
 #DEFAULT_HOST_IP = "10.112.100.138"
@@ -33,16 +42,21 @@ class score(BaseModel):
 
 class moduleEnum(str, Enum):
     ut = "UT"
-    distributions = "distributions"
+    distributions = "distributed"
     quantization = "quant"
     transformers = "transformers"
     core = "Core"
     op_imp = "OP impl"
     dependency = "dependency bug"
+    infra = "infra"
+    inductor = "inductor"
+    torchbench = "torchbench"
+    build = "build"
     na = "N/A"
 
+
 class ReproduceSteps(BaseModel):
-    steps:  score 
+    steps:  score
     software_version: score
     platform: score
 
@@ -68,8 +82,8 @@ class IssueDescription(BaseModel):
     state: str
     labeled_module: module
     predicted_module: module
-    report_date: updated 
-    last_update: updated 
+    report_date: updated
+    last_update: updated
 
 json_schema = IssueDescription.model_json_schema()
 
@@ -80,7 +94,7 @@ json_schema = IssueDescription.model_json_schema()
 repo = "intel/torch-xpu-ops"
 token = ""
 github_issue = Github_Issue(repo, token)
-issues = github_issue.get_issues("all")
+issues = github_issue.get_issues("open")
 latencies = [] 
 
 for issue in issues:
@@ -88,15 +102,23 @@ for issue in issues:
         import time
         extraction_start = time.time()
 
-        if issue.state == "closed":
-            continue
-        #if issue.number != 1674:
+        #if issue.number != 1693:
         #    continue
+        #import pdb
+        #pdb.set_trace()
 
         # skip pull requests 
         if issue.pull_request != None:
             print("\n### Drop the issue becuase it is pull request : " + str(issue.number))
             continue
+
+        labels = [ label.name for label in issue.labels ]
+        label = ".".join(labels)
+
+        if "skipped" in labels or "module: infra" in labels or "enhancement" in labels:
+            continue
+
+        last_update = issue.updated_at
 
         # request issue contents
         issue_contents = issue.body if issue.body != None else ""
@@ -108,12 +130,6 @@ for issue in issues:
         #     issue_contents = issue_contents[:where_version]
         issue_contents = "Content of #" + str(issue.number) + " is : " + issue_contents
 
-
-        labels = issue.labels
-        if len(labels) > 0:
-            label = [l.name for l in labels]
-        else:
-            label = "N/A"
 
         # request comments content
         comments_page_content = github_issue.get_comments(issue.number)
@@ -181,15 +197,16 @@ for issue in issues:
         def extract_description(texts):
             output_json = None
 
-            max_split = 5
-            for text in texts[0:max_split-1]:
+            max_split = min(5, len(texts))
+            for text in texts[0:max_split]:
                 prompt = f""" 
                     This is a github issue link https://github.com/{repo}/issues/{issue_number}. 
                     The reporter of the issue is {user}, 
                     and the assignee is {assignee},
                     and the state of the issue is {state},
                     and the issue is created at {issue.created_at},
-                    and the labels of the issue are {"".join(label)}.
+                    and the issue is last updated at {last_update},
+                    and the labels of the issue are {label}.
                     \nThis is the github issue title {issue.title},
                     and issue body {text}. 
                     As an expert of software quality control, please help to extract the issue number, reproter, assignee and state, and check whether the issue have concise information about issue_description, error message, impact of the issue, reproduce steps of the issue including python, pytest or shell commands (for example pytest test*.py or python *.py or shell commands), pytorch version and platform information, provide a score and evidence for each information, 2 is with the information and concise and clear, 1 is with the information but not so clear, and 0 is missing the information. Please also extract the module from issue label and also predict a module for the issue base on the issue description espcially the test case classifications, possible modules include core, transformers, UT, distributions, op_imp, and quantization, denpendency, also please provide evidence, if no module can be predicted return na. If possible also score the resolution and root cause information and provide evidence. In order to identify the issue without response for a long time, please also extract the date the issue is created. 
@@ -228,14 +245,16 @@ for issue in issues:
         def extract_comments(comments_texts):
             output_json = None
 
-            for text in comments_texts:
+            max_split = min(5, len(texts))
+            for text in comments_texts[0:max_split]:
                 print("\n********* comments {}\n".format(text))
 
                 prompt = f""" 
                     This is a github issue link https://github.com/{repo}/issues/{issue_number}. 
                     The reporter of the issue is {user}, 
                     and the assignee is {assignee},
-                    and the state of the issue is {state}.
+                    and the state of the issue is {state},
+                    and the issue is last updated at {last_update}.
                     \nAnd this is the comments for this github issue {text}, 
                     As an expert of software quanlity control, please check whether the comments provided concise information about resolution and root cause. If the information is concise and clear return 2, if has the inforamtion but not so concise return 1, if no information return 0, please also provide evidence. In order to identify the issue without response for a long time, please also extract the last updated date.
                     \nPlease generate a valid formatted json for the information collected in English only. Please provide details and don't generate unrelated informations not addressed in the prompt. If the information is not collected succussfully, just return 0 for integer dtype or "" for string dtype as the json value. Please ensure the generated output is a valid json and without repeated information.
@@ -271,7 +290,7 @@ for issue in issues:
 
         print("\n#### Merged Results: " + str(issue.number) + " " + json.dumps(output_json))
 
-        with open("results.txt", 'a') as f:
+        with open("issue_checker_results.txt", 'a') as f:
             f.write("### Merged Result:" + str(issue.number) + json.dumps(output_json) + "\n")
 
         extraction_end = time.time()
@@ -281,6 +300,6 @@ for issue in issues:
     except Exception as e:
         print("\n### Result:" + str(issue.number) + " failed to extract") 
         print(repr(e))
-        with open("results.txt", 'a') as f:
+        with open("issue_checker_results.txt", 'a') as f:
             f.write("\n### Result:" + str(issue.number) + f" failed to extract\n    {repr(e)}\n")
 
