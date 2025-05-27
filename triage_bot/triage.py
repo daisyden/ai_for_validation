@@ -51,22 +51,6 @@ def upload_rag_file(rag_file, host_ip=DEFAULT_HOST_IP):
     os.environ["http_proxy"] = proxy
     os.environ["https_proxy"] = proxy
 
-    return response
-
-def upload_rag_file(rag_file, host_ip=DEFAULT_HOST_IP):
-    url = f"http://{host_ip}:6007/v1/dataprep/ingest"
-
-    proxy = os.environ["http_proxy"]
-    os.environ["http_proxy"] = ""
-    os.environ["https_proxy"] = ""
-
-    with open(rag_file, "rb") as f:
-        files = {"files": f}
-        response = requests.post(url, files=files)
-
-    os.environ["http_proxy"] = proxy
-    os.environ["https_proxy"] = proxy
-
 
     return response
 
