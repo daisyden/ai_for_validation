@@ -157,7 +157,10 @@ class Github_Issue:
 
         # Process issue body (first comment)
         if content != None and content != "":
-            content = self._process_content_with_attachments(content, output_dir)
+            try:
+                content = self._process_content_with_attachments(content, output_dir)
+            except:
+                print(f"failed to process content for {output_dir}\n")
  
         print(f"Download complete. Files saved in {output_dir}/")
 
