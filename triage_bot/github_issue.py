@@ -26,7 +26,10 @@ class Github_Issue:
         self.repo = g.get_repo(repo)
         self.token = token
         self.repo_name = repo
+        self.g = g
 
+    def get_user(self, user):
+        return self.g.get_user(user)
 
     def get_issues(self, state):
         # Get all open issues, excluding pull requests
@@ -157,7 +160,10 @@ class Github_Issue:
 
         # Process issue body (first comment)
         if content != None and content != "":
-            content = self._process_content_with_attachments(content, output_dir)
+            try:
+                content = self._process_content_with_attachments(content, output_dir)
+            except:
+                print(f"failed to process content for {output_dir}\n")
  
         print(f"Download complete. Files saved in {output_dir}/")
 
