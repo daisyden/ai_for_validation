@@ -26,7 +26,10 @@ class Github_Issue:
         self.repo = g.get_repo(repo)
         self.token = token
         self.repo_name = repo
+        self.g = g
 
+    def get_user(self, user):
+        return self.g.get_user(user)
 
     def get_issues(self, state):
         # Get all open issues, excluding pull requests

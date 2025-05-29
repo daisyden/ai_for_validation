@@ -9,16 +9,7 @@ from pydantic import BaseModel
 
 #from vllm import LLM, SamplingParams
 #from vllm.sampling_params import GuidedDecodingParams
-import sys
-from pathlib import Path
-
-# Get the parent directory (one level up)
-parent_dir = Path(__file__).resolve().parent.parent
-
-# Add it to Python path
-sys.path.append(str(parent_dir))
-
-from github_issue.github_issue import Github_Issue 
+from github_issue import Github_Issue 
 from enum import Enum, IntEnum
 
 #DEFAULT_HOST_IP = "10.112.100.138"
