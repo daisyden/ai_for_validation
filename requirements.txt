@@ -6,3 +6,5 @@ langchain_community
 tiktoken
 python-magic
 python-magic-bin;platform_system=="Windows"
+nano_graphrag
+SentenceTransformer
