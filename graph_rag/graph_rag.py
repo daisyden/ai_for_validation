@@ -1,16 +1,19 @@
 import argparse
 import os
 import logging
-from openai import AsyncOpenAI
+import numpy as np
+import pandas as pd
+from dataclasses import dataclass
+from openai import AsyncOpenAI, OpenAI
 from nano_graphrag import GraphRAG, QueryParam
 from nano_graphrag import GraphRAG, QueryParam
 from nano_graphrag.base import BaseKVStorage
 from nano_graphrag._utils import compute_args_hash, wrap_embedding_func_with_attrs
 from nano_graphrag._storage import Neo4jStorage
-from sentence_transformers import SentenceTransformer
+# from sentence_transformers import SentenceTransformer
 from github_issue import Github_Issue
+from zhipuai import ZhipuAI
 
-import numpy as np
 
 logging.basicConfig(level=logging.WARNING)
 logging.getLogger("nano-graphrag").setLevel(logging.INFO)
@@ -26,11 +29,13 @@ Please ensure the generated output is a valid json and without repeated informat
 """
 
 
-DEEPSEEK_API_KEY = ""
+GLM_API_KEY = ""
 LLAMA_CLOUD_KEY = ""
-MODEL = "deepseek-chat"
+# MODEL = "deepseek-chat"
+MODEL = "glm-4-flash-250414"
 # DEFAULT_HOST_IP = "http://10.7.180.119:9009/v1"
-DEFAULT_HOST_IP = "https://api.deepseek.com"
+# DEFAULT_HOST_IP = "https://api.deepseek.com"
+DEFAULT_HOST_IP = "https://open.bigmodel.cn/api/paas/v4/"
 # DEFAULT_HOST_IP = "http://10.112.100.138:9009/v1"
 # MODEL = "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"
 
@@ -49,7 +54,7 @@ async def deepseepk_model_if_cache(
     prompt, system_prompt=None, history_messages=[], **kwargs
 ) -> str:
     openai_async_client = AsyncOpenAI(
-        api_key=DEEPSEEK_API_KEY, base_url=DEFAULT_HOST_IP,
+        api_key=GLM_API_KEY, base_url=DEFAULT_HOST_IP,
     )
     # openai_async_client = OpenAI(
     #     base_url=DEFAULT_HOST_IP,
@@ -90,22 +95,72 @@ def remove_if_exist(file):
         os.remove(file)
 
 
+@dataclass
+class EmbeddingFunc:
+    embedding_dim: int
+    max_token_size: int
+    func: callable
+
+    async def __call__(self, *args, **kwargs) -> np.ndarray:
+        return await self.func(*args, **kwargs)
+
+def wrap_embedding_func_with_attrs(**kwargs):
+    """Wrap a function with attributes"""
+
+    def final_decro(func) -> EmbeddingFunc:
+        new_func = EmbeddingFunc(**kwargs, func=func)
+        return new_func
+
+    return final_decro
+
+
+@wrap_embedding_func_with_attrs(embedding_dim=2048, max_token_size=8192)
+async def GLM_embedding(texts: list[str]) -> np.ndarray:
+    model_name = "embedding-3"
+    client = OpenAI(
+        api_key=GLM_API_KEY,
+        base_url=DEFAULT_HOST_IP,
+    ) 
+    embedding = client.embeddings.create(
+        input=texts,
+        model=model_name,
+    )
+    final_embedding = [d.embedding for d in embedding.data]
+    return np.array(final_embedding)
+
+
 WORKING_DIR = "./regtest"
 DATA_DIR = WORKING_DIR + "/data"
 os.makedirs(DATA_DIR, exist_ok=True)
 
-EMBED_MODEL = SentenceTransformer(
-    "TencentBAC/Conan-embedding-v1", cache_folder=WORKING_DIR, device="cpu"
-)
-# We're using Sentence Transformers to generate embeddings for the BGE model
-@wrap_embedding_func_with_attrs(
-    embedding_dim=EMBED_MODEL.get_sentence_embedding_dimension(),
-    max_token_size=EMBED_MODEL.max_seq_length,
-)
-async def local_embedding(texts: list[str]) -> np.ndarray:
-    return EMBED_MODEL.encode(texts, normalize_embeddings=True)
+# EMBED_MODEL = SentenceTransformer(
+#     "TencentBAC/Conan-embedding-v1", cache_folder=WORKING_DIR, device="cpu"
+# )
+# # We're using Sentence Transformers to generate embeddings for the BGE model
+# @wrap_embedding_func_with_attrs(
+#     embedding_dim=EMBED_MODEL.get_sentence_embedding_dimension(),
+#     max_token_size=EMBED_MODEL.max_seq_length,
+# )
+# async def local_embedding(texts: list[str]) -> np.ndarray:
+#     return EMBED_MODEL.encode(texts, normalize_embeddings=True)
 
-def get_issue_report(issue, github_issue):
+
+class IssueTablePandas:
+    def __init__(self):
+        self.table = pd.DataFrame(columns=['Issue ID', 'Issue Type', 'state'])
+    
+    def insert(self, issue_id, issue_type, state='pass'):
+        new_row = pd.DataFrame({'Issue ID': [issue_id], 'Issue Type': [issue_type], 'state': [state]})
+        self.table = pd.concat([self.table, new_row], ignore_index=True)
+    
+    def display(self):
+        print(self.table)
+    
+    def save_to_excel(self, file_name):
+        self.table.to_excel(file_name, index=False)
+
+
+def get_issue_report(issue, github_issue, insert=False):
     context = None
     try:
         import time
@@ -118,8 +173,15 @@ def get_issue_report(issue, github_issue):
 
         issue_id = issue.number
         if os.path.isfile(f"{DATA_DIR}/issue_{issue_id}.txt"):
-            with open(f"{DATA_DIR}/issue_{issue_id}.txt", 'r') as f:
-                context = f.read()
+            if not insert:
+                with open(f"{DATA_DIR}/issue_{issue_id}.txt", 'r') as f:
+                    context = f.read()
+            # else:
+            #     with open(f"{DATA_DIR}/issue_{issue_id}.txt", 'r') as f:
+            #         context = f.read()
+            #     is_bug = is_bug_issue(client, context)
+            #     issue_table.insert(issue.number, "Bug" if is_bug else "Not bug")
+            #     context = None
         else:
             # request issue contents
             issue_contents = issue.body if issue.body != None else ""
@@ -163,11 +225,31 @@ def get_issue_report(issue, github_issue):
     
     return context
 
+def is_bug_issue(client, context):
+    response = client.chat.completions.create(
+        model="glm-z1-flash",
+        messages=[
+            {"role": "user", "content": f"### You are a helpful, respectful, and honest assistant tasked with determining whether the report is a bug. Please determine if the following issue report is a bug, If yes , return yes, if no, return no. Please provide the final answer to the question directly, without any reasoning process or explanation. ### {context}"},
+        ],
+        max_tokens=12000,
+    )
+    print(f"this issue is :{response}")
+    answer = response.choices[0].message.content.split("\n</think>\n")
+    if len(answer) > 1 and answer[-1].strip().lower() == "yes":
+        return True
+    else:
+        return False
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="GraphRAG Github Issue Processor")
     parser.add_argument(
-        "--output", "-o", type=str, default="results.json",
-        help="output file"
+        "--query_output", "-o", type=str, default="results.json",
+        help="Query output file"
+    )
+    parser.add_argument(
+        "--report_output", type=str, default="issue_type.xlsx",
+        help="report type output file"
     )
     parser.add_argument(
         "--insert", action="store_true",
@@ -175,18 +257,20 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
+    issue_table = IssueTablePandas()
+
     repo = "intel/torch-xpu-ops"
     token = ""
     github_issue = Github_Issue(repo, token)
     issues = github_issue.get_issues("all")
     latencies = []
 
-    if args.insert:
-        remove_if_exist(f"{WORKING_DIR}/vdb_entities.json")
-        remove_if_exist(f"{WORKING_DIR}/kv_store_full_docs.json")
-        remove_if_exist(f"{WORKING_DIR}/kv_store_text_chunks.json")
-        remove_if_exist(f"{WORKING_DIR}/kv_store_community_reports.json")
-        remove_if_exist(f"{WORKING_DIR}/graph_chunk_entity_relation.graphml")
+    # if args.insert:
+    #     remove_if_exist(f"{WORKING_DIR}/vdb_entities.json")
+    #     remove_if_exist(f"{WORKING_DIR}/kv_store_full_docs.json")
+    #     remove_if_exist(f"{WORKING_DIR}/kv_store_text_chunks.json")
+    #     remove_if_exist(f"{WORKING_DIR}/kv_store_community_reports.json")
+    #     remove_if_exist(f"{WORKING_DIR}/graph_chunk_entity_relation.graphml")
     
 
     rag = GraphRAG(
@@ -196,18 +280,42 @@ if __name__ == "__main__":
         enable_llm_cache=True,
         best_model_func=deepseepk_model_if_cache,
         cheap_model_func=deepseepk_model_if_cache,
-        embedding_func=local_embedding,
+        embedding_func=GLM_embedding,
     )
+    client = ZhipuAI(api_key=GLM_API_KEY)
+    is_bug = None
+    state = None
 
-    with open(args.output, "w") as f:
+    with open(args.query_output, "w") as f:
         for issue in issues:
-            context = get_issue_report(issue, github_issue)
-            if context is not None:
-                print(f"Processing issue #{issue.number} with insert {args.insert}...")
-                if args.insert:
-                    rag.insert(context)
-                else:
-                    prompt = system_prompt + "\n\n" + "### the unit test context is:\n" + context
-                    result = rag.query(prompt, param=QueryParam(mode="local"))
-                    f.write(f"issue_id#{issue.number}: {result}\n")
-                    print(result)
+            try:
+                # if issue.number == 1733:
+                    # import pdb;pdb.set_trace()
+                labels = [label.name for label in issue.labels]
+                if "skipped" in labels or \
+                    "module: infra" in labels or \
+                    "documentation" in labels or \
+                    "duplicate" in labels:
+                    print(f"Skipped issue #{issue.number} due to 'skipped' label.")
+                    continue
+                context = get_issue_report(issue, github_issue, args.insert)
+                if context is not None:
+                    is_bug = is_bug_issue(client, context)
+                    print(f"Processing issue #{issue.number} with insert {args.insert}...")
+                    if "Bug" not in [label.name for label in issue.labels] and not is_bug:
+                        issue_table.insert(issue.number, "Bug" if is_bug else "Not bug")
+                        continue
+                    if args.insert:
+                        rag.insert(context)
+                        print(f"Inserted issue #{issue.number} into the knowledge base.")
+                        issue_table.insert(issue.number, "Bug" if is_bug else "Not bug")
+                    else:
+                        prompt = system_prompt + "\n\n" + "### the unit test context is:\n" + context
+                        result = rag.query(prompt, param=QueryParam(mode="local"))
+                        f.write(f"issue_id#{issue.number}: {result}\n")
+                        print(result)
+            except Exception as e:
+                print(f"An error occurred while processing issues: {e}")
+                issue_table.insert(issue.number, "Bug" if is_bug else "Not bug", state="fail")
+                continue
+    issue_table.save_to_excel(f"{WORKING_DIR}/{args.report_output}")
