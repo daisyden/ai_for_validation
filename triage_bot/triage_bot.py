@@ -37,10 +37,6 @@ def main():
         state = issue.state
         if issue.pull_request != None and state == "open":
             pr_number = issue.number
-            #owner = issue.login
-            #for testing
-            #if pr_number != 1696:
-            #    continue
     
             runs = github_issue.get_workflow_runs_for_pr(pr_number, token)
             time.sleep(args.delay)
@@ -73,34 +69,29 @@ def main():
                         artifact_found = True
                         print("Found failure list for {}\n".format(pr_number))
 
-                if artifact_found and os.path.isfile(failure_list_path):
+                if artifact_found and os.path.isfile(failure_list_path) and os.path.getsize(failure_list_path) != 0 :
                     responses = submit_triage_request(failure_list_path, pr_number)
                     result = ""
-                    no = 1
+                    no = 0
                     for response in responses:
-                        result = f"{result}\n{no}. {response[1]} {response[2]} got {response[3]} with error message \n```\n{response[4]}\n```\n Triage bot response:\n{response[7]}\n"
-                        no = no + 1
-                        
-                    body = "Triage bot UT analaysis result for reference only, please note unique error message only report once:\n" + result
-
-                    try:
-                        import json
-                        import pdb
-                        pdb.set_trace()
-                        data = json.loads(response[7].split("```json")[1].split("```")[0])
-                        #if data["similar_issue_id"] != "N/A":
-                        if True:
-                            details = f"<details>\n<summary>@sys_pytorchxpubot triage result for run {run['id']}</summary>{body}</details>"
-                            github_issue.add_comment(details, pr_number)
-                            print("############ similar issue detected {}: {}\n".format(pr_number, body))
-                        else:
-                            print("############ no similar issue found {}: {}\n".format(pr_number, body))
-                    except:
-                        print("Error: PR {} traige response is invalid json\n".format(pr_number))
-
-                    time.sleep(args.delay)
+                        try:
+                            import json
+                            data = json.loads(response[7].split("```json")[1].split("```")[0])
+                            if data["similar_issue_id"] != "N/A":
+                                no = no + 1
+                                result = f"{result}\n{no}. {response[1]} {response[2]} got {response[3]} with error message \n```\n{response[4]}\n```\n Triage bot response:\n{response[7]}\n"
+                        except:
+                            print("JSON error!")
+                    
+                    #if no != 0:
+                    if True:
+                        body = "Triage bot UT analaysis result for reference only, please note unique error message only report once:\n" + result
+                        details = f"<details>\n<summary>@sys_pytorchxpubot triage result for run {run['id']}</summary>{body}</details>"
+                        github_issue.add_comment(details, pr_number)
+                        print("############ similar issue detected {}: {}\n".format(pr_number, body))
+                        #time.sleep(args.delay)
                 else:
-                    print(f"No '{args.artifact_name}' artifacts found for PR #{pr_number}")
+                    print(f"No '{args.artifact_name}' artifacts found for PR #{pr_number}, or the failure list is empty!")
     
 if __name__ == '__main__':
     main()

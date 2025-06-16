@@ -31,7 +31,7 @@ with open(report, "w") as file:
         reporter_tbd = [] 
         scrub_tbd = [] 
         owner_tbd = [] 
-    
+
         for key in item:
             if key in ["issue_desscription", "error_message", "impact"]:
                 if item[key]['score'] == 0:
@@ -127,8 +127,8 @@ with open(report, "w") as file:
     
     
         if len(reporter_tbd) != 0  or len(owner_tbd) != 0  or len(scrub_tbd) != 0:
-            print(f"https://github.com/intel/torch-xpu-ops/issues/{issue_tbd} | {_reporter_tbd} | {_owner_tbd} | {_scrub_tbd}")
-            file.write(f"https://github.com/intel/torch-xpu-ops/issues/{issue_tbd} | {_reporter_tbd} | {_owner_tbd} | {_scrub_tbd}\n")
+            print(f"https://github.com/intel/torch-xpu-ops/issues/{issue_tbd} | {_reporter_tbd} | {_owner_tbd} | {_scrub_tbd} | {item['issue_type']} | {item['milestone']}\n")
+            file.write(f"https://github.com/intel/torch-xpu-ops/issues/{issue_tbd} | {_reporter_tbd} | {_owner_tbd} | {_scrub_tbd} | {item['issue_type']} | {item['milestone']}\n")
     
 print("mail to {}".format("; ".join(mailing)))
 

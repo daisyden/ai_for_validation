@@ -9,16 +9,26 @@ from pydantic import BaseModel
 
 #from vllm import LLM, SamplingParams
 #from vllm.sampling_params import GuidedDecodingParams
+import sys
+from pathlib import Path
+
+# Get the parent directory (one level up)
+parent_dir = Path(__file__).resolve().parent.parent
+
+# Add it to Python path
+sys.path.append(str(parent_dir))
+
 from github_issue import Github_Issue 
 from enum import Enum, IntEnum
 
 #DEFAULT_HOST_IP = "10.112.100.138"
-DEFAULT_HOST_IP = "10.7.180.119"
+DEFAULT_HOST_IP = "skyrex.jf.intel.com"
+#DEFAULT_HOST_IP = "skytrain.jf.intel.com"
 
-# initialize client 
+# initialize client
 client = OpenAI(
-    base_url=f"http://{DEFAULT_HOST_IP}:9009/v1",
-    api_key="-",
+    base_url=f"http://{DEFAULT_HOST_IP}:8000/v1",
+    api_key="EMPTY",
     http_client=httpx.Client(trust_env=False)
 )
 
@@ -30,6 +40,11 @@ class scoreEnum(IntEnum):
 class score(BaseModel):
     score: scoreEnum
     evidence: str
+
+class typeEnum(str, Enum):
+    bug = "bug"
+    performance = "performance"
+    feature = "feature"
 
 class moduleEnum(str, Enum):
     ut = "UT"
@@ -71,10 +86,12 @@ class IssueDescription(BaseModel):
     root_cause: score
     impact: score
     state: str
+    milestone: str
     labeled_module: module
     predicted_module: module
     report_date: updated
     last_update: updated
+    issue_type: typeEnum 
 
 json_schema = IssueDescription.model_json_schema()
 
@@ -93,8 +110,6 @@ for issue in issues:
         import time
         extraction_start = time.time()
 
-        #if issue.number != 1693:
-        #    continue
         #import pdb
         #pdb.set_trace()
 
@@ -106,6 +121,8 @@ for issue in issues:
         labels = [ label.name for label in issue.labels ]
         label = ".".join(labels)
 
+        #import pdb
+        #pdb.set_trace()
         if "skipped" in labels or "module: infra" in labels or "enhancement" in labels:
             continue
 
@@ -136,6 +153,12 @@ for issue in issues:
         assignee = str(issue.assignee.login) if issue.assignee != None else ""
         issue_number = issue.number
         state = issue.state
+        milestone = "not set"
+        try:
+            milestone = issue.milestone.title
+        except:
+            print("No milstone")
+
 
         # In case content of issue or comments are very long
         from langchain_text_splitters import TokenTextSplitter
@@ -188,7 +211,7 @@ for issue in issues:
         def extract_description(texts):
             output_json = None
 
-            max_split = min(5, len(texts))
+            max_split = min(20, len(texts))
             for text in texts[0:max_split]:
                 prompt = f""" 
                     This is a github issue link https://github.com/{repo}/issues/{issue_number}. 
@@ -197,10 +220,12 @@ for issue in issues:
                     and the state of the issue is {state},
                     and the issue is created at {issue.created_at},
                     and the issue is last updated at {last_update},
+                    and the milestone is {milestone},
                     and the labels of the issue are {label}.
+
                     \nThis is the github issue title {issue.title},
                     and issue body {text}. 
-                    As an expert of software quality control, please help to extract the issue number, reproter, assignee and state, and check whether the issue have concise information about issue_description, error message, impact of the issue, reproduce steps of the issue including python, pytest or shell commands (for example pytest test*.py or python *.py or shell commands), pytorch version and platform information, provide a score and evidence for each information, 2 is with the information and concise and clear, 1 is with the information but not so clear, and 0 is missing the information. Please also extract the module from issue label and also predict a module for the issue base on the issue description espcially the test case classifications, possible modules include core, transformers, UT, distributions, op_imp, and quantization, denpendency, also please provide evidence, if no module can be predicted return na. If possible also score the resolution and root cause information and provide evidence. In order to identify the issue without response for a long time, please also extract the date the issue is created. 
+                    As an expert of software quality control, please help to extract the issue number, reproter, assignee and state, and check whether the issue have concise information about issue_description, error message, impact of the issue, reproduce steps of the issue including python, pytest or shell commands (for example pytest test*.py or python *.py or shell commands), pytorch version and platform information, provide a score and evidence for each information, 2 is with the information and concise and clear, 1 is with the information but not so clear, and 0 is missing the information. Please also extract the module from issue label and also predict a module for the issue base on the issue description espcially the test case classifications, possible modules include core, transformers, UT, distributions, op_imp, and quantization, dependency, build, transformers, torchbench, inductor, also please provide evidence, if no module can be predicted return na. If possible also score the resolution and root cause information and provide evidence. In order to identify the issue without response for a long time, please also extract the date the issue is created. If the issue is a functionality bug return issue_type as bug, otherwise if it is a performacne bug return performance and if it is a feature request return feature. If the milestone is set return the milestone, otherwise return NA. 
                     \nPlease generate a valid formatted json for the information collected in English only. Please provide details and don't generate unrelated informations not addressed in the prompt. If the information is not collected succussfully, just return 0 for integer dtype or "" for string dtype as the json value. Please ensure the generated output is a valid json and without repeated information.
                     """
                 print(prompt)
@@ -226,9 +251,8 @@ for issue in issues:
                     output_json = merge_json(output_json, json2)
 
             return output_json
-       
-        
-        output_json = extract_description(texts) 
+
+        output_json = extract_description(texts)
 
         print("\n#### Results: " + str(issue.number) + json.dumps(output_json)) 
 
@@ -236,7 +260,7 @@ for issue in issues:
         def extract_comments(comments_texts):
             output_json = None
 
-            max_split = min(5, len(texts))
+            max_split = min(20, len(texts))
             for text in comments_texts[0:max_split]:
                 print("\n********* comments {}\n".format(text))
 

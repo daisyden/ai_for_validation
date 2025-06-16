@@ -3,6 +3,7 @@ import os
 import csv
 
 DEFAULT_HOST_IP = "10.7.180.119"
+#DEFAULT_HOST_IP = "10.112.100.138"
 
 
 def QnA(request, host_ip=DEFAULT_HOST_IP):
