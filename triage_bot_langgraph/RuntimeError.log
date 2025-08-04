@@ -1,0 +1,460 @@
+User: User: You are an expert QA engineer analyzing a failure in the `torch-xpu-ops` unit test. Below is the failure log:
+
+Torch-xpu-ops unit test class 
+<test_class>
+TestMathBitsXPU
+</test_class>
+
+test case 
+<test_case>
+test_conj_view_nn_functional_conv_transpose2d_xpu_complex64 
+</test_case>
+
+returned failure with error message: 
+<error_message>
+RuntimeError: could not create a primitive descriptor for a deconvolution forward propagation primitive
+</error_message> . 
+
+The test file is 
+<test_file>
+test/xpu/test_ops_xpu.py
+</test_file>
+
+and as a wrapper file it calls code in the base test file 
+<base_test_file>
+../../../test/test_ops.py
+</base_test_file>
+.\n
+
+The test tmux enviroment is 
+<tmux>
+python_test
+</tmux>
+
+1. **Extract the test case name**:
+   - Identify the full test case name starting with `test_` from the failure log.
+
+    ```
+2. **Determine the original test case**:
+   - If the test is parameterized (e.g., `test_compare_cpu__batch_norm_with_update_xpu_bool`), extract the base test name (e.g., `test_compare_cpu`).
+   - Verify by checking the test file:
+     <base_test_file>
+     ../../../test/test_ops.py
+     </base_test_file>
+     at repo 
+     ```
+     https://raw.githubusercontent.com/pytorch/pytorch/refs/heads/main
+     ```
+3. **Identify the test module**:
+   - Categorize the test into one of:
+     - `torch operation` (core ops)
+     - `distributed` (multi-process/device)
+     - `runtime` (execution environment)
+     - `inductor` (compiler)
+     - `torchbench` (benchmarking)
+
+4. **Extract the data type (`dtype`)**:
+   - Infer from test name/trace (e.g., `xpu_bool` → `bool`, `f32` → `float32`).
+
+5. **Resolve the torch operation or tensor info**:
+   - **If parameterized**: Parse the op name from the test case (e.g., `batch_norm` from `...batch_norm...`), the op name is usually right after the base test name.
+   - **Otherwise**: Trace the failure in 
+     <base_test_file>
+     ../../../test/test_ops.py
+     </base_test_file>
+     to find the tensor/op (ignore backends like `xpu/cpu`).
+
+6. **Classify the error type**:
+   - `AssertionError` (test condition failed)
+   - `RuntimeError` (execution crash)
+   - `FatalError` (critical system error)
+   - Other (specify).
+
+7. **Extract the error message**:
+   - Copy the raw error message (exclude stack traces unless critical).
+
+Please return a beutified JSON with the following structure, only return the json and not output other text:
+```json
+{
+  "base_test_file": "../../../test/test_ops.py",
+  "test_file": "test/xpu/test_ops_xpu.py"
+  "test_case": "test_conj_view_nn_functional_conv_transpose2d_xpu_complex64",
+  "original_test_case": "base_test_name",
+  "module": "torch operation/distributed/runtime/inductor/torchbench",
+  "dtype": "float32/bool/int64/etc",
+  "torch_op": "op_name_or_None",
+  "error_type": "AssertionError/RuntimeError/etc",
+  "error_message": "Raw error text"
+  "tmux": "The tmux session"
+}
+```
+
+Assistant: ```json
+{
+  "base_test_file": "../../../test/test_ops.py",
+  "test_file": "test/xpu/test_ops_xpu.py",
+  "test_case": "test_conj_view_nn_functional_conv_transpose2d_xpu_complex64",
+  "original_test_case": "test_conj_view_nn_functional_conv_transpose2d",
+  "module": "torch operation",
+  "dtype": "complex64",
+  "torch_op": "conv_transpose2d",
+  "error_type": "RuntimeError",
+  "error_message": "could not create a primitive descriptor for a deconvolution forward propagation primitive",
+  "tmux": "python_test"
+}
+```
+Assistant: 
+Assistant:  ===================================================================================================
+platform linux -- Python 3.10.18, pytest-7.3.2, pluggy-1.6.0 -- /home/daisyden/miniforge3/envs/pytorch/bin/python                                                                                                          
+cachedir: .pytest_cache                               
+hypothesis profile 'default' -> database=DirectoryBasedExampleDatabase('/home/daisyden/upstream/pytorch/third_party/torch-xpu-ops/.hypothesis/examples')                                                                   
+rootdir: /home/daisyden/upstream/pytorch              
+configfile: pytest.ini                                
+plugins: cpp-2.3.0, xdist-3.3.1, timeout-2.4.0, hypothesis-5.35.1, rerunfailures-14.0, subtests-0.13.1, xdoctest-1.1.0, flakefinder-1.1.0                                                                                  
+collecting ... warning: File "/opt/intel/oneapi/compiler/2025.1/lib/libsycl.so.8.0.0-gdb.py" auto-loading has been declined by your `auto-load safe-path' set to "$debugdir:$datadir/auto-load".                           
+To enable execution of this file add                  
+        add-auto-load-safe-path /opt/intel/oneapi/compiler/2025.1/lib/libsycl.so.8.0.0-gdb.py                
+line to your configuration file "/home/daisyden//.config/gdb/gdbinit".                                       
+To completely disable this security protection add    
+        set auto-load safe-path /                     
+line to your configuration file "/home/daisyden//.config/gdb/gdbinit".                                       
+For more information about this security protection see the                                                  
+"Auto-loading safe path" section in the GDB manual.  E.g., run from the shell:                               
+        info "(gdb)Auto-loading safe path"            
+[New Thread 0x7fff975ff640 (LWP 3236731)]             
+[New Thread 0x7fff96dfe640 (LWP 3236732)]             
+[New Thread 0x7fff945fd640 (LWP 3236733)]             
+[New Thread 0x7fff8fdfc640 (LWP 3236734)]             
+[New Thread 0x7fff8f5fb640 (LWP 3236735)]             
+[New Thread 0x7fff8adfa640 (LWP 3236736)]             
+[New Thread 0x7fff885f9640 (LWP 3236737)]             
+[New Thread 0x7fff85df8640 (LWP 3236738)]             
+[New Thread 0x7fff835f7640 (LWP 3236739)]             
+[New Thread 0x7fff80df6640 (LWP 3236740)]             
+[New Thread 0x7fff805f5640 (LWP 3236741)]             
+[New Thread 0x7fff7ddf4640 (LWP 3236742)]             
+[New Thread 0x7fff7b5f3640 (LWP 3236743)]             
+[New Thread 0x7fff78df2640 (LWP 3236744)]             
+[New Thread 0x7fff765f1640 (LWP 3236745)]             
+[New Thread 0x7fff73df0640 (LWP 3236746)]             
+[New Thread 0x7fff715ef640 (LWP 3236747)]             
+[New Thread 0x7fff6edee640 (LWP 3236748)]             
+[New Thread 0x7fff6c5ed640 (LWP 3236749)]             
+[New Thread 0x7fff69dec640 (LWP 3236750)]             
+[New Thread 0x7fff695eb640 (LWP 3236751)]             
+[New Thread 0x7fff62dea640 (LWP 3236752)]             
+[New Thread 0x7fff605e9640 (LWP 3236753)]             
+[New Thread 0x7fff5fde8640 (LWP 3236754)]             
+[New Thread 0x7fff5d5e7640 (LWP 3236755)]             
+[New Thread 0x7fff58de6640 (LWP 3236756)]             
+[New Thread 0x7fff585e5640 (LWP 3236757)]             
+[New Thread 0x7fff55de4640 (LWP 3236758)]             
+[New Thread 0x7fff515e3640 (LWP 3236759)]             
+[New Thread 0x7fff50de2640 (LWP 3236760)]             
+[New Thread 0x7fff4e5e1640 (LWP 3236761)]             
+[New Thread 0x7fff4bde0640 (LWP 3236762)]             
+[New Thread 0x7fff495df640 (LWP 3236763)]             
+[New Thread 0x7fff46dde640 (LWP 3236764)]             
+[New Thread 0x7fff445dd640 (LWP 3236765)]             
+[New Thread 0x7fff41ddc640 (LWP 3236766)]             
+[New Thread 0x7fff3f5db640 (LWP 3236767)]             
+[New Thread 0x7fff3adda640 (LWP 3236768)]             
+[New Thread 0x7fff385d9640 (LWP 3236769)]             
+[New Thread 0x7fff35dd8640 (LWP 3236770)]             
+[New Thread 0x7fff355d7640 (LWP 3236771)]             
+[New Thread 0x7fff32dd6640 (LWP 3236772)]             
+[New Thread 0x7fff2e5d5640 (LWP 3236773)]             
+[New Thread 0x7fff2ddd4640 (LWP 3236774)]             
+[New Thread 0x7fff295d3640 (LWP 3236775)]             
+[New Thread 0x7fff28dd2640 (LWP 3236776)]             
+[New Thread 0x7fff265d1640 (LWP 3236777)]             
+[Detaching after vfork from child process 3236960]    
+[New Thread 0x7fff09f82640 (LWP 3236990)]             
+[New Thread 0x7fff09781640 (LWP 3236991)]             
+[New Thread 0x7fff08e10640 (LWP 3236992)]             
+[Thread 0x7fff09f82640 (LWP 3236990) exited]          
+[Thread 0x7fff08e10640 (LWP 3236992) exited]          
+[Thread 0x7fff09781640 (LWP 3236991) exited]          
+warning: Temporarily disabling breakpoints for unloaded shared library "/opt/intel/oneapi/compiler/2025.1/lib/libintelocl.so"                                                                                              
+warning: Error removing breakpoint 1                  
+warning: Temporarily disabling breakpoints for unloaded shared library "/opt/intel/oneapi/compiler/latest/lib/libintelocl.so"                                                                                              
+[New Thread 0x7fff08e10640 (LWP 3237024)]             
+warning: Error removing breakpoint 1                  
+[New Thread 0x7fff09781640 (LWP 3237067)]             
+[New Thread 0x7fff09f82640 (LWP 3237068)]             
+[New Thread 0x7ffee8bff640 (LWP 3237069)]             
+[New Thread 0x7ffee63fe640 (LWP 3237070)]             
+[New Thread 0x7ffee3bfd640 (LWP 3237071)]             
+[New Thread 0x7ffee13fc640 (LWP 3237072)]             
+[New Thread 0x7ffedebfb640 (LWP 3237073)]             
+[New Thread 0x7ffedc3fa640 (LWP 3237074)]             
+[New Thread 0x7ffed9bf9640 (LWP 3237075)]             
+[New Thread 0x7ffed73f8640 (LWP 3237076)]             
+[New Thread 0x7ffed4bf7640 (LWP 3237077)]             
+[New Thread 0x7ffed23f6640 (LWP 3237078)]             
+[New Thread 0x7ffecfbf5640 (LWP 3237079)]             
+[New Thread 0x7ffecd3f4640 (LWP 3237080)]             
+[New Thread 0x7ffecabf3640 (LWP 3237081)]             
+[New Thread 0x7ffec83f2640 (LWP 3237082)]             
+[New Thread 0x7ffec5bf1640 (LWP 3237083)]             
+[New Thread 0x7ffec33f0640 (LWP 3237084)]             
+[New Thread 0x7ffebebef640 (LWP 3237085)]             
+[New Thread 0x7ffebc3ee640 (LWP 3237086)]             
+[New Thread 0x7ffebbbed640 (LWP 3237087)]             
+[New Thread 0x7ffeb93ec640 (LWP 3237088)]             
+[New Thread 0x7ffeb6beb640 (LWP 3237089)]             
+[New Thread 0x7ffeb23ea640 (LWP 3237090)]             
+[New Thread 0x7ffeafbe9640 (LWP 3237091)]             
+[New Thread 0x7ffead3e8640 (LWP 3237092)]             
+[New Thread 0x7ffeaabe7640 (LWP 3237093)]             
+[New Thread 0x7ffea83e6640 (LWP 3237094)]             
+[New Thread 0x7ffea5be5640 (LWP 3237095)]             
+[New Thread 0x7ffea33e4640 (LWP 3237096)]             
+[New Thread 0x7ffea0be3640 (LWP 3237097)]             
+[New Thread 0x7ffea03e2640 (LWP 3237098)]             
+[New Thread 0x7ffe9bbe1640 (LWP 3237099)]             
+[New Thread 0x7ffe9b3e0640 (LWP 3237100)]             
+[New Thread 0x7ffe98bdf640 (LWP 3237101)]             
+[New Thread 0x7ffe943de640 (LWP 3237102)]             
+[New Thread 0x7ffe93bdd640 (LWP 3237103)]             
+[New Thread 0x7ffe8f3dc640 (LWP 3237104)]             
+[New Thread 0x7ffe8cbdb640 (LWP 3237105)]             
+[New Thread 0x7ffe8a3da640 (LWP 3237106)]             
+[New Thread 0x7ffe87bd9640 (LWP 3237107)]             
+[New Thread 0x7ffe873d8640 (LWP 3237108)]             
+[New Thread 0x7ffe82bd7640 (LWP 3237109)]             
+[New Thread 0x7ffe803d6640 (LWP 3237110)]             
+[New Thread 0x7ffe7dbd5640 (LWP 3237111)]             
+[New Thread 0x7ffe7b3d4640 (LWP 3237112)]             
+[New Thread 0x7ffe78bd3640 (LWP 3237113)]             
+[Detaching after vfork from child process 3237213]    
+[Detaching after vfork from child process 3237364]    
+[Detaching after vfork from child process 3237365]    
+[Detaching after vfork from child process 3237366]    
+[Detaching after vfork from child process 3237367]    
+[Detaching after vfork from child process 3237428]    
+collected 18381 items / 18380 deselected / 1 selected 
+
+test/xpu/test_ops_xpu.py::TestMathBitsXPU::test_conj_view_nn_functional_conv_transpose2d_xpu_complex64 [New Thread 0x7ffe61711640 (LWP 3237508)]                                                                           
+[New Thread 0x7ffe60f10640 (LWP 3237509)]             
+
+Thread 1 "python" hit Catchpoint 1 (exception thrown), __cxxabiv1::__cxa_throw (obj=0x55556eab0ac0, tinfo=0x7fffd02f18b8 <typeinfo for dnnl::error>, dest=0x7fffba0626a0 <dnnl::error::~error()>) at ../../../../libstdc++-
+v3/libsupc++/eh_throw.cc:80                           
+80      ../../../../libstdc++-v3/libsupc++/eh_throw.cc: No such file or directory.                           
+#0  __cxxabiv1::__cxa_throw (obj=0x55556eab0ac0, tinfo=0x7fffd02f18b8 <typeinfo for dnnl::error>, dest=0x7fffba0626a0 <dnnl::error::~error()>) at ../../../../libstdc++-v3/libsupc++/eh_throw.cc:80                        
+#1  0x00007fffb9b9cbd9 in dnnl::error::wrap_c_api(dnnl_status_t, char const*) [clone .part.0] () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_xpu.so                        
+#2  0x00007fffba0a23ab in dnnl::deconvolution_forward::primitive_desc::primitive_desc(dnnl::engine const&, dnnl::prop_kind, dnnl::algorithm, dnnl::memory::desc const&, dnnl::memory::desc const&, dnnl::memory::desc const
+*, dnnl::memory::desc const&, std::vector<long, std::allocator<long> > const&, std::vector<long, std::allocator<long> > const*, std::vector<long, std::allocator<long> > const&, std::vector<long, std::allocator<long> > c
+onst&, dnnl::primitive_attr const&, bool) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_xpu.so                                                                            
+#3  0x00007fffba0a03d5 in at::native::onednn::deconvolution(at::Tensor&, at::Tensor const&, at::Tensor const&, at::Tensor const&, c10::ArrayRef<long>, c10::ArrayRef<long>, c10::ArrayRef<long>, c10::ArrayRef<long>, long,
+ at::native::onednn::Attr&, std::vector<sycl::_V1::event, std::allocator<sycl::_V1::event> > const&) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_xpu.so                 
+#4  0x00007fffba06cc7d in at::native::xpu::_convolution_out(at::Tensor&, at::Tensor const&, at::Tensor const&, at::Tensor const&, c10::ArrayRef<long>, c10::ArrayRef<long>, c10::ArrayRef<long>, bool, c10::ArrayRef<long>,
+ long, at::native::onednn::Attr, c10::ArrayRef<long>) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_xpu.so                                                                
+#5  0x00007fffba06e513 in at::native::xpu::_convolution(at::Tensor const&, at::Tensor const&, at::Tensor const&, c10::ArrayRef<long>, c10::ArrayRef<long>, c10::ArrayRef<long>, bool, c10::ArrayRef<long>, long, at::native
+::onednn::Attr) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_xpu.so                                                                                                      
+#6  0x00007fffba06e7c6 in at::native::xpu::convolution_overrideable(at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<long>, c10::ArrayRef<long>, c10::ArrayRef<long>, bool, c10::Array
+Ref<long>, long) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_xpu.so                                                                                                     
+#7  0x00007fffba073cd6 in c10::impl::wrap_kernel_functor_unboxed_<c10::impl::detail::WrapFunctionIntoFunctor_<c10::CompileTimeFunctionPointer<at::Tensor (at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> c
+onst&, c10::ArrayRef<long>, c10::ArrayRef<long>, c10::ArrayRef<long>, bool, c10::ArrayRef<long>, long), &at::native::xpu::convolution_overrideable>, at::Tensor, c10::guts::typelist::typelist<at::Tensor const&, at::Tenso
+r const&, std::optional<at::Tensor> const&, c10::ArrayRef<long>, c10::ArrayRef<long>, c10::ArrayRef<long>, bool, c10::ArrayRef<long>, long> >, at::Tensor (at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> 
+const&, c10::ArrayRef<long>, c10::ArrayRef<long>, c10::ArrayRef<long>, bool, c10::ArrayRef<long>, long)>::call(c10::OperatorKernel*, c10::DispatchKeySet, at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> c
+onst&, c10::ArrayRef<long>, c10::ArrayRef<long>, c10::ArrayRef<long>, bool, c10::ArrayRef<long>, long) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_xpu.so               
+#8  0x00007fffd320705f in at::_ops::convolution_overrideable::call(at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymIn
+t>, bool, c10::ArrayRef<c10::SymInt>, c10::SymInt) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so                                                                   
+#9  0x00007fffd22a99e9 in at::native::_convolution(at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<long>, c10::ArrayRef<long>, c10::ArrayRef<long>, bool, c10::ArrayRef<long>, long, 
+bool, bool, bool, bool) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so                                                                                              
+#10 0x00007fffd3591f29 in at::(anonymous namespace)::(anonymous namespace)::wrapper_CompositeExplicitAutograd___convolution(at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymI
+nt>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, bool, c10::ArrayRef<c10::SymInt>, c10::SymInt, bool, bool, bool, bool) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/l
+ibtorch_cpu.so                                        
+#11 0x00007fffd359955b in c10::impl::wrap_kernel_functor_unboxed_<c10::impl::detail::WrapFunctionIntoFunctor_<c10::CompileTimeFunctionPointer<at::Tensor (at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> c
+onst&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, bool, c10::ArrayRef<c10::SymInt>, c10::SymInt, bool, bool, bool, bool), &at::(anonymous namespace)::(anonymous namespace)::wrapp
+er_CompositeExplicitAutograd___convolution>, at::Tensor, c10::guts::typelist::typelist<at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10:
+:ArrayRef<c10::SymInt>, bool, c10::ArrayRef<c10::SymInt>, c10::SymInt, bool, bool, bool, bool> >, at::Tensor (at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::Arra
+yRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, bool, c10::ArrayRef<c10::SymInt>, c10::SymInt, bool, bool, bool, bool)>::call(c10::OperatorKernel*, c10::DispatchKeySet, at::Tensor const&, at::Tensor const&, std::optional
+<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, bool, c10::ArrayRef<c10::SymInt>, c10::SymInt, bool, bool, bool, bool) () from /home/daisyden/miniforge3/envs/pyto
+rch/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so                                                   
+#12 0x00007fffd2b5f514 in at::_ops::_convolution::call(at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, bool, c1
+0::ArrayRef<c10::SymInt>, c10::SymInt, bool, bool, bool, bool) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so                                                       
+#13 0x00007fffd229e9ad in at::native::convolution(at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<long>, c10::ArrayRef<long>, c10::ArrayRef<long>, bool, c10::ArrayRef<long>, long) (
+) from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so         
+#14 0x00007fffd3591a47 in at::(anonymous namespace)::(anonymous namespace)::wrapper_CompositeExplicitAutograd__convolution(at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymIn
+t>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, bool, c10::ArrayRef<c10::SymInt>, c10::SymInt) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so           
+#15 0x00007fffd3598cd7 in c10::impl::wrap_kernel_functor_unboxed_<c10::impl::detail::WrapFunctionIntoFunctor_<c10::CompileTimeFunctionPointer<at::Tensor (at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> c
+onst&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, bool, c10::ArrayRef<c10::SymInt>, c10::SymInt), &at::(anonymous namespace)::(anonymous namespace)::wrapper_CompositeExplicitAuto
+grad__convolution>, at::Tensor, c10::guts::typelist::typelist<at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, b
+ool, c10::ArrayRef<c10::SymInt>, c10::SymInt> >, at::Tensor (at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, bo
+ol, c10::ArrayRef<c10::SymInt>, c10::SymInt)>::call(c10::OperatorKernel*, c10::DispatchKeySet, at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymIn
+t>, c10::ArrayRef<c10::SymInt>, bool, c10::ArrayRef<c10::SymInt>, c10::SymInt) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so                                       
+#16 0x00007fffd2b0f779 in at::_ops::convolution::redispatch(c10::DispatchKeySet, at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10::Array
+Ref<c10::SymInt>, bool, c10::ArrayRef<c10::SymInt>, c10::SymInt) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so                                                     
+#17 0x00007fffd5433e8a in torch::autograd::VariableType::(anonymous namespace)::convolution(c10::DispatchKeySet, at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::A
+rrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, bool, c10::ArrayRef<c10::SymInt>, c10::SymInt) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so                     
+#18 0x00007fffd5434b39 in c10::impl::wrap_kernel_functor_unboxed_<c10::impl::detail::WrapFunctionIntoFunctor_<c10::CompileTimeFunctionPointer<at::Tensor (c10::DispatchKeySet, at::Tensor const&, at::Tensor const&, std::o
+ptional<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, bool, c10::ArrayRef<c10::SymInt>, c10::SymInt), &torch::autograd::VariableType::(anonymous namespace)::conv
+olution>, at::Tensor, c10::guts::typelist::typelist<c10::DispatchKeySet, at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10:
+:SymInt>, bool, c10::ArrayRef<c10::SymInt>, c10::SymInt> >, at::Tensor (c10::DispatchKeySet, at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>
+, c10::ArrayRef<c10::SymInt>, bool, c10::ArrayRef<c10::SymInt>, c10::SymInt)>::call(c10::OperatorKernel*, c10::DispatchKeySet, at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::S
+ymInt>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, bool, c10::ArrayRef<c10::SymInt>, c10::SymInt) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so       
+#19 0x00007fffd2b5e386 in at::_ops::convolution::call(at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, bool, c10
+::ArrayRef<c10::SymInt>, c10::SymInt) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so                                                                                
+#20 0x00007fffd229bc34 in at::native::(anonymous namespace)::complex_convolution(at::Tensor const&, at::Tensor const&, at::Tensor const&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt
+>, bool, c10::ArrayRef<c10::SymInt>, c10::SymInt const&) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so                                                             
+#21 0x00007fffd22a1d44 in at::native::conv_transpose2d_symint(at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c
+10::SymInt, c10::ArrayRef<c10::SymInt>) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so                                                                              
+#22 0x00007fffd36ce590 in c10::impl::wrap_kernel_functor_unboxed_<c10::impl::detail::WrapFunctionIntoFunctor_<c10::CompileTimeFunctionPointer<at::Tensor (at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> c
+onst&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10::SymInt, c10::ArrayRef<c10::SymInt>), &at::(anonymous namespace)::(anonymous namespace)::wrapper_CompositeImplicitAutograd_i
+nput_conv_transpose2d>, at::Tensor, c10::guts::typelist::typelist<at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt
+>, c10::SymInt, c10::ArrayRef<c10::SymInt> > >, at::Tensor (at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10
+::SymInt, c10::ArrayRef<c10::SymInt>)>::call(c10::OperatorKernel*, c10::DispatchKeySet, at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10
+::ArrayRef<c10::SymInt>, c10::SymInt, c10::ArrayRef<c10::SymInt>) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so                                                    
+#23 0x00007fffd2eff887 in at::_ops::conv_transpose2d_input::call(at::Tensor const&, at::Tensor const&, std::optional<at::Tensor> const&, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>, c10::ArrayRef<c10::SymInt>
+, c10::SymInt, c10::ArrayRef<c10::SymInt>) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_cpu.so                                                                           
+#24 0x00007fffe4fe552a in torch::autograd::THPVariable_conv_transpose2d(_object*, _object*, _object*) () from /home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/lib/libtorch_python.so             
+#25 0x000055555568fc66 in cfunction_call (func=0x7ffff46b9300, args=<optimized out>, kwargs=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/methodobject.c:543                                             
+#26 0x000055555569bf9f in _PyObject_Call (kwargs=<optimized out>, args=0x7ffe6c5daf80, callable=0x7ffff46b9300, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Objects/call.c:305                           
+#27 PyObject_Call (callable=0x7ffff46b9300, args=0x7ffe6c5daf80, kwargs=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/call.c:317                                                                         
+#28 0x000055555568598d in do_call_core (kwdict=0x7ffe6c6fff80, callargs=0x7ffe6c5daf80, func=0x7ffff46b9300, trace_info=0x7fffffff7b30, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5917 
+#29 _PyEval_EvalFrameDefault (tstate=<optimized out>, f=0x7ffe6c70f2e0, throwflag=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:4277                                                              
+#30 0x00005555556900ec in _PyEval_EvalFrame (throwflag=0, f=0x7ffe6c70f2e0, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/internal/pycore_ceval.h:46                                               
+#31 _PyEval_Vector (kwnames=<optimized out>, argcount=<optimized out>, args=<optimized out>, locals=0x0, con=0x7ffeed01db50, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5067             
+#32 _PyFunction_Vectorcall (func=0x7ffeed01db40, stack=<optimized out>, nargsf=<optimized out>, kwnames=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/call.c:342                                         
+#33 0x0000555555688567 in _PyObject_FastCallDictTstate (tstate=0x5555558fc5c0, callable=0x7ffeed01db40, args=<optimized out>, nargsf=<optimized out>, kwargs=<optimized out>) at /usr/local/src/conda/python-3.10.18/Object
+s/call.c:153                                          
+#34 0x0000555555699ab9 in _PyObject_Call_Prepend (tstate=0x5555558fc5c0, callable=0x7ffeed01db40, obj=0x7ffe737ce140, args=<optimized out>, kwargs=0x7ffe6c704100) at /usr/local/src/conda/python-3.10.18/Objects/call.c:43
+1                                                     
+#35 0x0000555555759949 in slot_tp_call (self=0x7ffe737ce140, args=0x7ffe6c73cac0, kwds=0x7ffe6c704100) at /usr/local/src/conda/python-3.10.18/Objects/typeobject.c:7494                                                    
+#36 0x000055555569bf9f in _PyObject_Call (kwargs=<optimized out>, args=0x7ffe6c73cac0, callable=0x7ffe737ce140, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Objects/call.c:305                           
+#37 PyObject_Call (callable=0x7ffe737ce140, args=0x7ffe6c73cac0, kwargs=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/call.c:317                                                                         
+#38 0x0000555555682c55 in do_call_core (kwdict=0x7ffe6c704100, callargs=0x7ffe6c73cac0, func=0x7ffe737ce140, trace_info=0x7fffffff7e80, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5945 
+#39 _PyEval_EvalFrameDefault (tstate=<optimized out>, f=0x5555644221a0, throwflag=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:4277                                                              
+#40 0x00005555556900ec in _PyEval_EvalFrame (throwflag=0, f=0x5555644221a0, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/internal/pycore_ceval.h:46                                               
+#41 _PyEval_Vector (kwnames=<optimized out>, argcount=<optimized out>, args=<optimized out>, locals=0x0, con=0x7ffe717724e0, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5067             
+#42 _PyFunction_Vectorcall (func=0x7ffe717724d0, stack=<optimized out>, nargsf=<optimized out>, kwnames=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/call.c:342                                         
+#43 0x00005555556807b0 in _PyObject_VectorcallTstate (kwnames=0x0, nargsf=<optimized out>, args=0x55555f254aa0, callable=0x7ffe717724d0, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/cpython/abst
+ract.h:114                                            
+#44 PyObject_Vectorcall (kwnames=0x0, nargsf=<optimized out>, args=0x55555f254aa0, callable=0x7ffe717724d0) at /usr/local/src/conda/python-3.10.18/Include/cpython/abstract.h:123                                          
+#45 call_function (kwnames=0x0, oparg=<optimized out>, pp_stack=<synthetic pointer>, trace_info=0x7fffffff8030, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5893                         
+#46 _PyEval_EvalFrameDefault (tstate=<optimized out>, f=0x55555f2548f0, throwflag=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:4198                                                              
+#47 0x00005555556900ec in _PyEval_EvalFrame (throwflag=0, f=0x55555f2548f0, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/internal/pycore_ceval.h:46                                               
+#48 _PyEval_Vector (kwnames=<optimized out>, argcount=<optimized out>, args=<optimized out>, locals=0x0, con=0x7ffe71772570, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5067             
+#49 _PyFunction_Vectorcall (func=0x7ffe71772560, stack=<optimized out>, nargsf=<optimized out>, kwnames=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/call.c:342                                         
+#50 0x000055555569be4c in PyVectorcall_Call (kwargs=<optimized out>, tuple=<optimized out>, callable=0x7ffe71772560) at /usr/local/src/conda/python-3.10.18/Objects/call.c:267                                             
+#51 _PyObject_Call (kwargs=<optimized out>, args=<optimized out>, callable=0x7ffe71772560, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/call.c:290                                               
+#52 PyObject_Call (callable=0x7ffe71772560, args=<optimized out>, kwargs=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/call.c:317                                                                        
+#53 0x0000555555682c55 in do_call_core (kwdict=0x7ffe6c7046c0, callargs=0x7fff126612d0, func=0x7ffe71772560, trace_info=0x7fffffff8240, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5945 
+#54 _PyEval_EvalFrameDefault (tstate=<optimized out>, f=0x7fff13dc6040, throwflag=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:4277                                                              
+#55 0x00005555556900ec in _PyEval_EvalFrame (throwflag=0, f=0x7fff13dc6040, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/internal/pycore_ceval.h:46                                               
+#56 _PyEval_Vector (kwnames=<optimized out>, argcount=<optimized out>, args=<optimized out>, locals=0x0, con=0x7ffe6f3b5400, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5067             
+#57 _PyFunction_Vectorcall (func=0x7ffe6f3b53f0, stack=<optimized out>, nargsf=<optimized out>, kwnames=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/call.c:342                                         
+#58 0x000055555569be4c in PyVectorcall_Call (kwargs=<optimized out>, tuple=<optimized out>, callable=0x7ffe6f3b53f0) at /usr/local/src/conda/python-3.10.18/Objects/call.c:267                                             
+#59 _PyObject_Call (kwargs=<optimized out>, args=<optimized out>, callable=0x7ffe6f3b53f0, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/call.c:290                                               
+#60 PyObject_Call (callable=0x7ffe6f3b53f0, args=<optimized out>, kwargs=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/call.c:317                                                                        
+#61 0x0000555555682c55 in do_call_core (kwdict=0x7ffe6c704680, callargs=0x7ffe6c6edde0, func=0x7ffe6f3b53f0, trace_info=0x7fffffff8450, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5945 
+#62 _PyEval_EvalFrameDefault (tstate=<optimized out>, f=0x7ffe6c70b300, throwflag=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:4277                                                              
+#63 0x00005555556900ec in _PyEval_EvalFrame (throwflag=0, f=0x7ffe6c70b300, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/internal/pycore_ceval.h:46                                               
+#64 _PyEval_Vector (kwnames=<optimized out>, argcount=<optimized out>, args=<optimized out>, locals=0x0, con=0x7ffe6f3b5520, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5067             
+#65 _PyFunction_Vectorcall (func=0x7ffe6f3b5510, stack=<optimized out>, nargsf=<optimized out>, kwnames=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/call.c:342                                         
+#66 0x000055555569be4c in PyVectorcall_Call (kwargs=<optimized out>, tuple=<optimized out>, callable=0x7ffe6f3b5510) at /usr/local/src/conda/python-3.10.18/Objects/call.c:267                                             
+#67 _PyObject_Call (kwargs=<optimized out>, args=<optimized out>, callable=0x7ffe6f3b5510, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/call.c:290                                               
+#68 PyObject_Call (callable=0x7ffe6f3b5510, args=<optimized out>, kwargs=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/call.c:317                                                                        
+#69 0x0000555555682c55 in do_call_core (kwdict=0x7ffe6c704740, callargs=0x7ffff47e5a50, func=0x7ffe6f3b5510, trace_info=0x7fffffff8660, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5945 
+#70 _PyEval_EvalFrameDefault (tstate=<optimized out>, f=0x555564421f90, throwflag=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:4277                                                              
+#71 0x000055555569b734 in _PyEval_EvalFrame (throwflag=0, f=0x555564421f90, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/internal/pycore_ceval.h:46                                               
+#72 _PyEval_Vector (kwnames=0x0, argcount=1, args=0x7fffffff8748, locals=0x0, con=0x7ffe6f3b5490, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5067                                        
+#73 _PyFunction_Vectorcall (kwnames=0x0, nargsf=1, stack=0x7fffffff8748, func=0x7ffe6f3b5480) at /usr/local/src/conda/python-3.10.18/Objects/call.c:342                                                                    
+#74 _PyObject_VectorcallTstate (kwnames=0x0, nargsf=1, args=0x7fffffff8748, callable=0x7ffe6f3b5480, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/cpython/abstract.h:114                          
+#75 method_vectorcall (method=<optimized out>, args=0x7ffff78a4088, nargsf=<optimized out>, kwnames=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/classobject.c:61                                       
+#76 0x0000555555682c55 in do_call_core (kwdict=0x7ffe6c7047c0, callargs=0x7ffff78a4070, func=0x7ffe6c706580, trace_info=0x7fffffff8870, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5945 
+#77 _PyEval_EvalFrameDefault (tstate=<optimized out>, f=0x7ffe716d2b60, throwflag=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:4277                                                              
+#78 0x000055555569b4b2 in _PyEval_EvalFrame (throwflag=0, f=0x7ffe716d2b60, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/internal/pycore_ceval.h:46                                               
+#79 _PyEval_Vector (kwnames=<optimized out>, argcount=<optimized out>, args=0x7ffe6c711600, locals=0x0, con=0x7ffe6e0b47a0, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5067              
+#80 _PyFunction_Vectorcall (kwnames=<optimized out>, nargsf=<optimized out>, stack=0x7ffe6c711600, func=0x7ffe6e0b4790) at /usr/local/src/conda/python-3.10.18/Objects/call.c:342                                          
+#81 _PyObject_VectorcallTstate (kwnames=<optimized out>, nargsf=<optimized out>, args=0x7ffe6c711600, callable=0x7ffe6e0b4790, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/cpython/abstract.h:114
+#82 method_vectorcall (method=<optimized out>, args=0x7ffe6c711608, nargsf=<optimized out>, kwnames=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/classobject.c:53                                       
+#83 0x00005555556803bc in _PyObject_VectorcallTstate (kwnames=0x0, nargsf=<optimized out>, args=0x7ffe6c711608, callable=0x7ffe6c706200, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/cpython/abst
+ract.h:114                                            
+#84 PyObject_Vectorcall (kwnames=0x0, nargsf=<optimized out>, args=0x7ffe6c711608, callable=0x7ffe6c706200) at /usr/local/src/conda/python-3.10.18/Include/cpython/abstract.h:123                                          
+#85 call_function (kwnames=0x0, oparg=<optimized out>, pp_stack=<synthetic pointer>, trace_info=0x7fffffff8a80, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5893                         
+#86 _PyEval_EvalFrameDefault (tstate=<optimized out>, f=0x7ffe6c711490, throwflag=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:4213                                                              
+#87 0x00005555556900ec in _PyEval_EvalFrame (throwflag=0, f=0x7ffe6c711490, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/internal/pycore_ceval.h:46                                               
+#88 _PyEval_Vector (kwnames=<optimized out>, argcount=<optimized out>, args=<optimized out>, locals=0x0, con=0x7ffff6e7e4e0, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5067             
+#89 _PyFunction_Vectorcall (func=0x7ffff6e7e4d0, stack=<optimized out>, nargsf=<optimized out>, kwnames=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/call.c:342                                         
+#90 0x00005555556807b0 in _PyObject_VectorcallTstate (kwnames=0x0, nargsf=<optimized out>, args=0x55555f254890, callable=0x7ffff6e7e4d0, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/cpython/abst
+ract.h:114                                            
+#91 PyObject_Vectorcall (kwnames=0x0, nargsf=<optimized out>, args=0x55555f254890, callable=0x7ffff6e7e4d0) at /usr/local/src/conda/python-3.10.18/Include/cpython/abstract.h:123                                          
+#92 call_function (kwnames=0x0, oparg=<optimized out>, pp_stack=<synthetic pointer>, trace_info=0x7fffffff8c30, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5893                         
+#93 _PyEval_EvalFrameDefault (tstate=<optimized out>, f=0x55555f2546d0, throwflag=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:4198                                                              
+#94 0x000055555569b4b2 in _PyEval_EvalFrame (throwflag=0, f=0x55555f2546d0, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/internal/pycore_ceval.h:46                                               
+#95 _PyEval_Vector (kwnames=<optimized out>, argcount=<optimized out>, args=0x5555644d0c80, locals=0x0, con=0x7ffff6e7e690, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5067              
+#96 _PyFunction_Vectorcall (kwnames=<optimized out>, nargsf=<optimized out>, stack=0x5555644d0c80, func=0x7ffff6e7e680) at /usr/local/src/conda/python-3.10.18/Objects/call.c:342                                          
+#97 _PyObject_VectorcallTstate (kwnames=<optimized out>, nargsf=<optimized out>, args=0x5555644d0c80, callable=0x7ffff6e7e680, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/cpython/abstract.h:114
+#98 method_vectorcall (method=<optimized out>, args=0x5555644d0c88, nargsf=<optimized out>, kwnames=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/classobject.c:53                                       
+#99 0x00005555556813f0 in _PyObject_VectorcallTstate (kwnames=0x7fff147507f0, nargsf=<optimized out>, args=<optimized out>, callable=0x7ffe6c706640, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/
+cpython/abstract.h:114                                
+#100 PyObject_Vectorcall (kwnames=0x7fff147507f0, nargsf=<optimized out>, args=<optimized out>, callable=0x7ffe6c706640) at /usr/local/src/conda/python-3.10.18/Include/cpython/abstract.h:123                             
+#101 call_function (kwnames=0x7fff147507f0, oparg=<optimized out>, pp_stack=<synthetic pointer>, trace_info=0x7fffffff8e40, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5893             
+#102 _PyEval_EvalFrameDefault (tstate=<optimized out>, f=0x5555644d0a10, throwflag=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:4231                                                             
+#103 0x000055555569b4b2 in _PyEval_EvalFrame (throwflag=0, f=0x5555644d0a10, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/internal/pycore_ceval.h:46                                              
+#104 _PyEval_Vector (kwnames=<optimized out>, argcount=<optimized out>, args=0x7ffe6c718390, locals=0x0, con=0x7fff12304950, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5067             
+#105 _PyFunction_Vectorcall (kwnames=<optimized out>, nargsf=<optimized out>, stack=0x7ffe6c718390, func=0x7fff12304940) at /usr/local/src/conda/python-3.10.18/Objects/call.c:342                                         
+#106 _PyObject_VectorcallTstate (kwnames=<optimized out>, nargsf=<optimized out>, args=0x7ffe6c718390, callable=0x7fff12304940, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/cpython/abstract.h:11
+4                                                     
+#107 method_vectorcall (method=<optimized out>, args=0x7ffe6c718398, nargsf=<optimized out>, kwnames=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/classobject.c:53                                      
+#108 0x00005555556813f0 in _PyObject_VectorcallTstate (kwnames=0x7fff147507f0, nargsf=<optimized out>, args=<optimized out>, callable=0x7ffe6c706340, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include
+/cpython/abstract.h:114                               
+#109 PyObject_Vectorcall (kwnames=0x7fff147507f0, nargsf=<optimized out>, args=<optimized out>, callable=0x7ffe6c706340) at /usr/local/src/conda/python-3.10.18/Include/cpython/abstract.h:123                             
+#110 call_function (kwnames=0x7fff147507f0, oparg=<optimized out>, pp_stack=<synthetic pointer>, trace_info=0x7fffffff9050, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5893             
+#111 _PyEval_EvalFrameDefault (tstate=<optimized out>, f=0x7ffe6c718210, throwflag=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:4231                                                             
+#112 0x000055555569b4b2 in _PyEval_EvalFrame (throwflag=0, f=0x7ffe6c718210, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/internal/pycore_ceval.h:46                                              
+#113 _PyEval_Vector (kwnames=<optimized out>, argcount=<optimized out>, args=0x7ffe6c70e528, locals=0x0, con=0x7fff123049e0, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5067             
+#114 _PyFunction_Vectorcall (kwnames=<optimized out>, nargsf=<optimized out>, stack=0x7ffe6c70e528, func=0x7fff123049d0) at /usr/local/src/conda/python-3.10.18/Objects/call.c:342                                         
+#115 _PyObject_VectorcallTstate (kwnames=<optimized out>, nargsf=<optimized out>, args=0x7ffe6c70e528, callable=0x7fff123049d0, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/cpython/abstract.h:11
+4                                                     
+#116 method_vectorcall (method=<optimized out>, args=0x7ffe6c70e530, nargsf=<optimized out>, kwnames=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/classobject.c:53                                      
+#117 0x00005555556813f0 in _PyObject_VectorcallTstate (kwnames=0x7ffff4828c40, nargsf=<optimized out>, args=<optimized out>, callable=0x7ffe6c706540, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include
+/cpython/abstract.h:114                               
+#118 PyObject_Vectorcall (kwnames=0x7ffff4828c40, nargsf=<optimized out>, args=<optimized out>, callable=0x7ffe6c706540) at /usr/local/src/conda/python-3.10.18/Include/cpython/abstract.h:123                             
+#119 call_function (kwnames=0x7ffff4828c40, oparg=<optimized out>, pp_stack=<synthetic pointer>, trace_info=0x7fffffff9260, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5893             
+#120 _PyEval_EvalFrameDefault (tstate=<optimized out>, f=0x7ffe6c70e3b0, throwflag=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:4231                                                             
+#121 0x000055555569b4b2 in _PyEval_EvalFrame (throwflag=0, f=0x7ffe6c70e3b0, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/internal/pycore_ceval.h:46                                              
+#122 _PyEval_Vector (kwnames=0x7ffe714f9c10, argcount=<optimized out>, args=0x7ffe714f9c00, locals=0x0, con=0x7ffeed13ac30, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5067              
+#123 _PyFunction_Vectorcall (kwnames=0x7ffe714f9c10, nargsf=<optimized out>, stack=0x7ffe714f9c00, func=0x7ffeed13ac20) at /usr/local/src/conda/python-3.10.18/Objects/call.c:342                                          
+#124 _PyObject_VectorcallTstate (kwnames=0x7ffe714f9c10, nargsf=<optimized out>, args=0x7ffe714f9c00, callable=0x7ffeed13ac20, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/cpython/abstract.h:114
+#125 method_vectorcall (method=method@entry=0x7ffe6c706300, args=args@entry=0x7ffe714f9c08, nargsf=<optimized out>, kwnames=kwnames@entry=0x7ffe6c6ed960) at /usr/local/src/conda/python-3.10.18/Objects/classobject.c:53  
+#126 0x000055555569be4c in PyVectorcall_Call (kwargs=<optimized out>, tuple=<optimized out>, callable=0x7ffe6c706300) at /usr/local/src/conda/python-3.10.18/Objects/call.c:267                                            
+#127 _PyObject_Call (kwargs=<optimized out>, args=<optimized out>, callable=0x7ffe6c706300, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/call.c:290                                              
+#128 PyObject_Call (callable=0x7ffe6c706300, args=<optimized out>, kwargs=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/call.c:317                                                                       
+#129 0x0000555555682c55 in do_call_core (kwdict=0x7ffe6c704a00, callargs=0x7ffff78a4070, func=0x7ffe6c706300, trace_info=0x7fffffff94d0, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5945
+#130 _PyEval_EvalFrameDefault (tstate=<optimized out>, f=0x7ffe6c70e200, throwflag=<optimized out>) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:4277                                                             
+#131 0x00005555556900ec in _PyEval_EvalFrame (throwflag=0, f=0x7ffe6c70e200, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Include/internal/pycore_ceval.h:46                                              
+#132 _PyEval_Vector (kwnames=<optimized out>, argcount=<optimized out>, args=<optimized out>, locals=0x0, con=0x7ffff6e7e840, tstate=0x5555558fc5c0) at /usr/local/src/conda/python-3.10.18/Python/ceval.c:5067            
+#133 _PyFunction_Vectorcall (func=0x7ffff6e7e830, stack=<optimized out>, nargsf=<optimized out>, kwnames=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objects/call.c:342                                        
+#134 0x0000555555688567 in _PyObject_FastCallDictTstate (tstate=0x5555558fc5c0, callable=0x7ffff6e7e830, args=<optimized out>, nargsf=<optimized out>, kwargs=<optimized out>) at /usr/local/src/conda/python-3.10.18/Objec
+ts/call.c:153                                         
+#135 0x0000555555699ab9 in _PyObject_Call_Prepend (tstate=0x5555558fc5c0, callable=0x7ffff6e7e830, obj=0x7ffe6c6edab0, args=<optimized out>, kwargs=0x7ffe6c704bc0) at /usr/local/src/conda/python-3.10.18/Objects/call.c:4
+31                                                    
+#136 0x0000555555759949 in slot_tp_call (self=0x7ffe6c6edab0, args=0x7ffff78a4070, kwds=0x7ffe6c704bc0) at /usr/local/src/conda/python-3.10.18/Objects/typeobject.c:7494                                                   
+#137 0x0000555555689023 in _PyObject_MakeTpCall (tstate=0x5555558fc5c0, callable=0x7ffe6c6edab0, args=0x7ffe716d2b00, nargs=<optimized out>, keywords=0x7ffff6b68c70) at /usr/local/src/conda/python-3.10.18/Objects/call.c
+:215                                                  
+#138 0x000055555568571d in _PyObject_VectorcallTstate (kwnames=0x7ffff6b68c70, nargsf=<optimized out>, args=<optimized out>, callable=0x7ffe6c6edab0, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Includ
+e/cpython/abstract.h:112                              
+#139 _PyObject_VectorcallTstate (kwnames=0x7ffff6b68c70, nargsf=<optimized out>, args=<optimized out>, callable=0x7ffe6c6edab0, tstate=<optimized out>) at /usr/local/src/conda/python-3.10.18/Include/cpython/abstract.h:9
+9           
+Assistant: The provided output is a gdb (GNU Debugger) traceback. It appears to be related to a Python program using the PyTorch library, which encountered an exception. 
+
+Here's a summary of the bug root cause:
+
+1. **Exception Type**: The exception is of type `dnnl::error`, which is a part of the oneDNN (formerly known as DNNL) library used by PyTorch for deep learning computations.
+2. **Error Location**: The error occurs in the `dnnl::deconvolution_forward::primitive_desc` constructor, which is called by PyTorch's `convolution_overrideable` function.
+3. **Possible Cause**: The error might be due to invalid input arguments or incorrect configuration of the convolution operation, leading to a failure in creating a primitive descriptor for the deconvolution operation.
+4. **Related Functions**: The functions involved in the error include `at::native::xpu::_convolution_out`, `at::native::xpu::_convolution`, and `at::native::conv_transpose2d_symint`, which are part of PyTorch's native functions for convolution and transposed convolution operations.
+
+To debug this issue, you can try the following steps:
+
+1. **Check Input Arguments**: Verify that the input arguments to the convolution or transposed convolution operation are valid and correctly configured.
+2. **Validate Model Configuration**: Ensure that the PyTorch model is correctly configured, and the convolution or transposed convolution operation is properly defined.
+3. **Update oneDNN Library**: Make sure that the oneDNN library is up-to-date, as newer versions might fix known issues or improve stability.
+4. **Enable Debugging**: Enable debugging in PyTorch and oneDNN to gather more detailed information about the error and the execution flow leading to it.
+
+By following these steps, you should be able to identify and potentially fix the root cause of the error. If the issue persists, you may want to seek further assistance from the PyTorch or oneDNN communities.
+User: 
