@@ -13,6 +13,7 @@ from langchain_core.runnables import RunnablePassthrough
 import subprocess
 from jinja2 import Environment, FileSystemLoader
 from langchain_core.messages import AIMessage
+import json
 
 
 ################################
@@ -29,7 +30,7 @@ def get_history(state: State, node: str):
     executed_nodes = state.get('execution_path')
     last_node = executed_nodes[-1] if executed_nodes else "START"
     
-    print(f"Node {node} executed after {last_node}\n")
+    print(f"=== Node {node} executed after {last_node} ====\n")
     return executed_nodes, last_node 
 
 
@@ -38,10 +39,13 @@ def get_history(state: State, node: str):
 # Tools 
 ################################
 @tool
+def do_nothing_tool(test_file: str, test_case: str, tmux: str) -> str:
+    """ Do nothing """
+    return "do nothing tool is called"
+
+@tool
 def verbose_tool(test_file: str, test_case: str, tmux: str, env: str) -> str:
     """Executes gdb catch throw comamnd to capture the trace of a pytest failure."""
-    import pdb
-    pdb.set_trace()
 
     command = f"tmux send-keys -t {tmux}  \"tmux clear-history; {env} pytest -v {test_file} -k {test_case} 2>&1|tee /tmp/log ; tmux wait -S my_lock \" C-m; tmux wait my_lock; tmux capture-pane -S - -N -p -t {tmux}"
     try:
@@ -77,19 +81,17 @@ def gdb_catch_throw_tool(test_file: str, test_case: str, tmux: str) -> str:
         return f"Error: Command '{command.split()[0]}' not found."
 
 
-retest_errtype_tools = [gdb_catch_throw_tool]
-llm_with_errortools = llm.bind_tools(retest_errtype_tools)
+retest_errtype_tools = [gdb_catch_throw_tool, do_nothing_tool]
+llm_with_errortools = llm.bind_tools(retest_errtype_tools, tool_choice='auto')
 
-retest_deps_tools = [verbose_tool]
-llm_with_depstools = llm.bind_tools(retest_deps_tools)
+retest_deps_tools = [verbose_tool, do_nothing_tool]
+llm_with_depstools = llm.bind_tools(retest_deps_tools, tool_choice='auto')
 
 ################################
 # Nodes 
 ################################
 
 def classify(state: State):
-    import pdb
-    pdb.set_trace()
     executed_nodes, last_node = get_history(state, "classify")
 
     prompt = ChatPromptTemplate.from_messages([
@@ -150,14 +152,11 @@ def depsRAG(
     else:
         raise ValueError(f"No messages found in input state to tool_edge: {state}")
 
-    import json
     json_string = ai_message.content
     python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
     
     if python_object['torch_op'] != None:
         question = f"Please get the depedency library or tool for the torch-xpu-ops op {python_object['torch_op']} based on the knowledge of the context. Only return the final answer and without any explainations.If no dependency library is detected, return 'sycl'" 
-        import pdb
-        pdb.set_trace()
         answer = rag_chain.invoke(question)
     else:
         answer = "sycl"
@@ -179,12 +178,10 @@ def triage_start(
   
 
 def check_for_dependency(state: State):
-    import pdb
-    pdb.set_trace()
     executed_nodes, last_node = get_history(state, "check_for_dependency")
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a helpful assistant that rerun the failed pytest test case according to torch ops, rerun with \"DNNL_VERBOSE=1\" for oneDNN issue or \"MKL_VERBOSE=1\" for MKL issue in tmux session, for other dependency return 'No dependency checkers'."),
+        ("system", "You are a helpful assistant that rerun the failed pytest test case according to torch ops, rerun with \"DNNL_VERBOSE=1\" for oneDNN dependent ops or \"MKL_VERBOSE=1\" for MKL dependent ops in tmux session, for other dependency do nothing."),
         ("human", "{text}")
     ])
     chain = {"text": RunnablePassthrough()} | prompt | llm_with_depstools
@@ -193,10 +190,11 @@ def check_for_dependency(state: State):
     }
 
 def check_for_error_type(state: State):
+ 
     executed_nodes, last_node = get_history(state, "check_for_error_type")
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a helpful assistant that rerun pytest for different error type, for runtime error rerun with gdb catch throw in tmux session, for other error type return 'No error checkers'."),
+        ("system", "You are a helpful assistant that rerun pytest for different error type, if the test error_type is runtime error rerun with gdb catch throw in tmux session, for other error types do nothing."),
         ("human", "{text}")
     ])
     chain = {"text": RunnablePassthrough()} | prompt | llm_with_errortools
@@ -205,13 +203,11 @@ def check_for_error_type(state: State):
     }
 
 def summary(state: State):
-    import pdb
-    pdb.set_trace()
 
     executed_nodes, last_node = get_history(state, "summary")
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a helpful assistant that summary the bug root cause based on the input."),
+        ("system", "You are a helpful assistant that summary the bug root cause based on the input. If a do nothing tool is called just return N/A."),
         ("human", "{text}")
     ])
     chain = {"text": RunnablePassthrough()} | prompt | llm
@@ -227,9 +223,14 @@ def summary(state: State):
         _reversed_node = list(reversed(executed_nodes))
         index = _reversed_node.index("triage_start") 
 
-        if ( "check_for_dependency" in _reversed_node and _reversed_node.index("check_for_dependency") < index ) or \
-           ( "check_for_error_type" in _reversed_node and _reversed_node.index("check_for_error_type") < index ):
+        checker = ""
+        if ( "check_for_dependency" in _reversed_node and _reversed_node.index("check_for_dependency") + 1 == index ):
             index = index + 2
+            checker = "check_for_dependency"
+
+        if ( "check_for_error_type" in _reversed_node and _reversed_node.index("check_for_error_type") + 1 == index ):
+            index = index + 2
+            checker = "check_for_error_type"
 
         if isinstance(state, list):
             ai_message = state[-index]
@@ -238,15 +239,14 @@ def summary(state: State):
         else:
             raise ValueError(f"No messages found in input state to tool_edge: {state}")
     
-        import json
         json_string = ai_message.content
         python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
 
-        if _reversed_node[index+1] == "check_for_dependency":
+        if checker == "check_for_dependency":
             summary_ai_message = chain.invoke(ai_message2.content)
             python_object["dependency_triaged"] = summary_ai_message.content
     
-        if _reversed_node[index+1] == "check_for_error_type":
+        if checker == "check_for_error_type":
             summary_ai_message = chain.invoke(ai_message2.content)
             python_object["error_type_triaged"] = summary_ai_message.content
  
@@ -267,8 +267,6 @@ def summary(state: State):
 def router(
     state: State
 ):
-    import pdb
-    pdb.set_trace()
     """
     Use in the conditional_edge to route to the restest_with_tools node according to the failure type. 
     If no failure type is matched, route to the end.
@@ -280,7 +278,6 @@ def router(
     else:
         raise ValueError(f"No messages found in input state to tool_edge: {state}")
 
-    import json
     json_string = ai_message.content
     python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
     
@@ -315,16 +312,13 @@ def route_error_type(
         else:
             raise ValueError(f"No messages found in input state to tool_edge: {state}")
     
-        import json
         json_string = ai_message.content
         python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
     
-        if python_object['error_type'] == 'RuntimeError':
-            #print(f"route check_for_error_type: {python_object}\n")
-            return 'retest_errtype_tools'
-        else:
-            #print("route END check_for_error_type\n")
-            return "summary" 
+        #print(f"route check_for_error_type: {python_object}\n")
+        return 'retest_errtype_tools'
+    else:
+        return END
 
 def route_dependency(
     state: State
@@ -333,10 +327,6 @@ def route_dependency(
     Use in the conditional_edge to route to the restest_with_tools node according to the failure type. 
     If no failure type is matched, route to the end.
     """
-    import pdb
-    pdb.set_trace()
-
-
     if isinstance(state, list):
         ai_message = state[-1]
     elif messages := state.get("messages", []):
@@ -352,16 +342,13 @@ def route_dependency(
         else:
             raise ValueError(f"No messages found in input state to tool_edge: {state}")
  
-        import json
         json_string = ai_message.content
         python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
         
-        if python_object['dependency'] == 'oneDNN' or python_object['dependency'] == 'MKL' :
-            #print(f"route check_for_error_type: {python_object}\n")
-            return 'retest_deps_tools'
-        else:
-            #print("route END check_for_error_type\n")
-            return "summary" 
+        #print(f"route check_for_error_type: {python_object}\n")
+        return 'retest_deps_tools'
+    else:
+        return END 
 
 
 def stream_graph_updates(user_input: str, graph: StateGraph):
@@ -369,10 +356,17 @@ def stream_graph_updates(user_input: str, graph: StateGraph):
     for event in graph.stream({"messages": [{"role": "user", "content": user_input}], "execution_path": []}):
         for value in event.values():
             if isinstance(value["messages"], list):
-                print("Assistant:", value["messages"][-1].content)
+                json_string = value["messages"][-1].content
             else:
-                print("Assistant:", value["messages"].content)
+                 json_string =value["messages"].content
+            try:
+                python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
+                json_string = json.dumps(python_object, indent=4)
+            except:
+                print("invalid json")
 
+            print(f"### Assistant: {json_string}")
+ 
 
    
 graph_builder = StateGraph(State)
@@ -412,7 +406,7 @@ graph_builder.add_conditional_edges(
     # want to use a node named something else apart from "tools",
     # You can update the value of the dictionary to something else
     # e.g., "tools": "my_tools"
-    {"retest_errtype_tools": "retest_errtype_tools", "summary": "summary"},
+    {"retest_errtype_tools": "retest_errtype_tools", END: END},
 )
 graph_builder.add_conditional_edges(
     "check_for_dependency",
@@ -422,7 +416,7 @@ graph_builder.add_conditional_edges(
     # want to use a node named something else apart from "tools",
     # You can update the value of the dictionary to something else
     # e.g., "tools": "my_tools"
-    {"retest_deps_tools": "retest_deps_tools", "summary": "summary"},
+    {"retest_deps_tools": "retest_deps_tools", END: END},
 )
 graph_builder.add_edge("retest_errtype_tools", "summary")
 graph_builder.add_edge("retest_deps_tools", "summary")
@@ -449,8 +443,6 @@ except Exception:
 while True:
     try:
         user_input = input("User: ")
-        import pdb
-        pdb.set_trace()
 
         if user_input == "1":
             test_file = "test/xpu/quantization/core/test_workflow_ops_xpu.py"
