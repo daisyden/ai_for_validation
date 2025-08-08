@@ -1,123 +1,123 @@
-addbmm	oneDNN
-addbmm_	oneDNN
-addbmm.out	oneDNN
-_addmm_activation.out	oneDNN
-addmm.out	oneDNN
-addmv.out	oneDNN
-baddbmm	oneDNN
-baddbmm_	oneDNN
-baddbmm.out	oneDNN
-bmm	oneDNN
-bmm.out	oneDNN
-cholesky_inverse	MKL
-cholesky_inverse.out	MKL
-cholesky	MKL
-cholesky.out	MKL
-_cholesky_solve_helper	MKL
-_conv_depthwise2d	oneDNN
-_conv_depthwise2d.out	oneDNN
-conv_depthwise3d	oneDNN
-convolution_backward	oneDNN
-conv_tbc	oneDNN
-_cslt_compress	cuSPARSE
-_cslt_sparse_mm	cuSPARSE
-_cslt_sparse_mm_search	cuSPARSE
-dot	MKL
-_fft_c2c	MKL
-_fft_c2c.out	MKL
-_fft_c2r	MKL
-_fft_c2r.out	MKL
-_fft_r2c	MKL
-_fft_r2c.out	MKL
-geqrf.a	MKL
-geqrf	MKL
-_int_mm	oneDNN
-_int_mm.out	oneDNN
-inverse	MKL
-inverse.out	MKL
-linalg_cholesky_ex.L	MKL
-linalg_cholesky_ex	MKL
-_linalg_det	MKL
-_linalg_det.result	MKL
-_linalg_eigh.eigenvalues	MKL
-linalg_eigh.eigvals	MKL
-_linalg_eigh	MKL
-linalg_eigh	MKL
-linalg_eig	MKL
-linalg_eig.out	MKL
-linalg_eigvalsh	MKL
-linalg_eigvalsh.out	MKL
-_linalg_eigvals	MKL
-linalg_eigvals.out	MKL
-linalg_householder_product	MKL
-linalg_householder_product.out	MKL
-linalg_inv_ex.inverse	MKL
-linalg_inv_ex	MKL
-linalg_ldl_factor_ex	MKL
-linalg_ldl_factor_ex.out	MKL
-linalg_ldl_solve	MKL
-linalg_ldl_solve.out	MKL
-linalg_lstsq.out	MKL
-linalg_lu_factor_ex	MKL
-linalg_lu_factor_ex.out	MKL
-linalg_lu	MKL
-linalg_lu.out	MKL
-linalg_lu_solve	MKL
-linalg_lu_solve.out	MKL
-linalg_matrix_exp	MKL
-linalg_qr	MKL
-linalg_qr.out	MKL
-_linalg_slogdet	MKL
-_linalg_slogdet.sign	MKL
-_linalg_solve_ex	MKL
-_linalg_solve_ex.result	MKL
-linalg_solve_triangular	MKL
-linalg_solve_triangular.out	MKL
-_linalg_svd	MKL
-_linalg_svd.U	MKL
-lu_solve	MKL
-lu_solve.out	MKL
-lu_unpack	MKL
-lu_unpack.out	MKL
-_lu_with_info	MKL
-matrix_exp	MKL
-miopen_batch_norm_backward	ROCm
-miopen_batch_norm	ROCm
-miopen_convolution_add_relu	ROCm
-miopen_convolution_relu	ROCm
-miopen_convolution	ROCm
-miopen_convolution_transpose	ROCm
-miopen_depthwise_convolution	ROCm
-miopen_rnn_backward	ROCm
-miopen_rnn	ROCm
-mm	oneDNN
-mm.out	oneDNN
-ormqr	MKL
-ormqr.out	MKL
-_scaled_mm	oneDNN
-_scaled_mm.out	oneDNN
-_slow_conv2d_backward.grad_input	oneDNN
-_slow_conv2d_backward.output_mask	oneDNN
-_slow_conv2d_forward	oneDNN
-_slow_conv2d_forward.output	oneDNN
-slow_conv_dilated2d	oneDNN
-slow_conv_dilated3d	oneDNN
-slow_conv_transpose2d	oneDNN
-slow_conv_transpose2d.out	oneDNN
-slow_conv_transpose3d	oneDNN
-slow_conv_transpose3d.out	oneDNN
-sparse:addmm	MKL
-sparse:addmm_	MKL
-sparse:addmm.out	MKL
-sparse:bmm	MKL
-sparse:bmm.out	MKL
-sparse:hspmm	MKL
-sparse:hspmm.out	MKL
-sparse:mm	MKL
-sparse:mm.out	MKL
-sparse:_sparse_sparse_matmul	MKL
-sparse:sspaddmm.out	MKL
-sspaddmm.out	MKL
-triangular_solve	MKL
-triangular_solve.X	MKL
-vdot	MKL
+addbmm depends on oneDNN
+addbmm_ depends on oneDNN
+addbmm.out depends on oneDNN
+_addmm_activation.out depends on oneDNN
+addmm.out depends on oneDNN
+addmv.out depends on oneDNN
+baddbmm depends on oneDNN
+baddbmm_ depends on oneDNN
+baddbmm.out depends on oneDNN
+bmm depends on oneDNN
+bmm.out depends on oneDNN
+cholesky_inverse depends on MKL
+cholesky_inverse.out depends on MKL
+cholesky depends on MKL
+cholesky.out depends on MKL
+_cholesky_solve_helper depends on MKL
+_conv_depthwise2d depends on oneDNN
+_conv_depthwise2d.out depends on oneDNN
+conv_depthwise3d depends on oneDNN
+convolution_backward depends on oneDNN
+conv_tbc depends on oneDNN
+_cslt_compress depends on cuSPARSE
+_cslt_sparse_mm depends on cuSPARSE
+_cslt_sparse_mm_search depends on cuSPARSE
+dot depends on MKL
+_fft_c2c depends on MKL
+_fft_c2c.out depends on MKL
+_fft_c2r depends on MKL
+_fft_c2r.out depends on MKL
+_fft_r2c depends on MKL
+_fft_r2c.out depends on MKL
+geqrf.a depends on MKL
+geqrf depends on MKL
+_int_mm depends on oneDNN
+_int_mm.out depends on oneDNN
+inverse depends on MKL
+inverse.out depends on MKL
+linalg_cholesky_ex.L depends on MKL
+linalg_cholesky_ex depends on MKL
+_linalg_det depends on MKL
+_linalg_det.result depends on MKL
+_linalg_eigh.eigenvalues depends on MKL
+linalg_eigh.eigvals depends on MKL
+_linalg_eigh depends on MKL
+linalg_eigh depends on MKL
+linalg_eig depends on MKL
+linalg_eig.out depends on MKL
+linalg_eigvalsh depends on MKL
+linalg_eigvalsh.out depends on MKL
+_linalg_eigvals depends on MKL
+linalg_eigvals.out depends on MKL
+linalg_householder_product depends on MKL
+linalg_householder_product.out depends on MKL
+linalg_inv_ex.inverse depends on MKL
+linalg_inv_ex depends on MKL
+linalg_ldl_factor_ex depends on MKL
+linalg_ldl_factor_ex.out depends on MKL
+linalg_ldl_solve depends on MKL
+linalg_ldl_solve.out depends on MKL
+linalg_lstsq.out depends on MKL
+linalg_lu_factor_ex depends on MKL
+linalg_lu_factor_ex.out depends on MKL
+linalg_lu depends on MKL
+linalg_lu.out depends on MKL
+linalg_lu_solve depends on MKL
+linalg_lu_solve.out depends on MKL
+linalg_matrix_exp depends on MKL
+linalg_qr depends on MKL
+linalg_qr.out depends on MKL
+_linalg_slogdet depends on MKL
+_linalg_slogdet.sign depends on MKL
+_linalg_solve_ex depends on MKL
+_linalg_solve_ex.result depends on MKL
+linalg_solve_triangular depends on MKL
+linalg_solve_triangular.out depends on MKL
+_linalg_svd depends on MKL
+_linalg_svd.U depends on MKL
+lu_solve depends on MKL
+lu_solve.out depends on MKL
+lu_unpack depends on MKL
+lu_unpack.out depends on MKL
+_lu_with_info depends on MKL
+matrix_exp depends on MKL
+miopen_batch_norm_backward depends on ROCm
+miopen_batch_norm depends on ROCm
+miopen_convolution_add_relu depends on ROCm
+miopen_convolution_relu depends on ROCm
+miopen_convolution depends on ROCm
+miopen_convolution_transpose depends on ROCm
+miopen_depthwise_convolution depends on ROCm
+miopen_rnn_backward depends on ROCm
+miopen_rnn depends on ROCm
+mm depends on oneDNN
+mm.out depends on oneDNN
+ormqr depends on MKL
+ormqr.out depends on MKL
+_scaled_mm depends on oneDNN
+_scaled_mm.out depends on oneDNN
+_slow_conv2d_backward.grad_input depends on oneDNN
+_slow_conv2d_backward.output_mask depends on oneDNN
+_slow_conv2d_forward depends on oneDNN
+_slow_conv2d_forward.output depends on oneDNN
+slow_conv_dilated2d depends on oneDNN
+slow_conv_dilated3d depends on oneDNN
+slow_conv_transpose2d depends on oneDNN
+slow_conv_transpose2d.out depends on oneDNN
+slow_conv_transpose3d depends on oneDNN
+slow_conv_transpose3d.out depends on oneDNN
+sparse:addmm depends on MKL
+sparse:addmm_ depends on MKL
+sparse:addmm.out depends on MKL
+sparse:bmm depends on MKL
+sparse:bmm.out depends on MKL
+sparse:hspmm depends on MKL
+sparse:hspmm.out depends on MKL
+sparse:mm depends on MKL
+sparse:mm.out depends on MKL
+sparse:_sparse_sparse_matmul depends on MKL
+sparse:sspaddmm.out depends on MKL
+sspaddmm.out depends on MKL
+triangular_solve depends on MKL
+triangular_solve.X depends on MKL
+vdot depends on MKL
