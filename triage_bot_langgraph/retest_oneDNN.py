@@ -23,6 +23,16 @@ class State(TypedDict):
     # in the annotation defines how this state key should be updated
     # (in this case, it appends messages to the list, rather than overwriting them)
     messages: Annotated[list, add_messages]
+    execution_path: list[str]        
+
+def get_history(state: State, node: str):
+    executed_nodes = state.get('execution_path')
+    last_node = executed_nodes[-1] if executed_nodes else "START"
+    
+    print(f"Node {node} executed after {last_node}\n")
+    return executed_nodes, last_node 
+
+
 
 ################################
 # Tools 
@@ -78,12 +88,18 @@ llm_with_depstools = llm.bind_tools(retest_deps_tools)
 ################################
 
 def classify(state: State):
+    import pdb
+    pdb.set_trace()
+    executed_nodes, last_node = get_history(state, "classify")
+
     prompt = ChatPromptTemplate.from_messages([
         ("system", "You are a helpful assistant that classify pytest faiures."),
         ("human", "{text}")
     ])
     chain = {"text": RunnablePassthrough()} | prompt | llm
-    return {"messages": chain.invoke(state["messages"])}
+    return {"messages": chain.invoke(state["messages"]),
+            "execution_path": state.get("execution_path", []) + ["classify"]
+    }
 
 ################################
 # RAG node
@@ -124,6 +140,9 @@ rag_chain = (
 def depsRAG(
     state: State,
 ) -> State:
+
+    executed_nodes, last_node = get_history(state, "depsRAG")
+
     if isinstance(state, list):
         ai_message = state[-1]
     elif messages := state.get("messages", []):
@@ -136,40 +155,60 @@ def depsRAG(
     python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
     
     if python_object['torch_op'] != None:
-        question = f"Please update {ai_message} return the depedency library or tool for the torch-xpu-ops op {python_object['torch_op']} based on the knowledge of the context. Only return the final answer and without any explainations." 
+        question = f"Please get the depedency library or tool for the torch-xpu-ops op {python_object['torch_op']} based on the knowledge of the context. Only return the final answer and without any explainations.If no dependency library is detected, return 'sycl'" 
+        import pdb
+        pdb.set_trace()
         answer = rag_chain.invoke(question)
     else:
         answer = "sycl"
 
     python_object["dependency"] = answer
     json_string = json.dumps(python_object)
-    return {"messages": AIMessage(content=json_string)}
+    return {"messages": AIMessage(content=json_string),
+            "execution_path": state.get("execution_path", []) + ["depRAG"]
+    }
 
 def triage_start(
     state: State,
 ):
-    return state 
+    executed_nodes, last_node = get_history(state, "triage_start")
+
+    return {"messages": state.get("messages", []),
+            "execution_path": state.get("execution_path", []) + ["triage_start"]
+    }
+  
 
 def check_for_dependency(state: State):
+    import pdb
+    pdb.set_trace()
+    executed_nodes, last_node = get_history(state, "check_for_dependency")
+
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a helpful assistant that rerun the failed pytest test case according to torch ops, rerun with \"DNNL_VERBOSE=1\" for oneDNN issue or \"MKL_VERBOSE=1\" for MKL issue in tmux session"),
+        ("system", "You are a helpful assistant that rerun the failed pytest test case according to torch ops, rerun with \"DNNL_VERBOSE=1\" for oneDNN issue or \"MKL_VERBOSE=1\" for MKL issue in tmux session, for other dependency return 'No dependency checkers'."),
         ("human", "{text}")
     ])
     chain = {"text": RunnablePassthrough()} | prompt | llm_with_depstools
-    return {"messages": chain.invoke(state["messages"][-1])}
+    return {"messages": chain.invoke(state["messages"][-1]),
+            "execution_path": state.get("execution_path", []) + ["check_for_dependency"]
+    }
 
 def check_for_error_type(state: State):
+    executed_nodes, last_node = get_history(state, "check_for_error_type")
+
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a helpful assistant that rerun pytest for different error type, for runtime error rerun with gdb catch throw in tmux session"),
+        ("system", "You are a helpful assistant that rerun pytest for different error type, for runtime error rerun with gdb catch throw in tmux session, for other error type return 'No error checkers'."),
         ("human", "{text}")
     ])
     chain = {"text": RunnablePassthrough()} | prompt | llm_with_errortools
-    return {"messages": chain.invoke(state["messages"][-1])}
+    return {"messages": chain.invoke(state["messages"][-1]),
+            "execution_path": state.get("execution_path", []) + ["check_for_error_type"]
+    }
 
 def summary(state: State):
-
     import pdb
     pdb.set_trace()
+
+    executed_nodes, last_node = get_history(state, "summary")
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", "You are a helpful assistant that summary the bug root cause based on the input."),
@@ -178,30 +217,47 @@ def summary(state: State):
     chain = {"text": RunnablePassthrough()} | prompt | llm
 
     if isinstance(state, list):
-        ai_message = state[-3]
-    elif messages := state.get("messages", []):
-        ai_message = messages[-3]
-
-    import json
-    json_string = ai_message.content
-    python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
-
-    if isinstance(state, list):
         ai_message2 = state[-1]
     elif messages := state.get("messages", []):
         ai_message2 = messages[-1]
     else:
         raise ValueError(f"No messages found in input state to tool_edge: {state}")
 
-    if ai_message2.content.startswith("Error type triage tool output:"):
-        summary_ai_message = chain.invoke(ai_message2.content)
-        python_object["error_type_triaged"] = summary_ai_message.content
-    if ai_message2.content.startswith("Dependency triage tool output:"):
-        summary_ai_message = chain.invoke(ai_message2.content)
-        python_object["dependency_triaged"] = summary_ai_message.content
+    try:
+        _reversed_node = list(reversed(executed_nodes))
+        index = _reversed_node.index("triage_start") 
+
+        if ( "check_for_dependency" in _reversed_node and _reversed_node.index("check_for_dependency") < index ) or \
+           ( "check_for_error_type" in _reversed_node and _reversed_node.index("check_for_error_type") < index ):
+            index = index + 2
+
+        if isinstance(state, list):
+            ai_message = state[-index]
+        elif messages := state.get("messages", []):
+            ai_message = messages[-index]
+        else:
+            raise ValueError(f"No messages found in input state to tool_edge: {state}")
+    
+        import json
+        json_string = ai_message.content
+        python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
+
+        if _reversed_node[index+1] == "check_for_dependency":
+            summary_ai_message = chain.invoke(ai_message2.content)
+            python_object["dependency_triaged"] = summary_ai_message.content
+    
+        if _reversed_node[index+1] == "check_for_error_type":
+            summary_ai_message = chain.invoke(ai_message2.content)
+            python_object["error_type_triaged"] = summary_ai_message.content
+ 
+    except:
+        print("Impossible, cannot find triage_start")
+        raise ValueError(f"Cannot find triage_start node in state.")
 
     json_string = json.dumps(python_object)
-    return {"messages": AIMessage(content=json_string)}
+    return {"messages": AIMessage(content=json_string),
+            "execution_path": state.get("execution_path", []) + ["summary"]
+    }
 
 
 ################################
@@ -211,6 +267,8 @@ def summary(state: State):
 def router(
     state: State
 ):
+    import pdb
+    pdb.set_trace()
     """
     Use in the conditional_edge to route to the restest_with_tools node according to the failure type. 
     If no failure type is matched, route to the end.
@@ -308,7 +366,7 @@ def route_dependency(
 
 def stream_graph_updates(user_input: str, graph: StateGraph):
     messages = [HumanMessage(user_input)]
-    for event in graph.stream({"messages": [{"role": "user", "content": user_input}]}):
+    for event in graph.stream({"messages": [{"role": "user", "content": user_input}], "execution_path": []}):
         for value in event.values():
             if isinstance(value["messages"], list):
                 print("Assistant:", value["messages"][-1].content)
@@ -391,6 +449,8 @@ except Exception:
 while True:
     try:
         user_input = input("User: ")
+        import pdb
+        pdb.set_trace()
 
         if user_input == "1":
             test_file = "test/xpu/quantization/core/test_workflow_ops_xpu.py"
