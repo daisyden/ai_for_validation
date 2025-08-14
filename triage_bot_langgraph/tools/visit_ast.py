@@ -22,34 +22,6 @@ class VisitAST(ast.NodeTransformer):
         self.tensor_print = False
         
 
-    #def find_function_for_a_line(self, source_file, target_line):
-    #    """
-    #    Returns the name of the function that contains the target line number.
-    #    
-    #    Args:
-    #        source_file (str): The Python source code file to analyze
-    #        target_line (int): The line number to check (1-based)
-    #    
-    #    Returns:
-    #        str: The name of the containing function, or None if not in a function
-    #    """
-    #    try:
-    #        with open(source_file, 'r') as file:
-    #            content = file.read()
-    #    except FileNotFoundError:
-    #        print("Error: The file 'my_file.txt' was not found.")
-
-    #    tree = ast.parse(content)
-    #    
-    #    # We'll search through all nodes in the AST
-    #    for node in ast.walk(tree):
-    #        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-    #            # Check if target line is within this function's body
-    #            if (node.lineno <= target_line <= 
-    #                max(getattr(n, 'lineno', node.lineno) for n in ast.walk(node))):
-    #                return node.name
-    #    return None
-
     def visit_Module(self, node):
         if not self.import_added:
             node.body = [
@@ -64,7 +36,7 @@ class VisitAST(ast.NodeTransformer):
         if id(node) not in self.visited:
             for line in self.line_func_dict.keys():
                 func = self.line_func_dict[line]
-                
+               
                 if node.name == func and ( node.lineno <= line < max(getattr(n, 'lineno', node.lineno) for n in ast.walk(node)) ): 
                     self.scope_stack.append(node.name)
                     debug_print = self._create_print(
@@ -123,7 +95,8 @@ class VisitAST(ast.NodeTransformer):
                 debug_nodes.append(self._create_var_debug(kw.value.id, f"KWARG {kw.arg}"))
 
         if "assertEqual" in func_name and len(call_node.args) >= 2:
-            debug_nodes.append(self._create_equal_checking(call_node.args[0], call_node.args[1]))
+            if isinstance(call_node.args[0], ast.Name) and isinstance(call_node.args[0], ast.Name):
+                debug_nodes.append(self._create_equal_checking(call_node.args[0], call_node.args[1]))
 
         return debug_nodes
 
@@ -190,30 +163,31 @@ except Exception as e:
 
 def debug_transform(source_code, function_dict):
     import copy
-    function_dict_copied = copy.deepcopy(function_dict)
+    _function_dict = copy.deepcopy(function_dict)
 
     tree = ast.parse(source_code)
     func_def = {}
 
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef):
-            func_def[node.lineno] = node.name
-    
-    for index, (_line, _func) in enumerate(function_dict_copied.items()):
+            func_def[node.name] = node.lineno
+
+    for index, (_line, _func) in enumerate(function_dict.items()):
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef) and node.name == _func:
                 for node in ast.walk(node):
                     if isinstance(node, ast.Call):
                         if isinstance(node.func, ast.Name):
                             #print(f"#### {node.func.id} is called by {_func}\n")
-                            if node.func.id in func_def.values():                                
-                                function_dict[node.func.lineno] = node.func.id
+                            if node.func.id in func_def.keys():                                
+                                _function_dict.update({node.func.lineno: node.func.id,})
+                                #print(_function_dict)
                         if isinstance(node.func, ast.Attribute):
-                            if isinstance(node.func.value, ast.Name) and node.func.attr in func_def.values():
-                                #print(f"#### {node.func.value.id}.{node.func.attr} is called by {_func}\n")                          
-                                function_dict[node.func.lineno] = node.func.attr
-
-    transformer = VisitAST(function_dict)
+                            if isinstance(node.func.value, ast.Name) and node.func.attr in func_def.keys():
+                                #print(f"#### {_function_dict} {node.func.value.id}.{node.func.attr} is called by {_func}\n")                          
+                                _function_dict.update({func_def[node.func.attr]: node.func.attr,})
+                                #print(_function_dict)
+    transformer = VisitAST(_function_dict)
     new_tree = transformer.visit(tree)
     ast.fix_missing_locations(new_tree)
     return ast.unparse(new_tree)

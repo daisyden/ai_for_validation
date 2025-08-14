@@ -80,8 +80,25 @@ def gdb_catch_throw_tool(test_file: str, test_case: str, tmux: str) -> str:
     except FileNotFoundError:
         return f"Error: Command '{command.split()[0]}' not found."
 
-
-retest_errtype_tools = [gdb_catch_throw_tool, do_nothing_tool]
+@tool
+def debug_prints_tool(test_file: str, test_case: str, base_test_file: str, original_test_case: str, lineno: int, tmux: str) -> str:
+    """Instrument print in the code and rerun the test to collect debug information."""
+    command = f"tmux send-keys -t {tmux}  \"tmux clear-history; cp {base_test_file} {base_test_file}.saved ; python /tmp/visit_ast.py {base_test_file} {original_test_case} {lineno} 2>&1|tee {base_test_file}.updated; cp {base_test_file}.updated {base_test_file} ; PYTORCH_ENABLE_XPU_FALLBACK=1 PYTORCH_TEST_WITH_SLOW=1 pytest -vs {test_file} -k {test_case} 2>&1|tee /tmp/log ; mv {base_test_file}.saved {base_test_file}; tmux wait -S my_lock \" C-m; tmux wait my_lock; tmux capture-pane -S - -N -p -t {tmux}"
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,  # Set to True to allow shell features like piping
+            check=True,  # Raise an exception for non-zero exit codes
+            text=True,   # Decode stdout/stderr as text
+            capture_output=True # Capture stdout and stderr
+        )
+        return "Error type triage tool output: \n" + result.stdout.strip().split("test session starts")[-1][0:min(50000, len(result.stdout))] if result.stdout else "Command executed successfully."
+    except subprocess.CalledProcessError as e:
+        return f"Error executing command: {e.stderr.strip()}"
+    except FileNotFoundError:
+        return f"Error: Command '{command.split()[0]}' not found."
+    
+retest_errtype_tools = [gdb_catch_throw_tool, debug_prints_tool, do_nothing_tool]
 llm_with_errortools = llm.bind_tools(retest_errtype_tools, tool_choice='auto')
 
 retest_deps_tools = [verbose_tool, do_nothing_tool]
@@ -193,8 +210,25 @@ def check_for_error_type(state: State):
  
     executed_nodes, last_node = get_history(state, "check_for_error_type")
 
+     
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a helpful assistant that rerun pytest for different error type, if the test error_type is runtime error rerun with gdb catch throw in tmux session, for other error types do nothing."),
+        ("system", """You are a helpful assistant that rerun pytest for different error type:
+         1. If the test error_type is as following, rerun with debug prints:
+            "ValueError",
+            "TypeError",
+            "AttributeError",
+            "KeyError",
+            "IndexError",
+            "AssertionError",
+            "Exception",
+            "OSError",
+            "Failed",
+            "FileNotFoundError",
+            "PermissionError",
+         2. If the test error_type is "RuntimeError" rerun with gdb catch throw in tmux session.
+         2. For other error_types, do nothing.
+         """
+         ),
         ("human", "{text}")
     ])
     chain = {"text": RunnablePassthrough()} | prompt | llm_with_errortools
@@ -446,19 +480,48 @@ while True:
 
         if user_input == "1":
             test_file = "test/xpu/quantization/core/test_workflow_ops_xpu.py"
-            base_test_file = "../../../test/quantization/core/test_workflow_ops.py"
+            base_test_file = "test/quantization/core/test_workflow_ops.py"
             test_class = "TestFusedObsFakeQuantXPU" 
             test_case = "test_fused_obs_fake_quant_moving_avg_per_channel_xpu"
             tmux = "python_test" 
             error_message ="TypeError: accept..test_fused_obs_fake_quant_moving_avg_per_channel() missing 1 required positional argument: 'use_bool'" 
         elif user_input == "2":
             test_file = "test/xpu/test_ops_xpu.py"
-            base_test_file = "../../../test/test_ops.py"
+            base_test_file = "test/test_ops.py"
             test_class = "TestMathBitsXPU" 
             test_case = "test_conj_view_nn_functional_conv_transpose2d_xpu_complex64"
-
             tmux = "python_test" 
-            error_message ="RuntimeError: could not create a primitive descriptor for a deconvolution forward propagation primitive" 
+            error_message ="""
+Traceback (most recent call last):
+  File "/home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/testing/_internal/common_device_type.py", line 1135, in test_wrapper
+    return test(*args, **kwargs)
+  File "/home/daisyden/upstream/pytorch/third_party/torch-xpu-ops/test/xpu/../../../../test/test_ops.py", line 2155, in test_conj_view
+    self._test_math_view(
+  File "/home/daisyden/upstream/pytorch/third_party/torch-xpu-ops/test/xpu/../../../../test/test_ops.py", line 2087, in _test_math_view
+    expected_forward = op(sample.input, *sample.args, **sample.kwargs)
+  File "/home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/testing/_internal/opinfo/core.py", line 1188, in __call__
+    return self.op(*args, **kwargs)
+RuntimeError: could not create a primitive descriptor for the deconvolution forward propagation primitive. Run workload with environment variable ONEDNN_VERBOSE=all to get additional diagnostic information.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/testing/_internal/common_utils.py", line 3223, in wrapper
+    method(*args, **kwargs)
+  File "/home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/testing/_internal/common_device_type.py", line 426, in instantiated_test
+    result = test(self, **param_kwargs)
+  File "/home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/testing/_internal/common_utils.py", line 1644, in wrapper
+    fn(*args, **kwargs)
+  File "/home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/testing/_internal/common_device_type.py", line 1147, in test_wrapper
+    raise e_tracked from e
+Exception: Caused by sample input at index 2: SampleInput(input=Tensor[size=(2, 2, 4, 4), device="xpu:0", dtype=torch.complex64], args=TensorList[Tensor[size=(2, 2, 4, 5), device="xpu:0", dtype=torch.complex64], Tensor[size=(4,), device="xpu:0", dtype=torch.complex64]], kwargs={'stride': '(3,2)', 'padding': '(1,2)', 'output_padding': '(2,3)', 'groups': '2', 'dilation': '(4,4)'}, broadcasts_input=False, name='')
+
+To execute this test, run the following from the base repo dir:
+    PYTORCH_OPINFO_SAMPLE_INPUT_INDEX=2 python ../../test/test_ops.py TestMathBitsXPU.test_conj_view_nn_functional_conv_transpose2d_xpu_complex64
+
+This message can be suppressed by setting PYTORCH_PRINT_REPRO_ON_FAILURE=0
+"""
+        #RuntimeError: could not create a primitive descriptor for a deconvolution forward propagation primitive" 
         else:
             continue
 
