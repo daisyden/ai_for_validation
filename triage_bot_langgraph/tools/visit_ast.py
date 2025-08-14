@@ -1,4 +1,17 @@
 import ast
+import argparse
+
+parser = argparse.ArgumentParser(
+            prog='visit_ast',
+            description='visit AST to add debug information in code',
+            epilog='visit_ast <testfile> <testcase> <lineno>')
+
+parser.add_argument('testfile')          # positional argument
+parser.add_argument('testcase')          # positional argument
+parser.add_argument('lineno')            # positional argument
+
+
+args = parser.parse_args()
 
 class VisitAST(ast.NodeTransformer):
     def __init__(self, line_func_dict):
@@ -52,7 +65,7 @@ class VisitAST(ast.NodeTransformer):
             for line in self.line_func_dict.keys():
                 func = self.line_func_dict[line]
                 
-                if node.name == func and ( node.lineno <= line << max(getattr(n, 'lineno', node.lineno) for n in ast.walk(node)) ): 
+                if node.name == func and ( node.lineno <= line < max(getattr(n, 'lineno', node.lineno) for n in ast.walk(node)) ): 
                     self.scope_stack.append(node.name)
                     debug_print = self._create_print(
                             f"FUNC {node.name}({', '.join(arg.arg for arg in node.args.args)})"
@@ -207,14 +220,14 @@ def debug_transform(source_code, function_dict):
 
 def main():
     try:
-        with open('test/test_reductions.py', 'r') as file:
+        with open(args.testfile, 'r') as file:
             content = file.read()
     except FileNotFoundError:
         print("Error: The file 'my_file.txt' was not found.")
     
     source = content
     
-    func = {214: "test_reference_masked"}
+    func = {int(args.lineno): args.testcase}
     print(debug_transform(source, func))
 
 
