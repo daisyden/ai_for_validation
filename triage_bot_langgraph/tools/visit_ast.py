@@ -99,6 +99,7 @@ class VisitAST(ast.NodeTransformer):
         debug_nodes = []
         func_name = ast.unparse(call_node.func)
         debug_nodes.append(self._create_print(f"\tCALL {func_name}"))
+        debug_nodes.append(self._create_funcdef_inspect(f"{func_name}"))
 
         for i, arg in enumerate(call_node.args):
             if isinstance(arg, ast.Name):
@@ -119,6 +120,20 @@ class VisitAST(ast.NodeTransformer):
             if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load):
                 names.add(n.id)
         return names
+
+    def _create_funcdef_inspect(self, func_name):
+        """Safe object method inspect to get definition file."""
+        debug_code = f"""
+try:
+    if len("{func_name}".split('.')) >= 2:
+        import inspect
+        _func_def_path = inspect.getsourcefile({func_name})
+        _line_number = inspect.getsourcelines({func_name})[1]
+        print(f"\tFunction {func_name} is defined at {{_func_def_path}}:{{_line_number}}")
+except Exception as e:
+    print(f"\tCannot inpect {func_name} source file")
+"""
+        return ast.parse(debug_code).body[0]
 
     def _create_var_debug(self, var_name, prefix=None):
         """Safe variable debugging that handles all types"""
@@ -192,14 +207,14 @@ def debug_transform(source_code, function_dict):
 
 def main():
     try:
-        with open('test/test_scatter_gather_ops.py', 'r') as file:
+        with open('test/test_reductions.py', 'r') as file:
             content = file.read()
     except FileNotFoundError:
         print("Error: The file 'my_file.txt' was not found.")
     
     source = content
     
-    func = {214: "test_scatter_reduce_mean"}
+    func = {214: "test_reference_masked"}
     print(debug_transform(source, func))
 
 
