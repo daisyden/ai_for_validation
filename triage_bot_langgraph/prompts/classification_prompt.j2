@@ -36,15 +36,19 @@ The test tmux enviroment is
 
     ```
 2. **Determine the original test case**:
-   - If the test is parameterized (e.g., `test_compare_cpu__batch_norm_with_update_xpu_bool`), extract the base test name (e.g., `test_compare_cpu`).
-   - Verify by checking the test file:
-     <base_test_file>
-     {{ base_test_file }}
-     </base_test_file>
-     at repo 
-     ```
-     https://raw.githubusercontent.com/pytorch/pytorch/refs/heads/main
-     ```
+   - The test case is started with "test_".
+   - Please extract test case name from error message. 
+   - If the test 
+      <test_class>
+      {{ test_class }}
+      </test_class>
+   is parameterized (e.g., `test_compare_cpu__batch_norm_with_update_xpu_bool`), extract the base test name from the traceback of 
+      <error_message>
+      {{ error_message }}
+      </error_message>
+   (e.g., `test_compare_cpu`). Please also get the line number of the testcase from the traceback. 
+   
+
 3. **Identify the test module**:
    - Categorize the test into one of:
      - `torch operation` (core ops)
@@ -76,15 +80,19 @@ The test tmux enviroment is
 Please return a beutified JSON with the following structure, only return the json and not output other text:
 ```json
 {
-  "base_test_file": "{{ base_test_file }}",
+  "base_test_file": "../../{{ base_test_file }}",
   "test_file": "{{ test_file }}"
   "test_case": "{{ test_case }}",
   "original_test_case": "base_test_name",
+  "original_test_case_lineno": "base_test_name_lineno",
   "module": "torch operation/distributed/runtime/inductor/torchbench",
   "dtype": "float32/bool/int64/etc",
   "torch_op": "op_name_or_None",
   "error_type": "AssertionError/RuntimeError/etc",
   "error_message": "Raw error text"
   "tmux": "The tmux session"
+  "error_type_triaged": "",
+  "dependency_triaged": "",
+  "reproduce_code": "true for reproduced issue",
 }
 ```

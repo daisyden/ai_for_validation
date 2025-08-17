@@ -3,7 +3,7 @@ from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from vllm_service import llm
-from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.prebuilt import ToolNode
 from langchain_community.tools.shell.tool import ShellTool
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
@@ -14,6 +14,7 @@ import subprocess
 from jinja2 import Environment, FileSystemLoader
 from langchain_core.messages import AIMessage
 import json
+import time
 
 
 ################################
@@ -47,7 +48,7 @@ def do_nothing_tool(test_file: str, test_case: str, tmux: str) -> str:
 def verbose_tool(test_file: str, test_case: str, tmux: str, env: str) -> str:
     """Executes gdb catch throw comamnd to capture the trace of a pytest failure."""
 
-    command = f"tmux send-keys -t {tmux}  \"tmux clear-history; {env} pytest -v {test_file} -k {test_case} 2>&1|tee /tmp/log ; tmux wait -S my_lock \" C-m; tmux wait my_lock; tmux capture-pane -S - -N -p -t {tmux}"
+    command = f"tmux send-keys -R -t {tmux}  \"tmux clear-history; clear ; {env} pytest -v {test_file} -k {test_case} 2>&1|tee /tmp/log ; tmux wait -S my_lock \" C-m; tmux wait my_lock; tmux capture-pane -S - -E - -p -t {tmux}"
     try:
         result = subprocess.run(
             command,
@@ -56,7 +57,7 @@ def verbose_tool(test_file: str, test_case: str, tmux: str, env: str) -> str:
             text=True,   # Decode stdout/stderr as text
             capture_output=True # Capture stdout and stderr
         )
-        return "Dependency triage tool output: \n" + result.stdout.strip().split("test session starts")[-1][0:min(50000, len(result.stdout))] if result.stdout else "Command executed successfully."
+        return "verbose_tool output: \n" + result.stdout.strip().split("test session starts")[-1][0:min(50000, len(result.stdout))] if result.stdout else "Command executed successfully."
     except subprocess.CalledProcessError as e:
         return f"Error executing command: {e.stderr.strip()}"
     except FileNotFoundError:
@@ -65,7 +66,8 @@ def verbose_tool(test_file: str, test_case: str, tmux: str, env: str) -> str:
 @tool
 def gdb_catch_throw_tool(test_file: str, test_case: str, tmux: str) -> str:
     """Executes gdb catch throw comamnd to capture the trace of a pytest failure."""
-    command = f"tmux send-keys -t {tmux}  \"tmux clear-history; PYTORCH_ENABLE_XPU_FALLBACK=1 PYTORCH_TEST_WITH_SLOW=1 gdb -batch -ex \'catch throw\' -ex \"run\" -ex \"bt\" --args python -m pytest -v {test_file} -k {test_case} 2>&1|tee /tmp/log ; tmux wait -S my_lock \" C-m; tmux wait my_lock; tmux capture-pane -S - -N -p -t {tmux}"
+   
+    command = f"tmux send-keys -R -t {tmux}  \"tmux clear-history; clear ; PYTORCH_ENABLE_XPU_FALLBACK=1 PYTORCH_TEST_WITH_SLOW=1 gdb -batch -ex \'catch throw\' -ex \"run\" -ex \"bt\" --args python -m pytest -v {test_file} -k {test_case} 2>&1|tee /tmp/log ; tmux wait-for -S my_lock \" C-m; tmux wait-for my_lock; tmux capture-pane -S - -E - -p -t {tmux}"
     try:
         result = subprocess.run(
             command,
@@ -74,16 +76,17 @@ def gdb_catch_throw_tool(test_file: str, test_case: str, tmux: str) -> str:
             text=True,   # Decode stdout/stderr as text
             capture_output=True # Capture stdout and stderr
         )
-        return "Error type triage tool output: \n" + result.stdout.strip().split("test session starts")[-1][0:min(50000, len(result.stdout))] if result.stdout else "Command executed successfully."
+        return "gdb_catch_throw_tool output: \n" + result.stdout.strip().split("test session starts")[-1][0:min(50000, len(result.stdout))] if result.stdout else "Command executed successfully."
     except subprocess.CalledProcessError as e:
         return f"Error executing command: {e.stderr.strip()}"
     except FileNotFoundError:
         return f"Error: Command '{command.split()[0]}' not found."
 
 @tool
-def debug_prints_tool(test_file: str, test_case: str, base_test_file: str, original_test_case: str, lineno: int, tmux: str) -> str:
-    """Instrument print in the code and rerun the test to collect debug information."""
-    command = f"tmux send-keys -t {tmux}  \"tmux clear-history; cp {base_test_file} {base_test_file}.saved ; python /tmp/visit_ast.py {base_test_file} {original_test_case} {lineno} 2>&1|tee {base_test_file}.updated; cp {base_test_file}.updated {base_test_file} ; PYTORCH_ENABLE_XPU_FALLBACK=1 PYTORCH_TEST_WITH_SLOW=1 pytest -vs {test_file} -k {test_case} 2>&1|tee /tmp/log ; mv {base_test_file}.saved {base_test_file}; tmux wait -S my_lock \" C-m; tmux wait my_lock; tmux capture-pane -S - -N -p -t {tmux}"
+def retest_reproduce_tool(test_file: str, test_case: str, base_test_file: str, original_test_case: str, lineno: int, tmux: str) -> str:
+    """Reprudce the failure in tmux enviroment"""    
+    command = f"tmux send-keys -R -t {tmux}  \"tmux clear-history; clear ; tmux wait -S my_lock \" C-m ; tmux wait my_lock ; tmux capture-pane -S - -E - -p -t {tmux}"
+    print(command)
     try:
         result = subprocess.run(
             command,
@@ -92,17 +95,56 @@ def debug_prints_tool(test_file: str, test_case: str, base_test_file: str, origi
             text=True,   # Decode stdout/stderr as text
             capture_output=True # Capture stdout and stderr
         )
-        return "Error type triage tool output: \n" + result.stdout.strip().split("test session starts")[-1][0:min(50000, len(result.stdout))] if result.stdout else "Command executed successfully."
+        return "debug_prints_tool output: \n" + result.stdout.strip().split("test session starts")[-1][0:min(50000, len(result.stdout))] if result.stdout else "Command executed successfully."
     except subprocess.CalledProcessError as e:
         return f"Error executing command: {e.stderr.strip()}"
     except FileNotFoundError:
         return f"Error: Command '{command.split()[0]}' not found."
     
-retest_errtype_tools = [gdb_catch_throw_tool, debug_prints_tool, do_nothing_tool]
-llm_with_errortools = llm.bind_tools(retest_errtype_tools, tool_choice='auto')
+@tool
+def retest_debug_prints_tool(test_file: str, test_case: str, base_test_file: str, original_test_case: str, lineno: int, tmux: str) -> str:
+    """Instrument print in the code and rerun the test to collect debug information."""
+    
+    command = f"tmux send-keys -R -t {tmux}  \"tmux clear-history; clear ; cp {base_test_file} {base_test_file}.saved ; python /tmp/visit_ast.py {base_test_file} {original_test_case} {lineno} >{base_test_file}.updated; cp {base_test_file}.updated {base_test_file} ; tmux wait -S my_lock \" C-m; tmux wait my_lock; tmux capture-pane -S - -E - -p -t {tmux}"
+    print(command)
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,  # Set to True to allow shell features like piping
+            check=True,  # Raise an exception for non-zero exit codes
+            text=True,   # Decode stdout/stderr as text
+            capture_output=True # Capture stdout and stderr
+        )
+        time.sleep(20)
+    except subprocess.CalledProcessError as e:
+        return f"Error executing command: {e.stderr.strip()}"
+    except FileNotFoundError:
+        return f"Error: Command '{command.split()[0]}' not found."
+    
+    command = f"tmux send-keys -R -t {tmux}  \"tmux clear-history; clear ; PYTORCH_ENABLE_XPU_FALLBACK=1 PYTORCH_TEST_WITH_SLOW=1 pytest -vs {test_file} -k {test_case} 2>&1|tee /tmp/log ; mv {base_test_file}.saved {base_test_file} ; tmux wait -S my_lock \" C-m ; tmux wait my_lock ; tmux capture-pane -S - -E - -p -t {tmux}"
+    print(command)
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,  # Set to True to allow shell features like piping
+            check=True,  # Raise an exception for non-zero exit codes
+            text=True,   # Decode stdout/stderr as text
+            capture_output=True # Capture stdout and stderr
+        )
+        return "debug_prints_tool output: \n" + result.stdout.strip().split("test session starts")[-1][0:min(50000, len(result.stdout))] if result.stdout else "Command executed successfully."
+    except subprocess.CalledProcessError as e:
+        return f"Error executing command: {e.stderr.strip()}"
+    except FileNotFoundError:
+        return f"Error: Command '{command.split()[0]}' not found."
+    
+retest_errtype_tools = [gdb_catch_throw_tool, do_nothing_tool]
+llm_with_errortools = llm.bind_tools(retest_errtype_tools, tool_choice="auto")
 
 retest_deps_tools = [verbose_tool, do_nothing_tool]
-llm_with_depstools = llm.bind_tools(retest_deps_tools, tool_choice='auto')
+llm_with_depstools = llm.bind_tools(retest_deps_tools, tool_choice="auto")
+
+llm_with_reprtools = llm.bind_tools([retest_reproduce_tool,])
+llm_with_dbgtools = llm.bind_tools([retest_debug_prints_tool,])
 
 ################################
 # Nodes 
@@ -118,6 +160,35 @@ def classify(state: State):
     chain = {"text": RunnablePassthrough()} | prompt | llm
     return {"messages": chain.invoke(state["messages"]),
             "execution_path": state.get("execution_path", []) + ["classify"]
+    }
+
+def call_reproduce_tool(state: State):
+    executed_nodes, last_node = get_history(state, "call_reproduce_tool")
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", """You are a helpful debugging assistant that can reproduce pytest faiures. Please rerpoduce the failure in tmux enviroment and check whether the error message is the same. 
+        If the same, return 'Reproduced' only, otherwise return 'CannotReproduce' only.   
+        """),
+        ("human", "{text}")
+    ])
+
+    chain = {"text": RunnablePassthrough()} | prompt | llm_with_reprtools
+ 
+    return {"messages": chain.invoke(state["messages"][-1]),
+            "execution_path": state.get("execution_path", []) + ["call_reproduce_tool"]
+    }
+
+def call_debug_prints_tool(state: State):
+    executed_nodes, last_node = get_history(state, "call_debug_prints_tool")
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", """You are a helpful debugging assistant that can instrument prints in test cases and rerun test.    
+        """),
+        ("human", "{text}")
+    ])
+
+    chain = {"text": RunnablePassthrough()} | prompt | llm_with_dbgtools
+ 
+    return {"messages": chain.invoke(state["messages"][-1]),
+            "execution_path": state.get("execution_path", []) + ["call_debug_prints_tool"]
     }
 
 ################################
@@ -188,7 +259,6 @@ def triage_start(
     state: State,
 ):
     executed_nodes, last_node = get_history(state, "triage_start")
-
     return {"messages": state.get("messages", []),
             "execution_path": state.get("execution_path", []) + ["triage_start"]
     }
@@ -196,6 +266,8 @@ def triage_start(
 
 def check_for_dependency(state: State):
     executed_nodes, last_node = get_history(state, "check_for_dependency")
+    import pdb
+    pdb.set_trace()
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", "You are a helpful assistant that rerun the failed pytest test case according to torch ops, rerun with \"DNNL_VERBOSE=1\" for oneDNN dependent ops or \"MKL_VERBOSE=1\" for MKL dependent ops in tmux session, for other dependency do nothing."),
@@ -206,26 +278,15 @@ def check_for_dependency(state: State):
             "execution_path": state.get("execution_path", []) + ["check_for_dependency"]
     }
 
-def check_for_error_type(state: State):
- 
+def check_for_error_type(state: State): 
     executed_nodes, last_node = get_history(state, "check_for_error_type")
-
-     
+    import pdb
+    pdb.set_trace()
     prompt = ChatPromptTemplate.from_messages([
-        ("system", """You are a helpful assistant that rerun pytest for different error type:
-         1. If the test error_type is as following, rerun with debug prints:
-            "ValueError",
-            "TypeError",
-            "AttributeError",
-            "KeyError",
-            "IndexError",
-            "AssertionError",
-            "Exception",
-            "OSError",
-            "Failed",
-            "FileNotFoundError",
-            "PermissionError",
-         2. If the test error_type is "RuntimeError" rerun with gdb catch throw in tmux session.
+        ("system", """You are an intelligent test debugging assistant specialized in automatically rerunning failed pytest cases with appropriate debugging instrumentation based on the error type. 
+         Follow these precise rules:
+:
+         1. For RuntimeError failures: Rerun in GDB debug mode to capture stack traces by tool calling. 
          2. For other error_types, do nothing.
          """
          ),
@@ -236,12 +297,48 @@ def check_for_error_type(state: State):
             "execution_path": state.get("execution_path", []) + ["check_for_error_type"]
     }
 
+def check_debug_trace(state: State):
+    executed_nodes, last_node = get_history(state, "check_reproducible")
+    import pdb
+    pdb.set_trace()
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", """You are a helpful assistant that check a debugging log to get the code execution trace and determine the shape of torch ops input that cause the error.
+            Please list the code trace with format <code snippet> [file:line_no]
+            Please also point the root cuase of the error. 
+            Then please write a small python script that reproduce the error. 
+         """),
+        ("human", "{text}")
+    ])
+    chain = {"text": RunnablePassthrough()} | prompt | llm    
+    result = chain.invoke(state["messages"][-1])
+
+    if isinstance(state, list):
+        ai_message = state[-3]
+    elif messages := state.get("messages", []):
+        ai_message = messages[-3]
+    else:
+        raise ValueError(f"No messages found in input state to tool_edge: {state}")
+
+    json_string = ai_message.content
+    
+    python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
+    python_object['reproduce_code'] = result.content
+    pdb.set_trace()
+    json_string = json.dumps(python_object)
+    return {"messages": AIMessage(content=json_string),
+            "execution_path": state.get("execution_path", []) + ["check_debug_trace"]
+    }
+
+
 def summary(state: State):
 
     executed_nodes, last_node = get_history(state, "summary")
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a helpful assistant that summary the bug root cause based on the input. If a do nothing tool is called just return N/A."),
+        ("system", """You are a helpful assistant that summary the bug root cause based on the input.
+                   If oneDNN verbose in the log, also create a benchdnn command to reproduce the issue.
+                   If a gdb traceback in the log, also highlight the C++ component or code caused the issue.
+                   If a do nothing tool is called just return N/A."""),
         ("human", "{text}")
     ])
     chain = {"text": RunnablePassthrough()} | prompt | llm
@@ -298,6 +395,93 @@ def summary(state: State):
 # Routers 
 ###############################
 
+# Define your router function for reprodcue tool
+def route_on_reproduce_tool(state):
+    """
+    Use in the conditional_edge to route to the retest_reproduce_tool node, if no tool calling found return END
+    """
+    
+    if isinstance(state, list):
+        ai_message = state[-1]
+    elif messages := state.get("messages", []):
+        ai_message = messages[-1]
+    else:
+        raise ValueError(f"No messages found in input state to tool_edge: {state}")
+
+    if hasattr(ai_message, "tool_calls") and len(ai_message.tool_calls) > 0:
+        if isinstance(state, list):
+            ai_message = state[-2]
+        elif messages := state.get("messages", []):
+            ai_message = messages[-2]
+        else:
+            raise ValueError(f"No messages found in input state to tool_edge: {state}")
+    
+        json_string = ai_message.content
+        python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
+    
+        print(f"\n### route check_for_error_type: {python_object}\n")
+        return 'retest_reproduce_tool'
+    else:
+        return END
+
+# Define your router function for reprodcue tool
+def route_on_debug_prints_tool(state):
+    """
+    Use in the conditional_edge to route to the retest_reproduce_tool node, if no tool calling found return END
+    """
+    
+    if isinstance(state, list):
+        ai_message = state[-1]
+    elif messages := state.get("messages", []):
+        ai_message = messages[-1]
+    else:
+        raise ValueError(f"No messages found in input state to tool_edge: {state}")
+
+    if hasattr(ai_message, "tool_calls") and len(ai_message.tool_calls) > 0:
+        if isinstance(state, list):
+            ai_message = state[-2]
+        elif messages := state.get("messages", []):
+            ai_message = messages[-2]
+        else:
+            raise ValueError(f"No messages found in input state to tool_edge: {state}")
+    
+        json_string = ai_message.content
+        python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
+    
+        print(f"\n### route check_for_error_type: {python_object}\n")
+        return 'retest_debug_prints_tool'
+    else:
+        return END
+
+def route_on_reproduce_result(state):
+    """
+    Use in the conditional_edge to route to next step or END, if the failure is reproduced do next step triage, otherwise go to END
+    """
+    
+    if isinstance(state, list):
+        ai_message = state[-1]
+    elif messages := state.get("messages", []):
+        ai_message = messages[-1]
+    else:
+        raise ValueError(f"No messages found in input state to tool_edge: {state}")
+
+    if hasattr(ai_message, "tool_calls") and len(ai_message.tool_calls) > 0:
+        if isinstance(state, list):
+            ai_message = state[-2]
+        elif messages := state.get("messages", []):
+            ai_message = messages[-2]
+        else:
+            raise ValueError(f"No messages found in input state to tool_edge: {state}")
+    
+        json_string = ai_message.content
+        python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
+    
+        print(f"\n### route check_for_error_type: {python_object}\n")
+        return 'retest_reproduce_tool'
+    else:
+        return END
+
+
 def router(
     state: State
 ):
@@ -305,6 +489,8 @@ def router(
     Use in the conditional_edge to route to the restest_with_tools node according to the failure type. 
     If no failure type is matched, route to the end.
     """
+    #executed_nodes, last_node = get_history(state, "router")
+
     if isinstance(state, list):
         ai_message = state[-1]
     elif messages := state.get("messages", []):
@@ -315,6 +501,8 @@ def router(
     json_string = ai_message.content
     python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
     
+    import pdb
+    pdb.set_trace()
     if python_object['error_type_triaged'] == "":
         return 'check_for_error_type'
     elif python_object['dependency_triaged'] == "":
@@ -330,6 +518,8 @@ def route_error_type(
     Use in the conditional_edge to route to the restest_with_tools node according to the failure type. 
     If no failure type is matched, route to the end.
     """
+    
+    #executed_nodes, last_node = get_history(state, "route_error_type")
 
     if isinstance(state, list):
         ai_message = state[-1]
@@ -349,7 +539,7 @@ def route_error_type(
         json_string = ai_message.content
         python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
     
-        #print(f"route check_for_error_type: {python_object}\n")
+        print(f"\n### route check_for_error_type: {python_object}\n")
         return 'retest_errtype_tools'
     else:
         return END
@@ -361,6 +551,8 @@ def route_dependency(
     Use in the conditional_edge to route to the restest_with_tools node according to the failure type. 
     If no failure type is matched, route to the end.
     """
+    #executed_nodes, last_node = get_history(state, "route_dependency")
+
     if isinstance(state, list):
         ai_message = state[-1]
     elif messages := state.get("messages", []):
@@ -379,7 +571,7 @@ def route_dependency(
         json_string = ai_message.content
         python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
         
-        #print(f"route check_for_error_type: {python_object}\n")
+        print(f"\n### route check_for_error_type: {python_object}\n")
         return 'retest_deps_tools'
     else:
         return END 
@@ -387,22 +579,25 @@ def route_dependency(
 
 def stream_graph_updates(user_input: str, graph: StateGraph):
     messages = [HumanMessage(user_input)]
+
     for event in graph.stream({"messages": [{"role": "user", "content": user_input}], "execution_path": []}):
         for value in event.values():
             if isinstance(value["messages"], list):
                 json_string = value["messages"][-1].content
             else:
                  json_string =value["messages"].content
-            try:
-                python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
-                json_string = json.dumps(python_object, indent=4)
-            except:
-                print("invalid json")
 
-            print(f"### Assistant: {json_string}")
+            if len(json_string) > 0:
+                try:
+                    python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
+                    json_string = json.dumps(python_object, indent=4)
+                    print(f"### Assistant output json: {json_string}")
+                except:
+                    print(f"### Assistant output text: {json_string}")
+                
  
 
-   
+
 graph_builder = StateGraph(State)
 graph_builder.add_node("classify", classify)
 graph_builder.add_node("depsRAG", depsRAG)
@@ -411,11 +606,29 @@ graph_builder.add_node("check_for_error_type", check_for_error_type)
 graph_builder.add_node("check_for_dependency", check_for_dependency)
 graph_builder.add_node("retest_errtype_tools", ToolNode(retest_errtype_tools))
 graph_builder.add_node("retest_deps_tools", ToolNode(retest_deps_tools))
+graph_builder.add_node("retest_reproduce_tool", ToolNode([retest_reproduce_tool,]))
+graph_builder.add_node("retest_debug_prints_tool", ToolNode([retest_debug_prints_tool,]))
 graph_builder.add_node("summary", summary)
+graph_builder.add_node("call_reproduce_tool", call_reproduce_tool)
+graph_builder.add_node("call_debug_prints_tool", call_debug_prints_tool)
+graph_builder.add_node("check_debug_trace", check_debug_trace)
 
 graph_builder.add_edge(START, "classify")
 graph_builder.add_edge(
     "classify",
+    "call_debug_prints_tool",
+)
+graph_builder.add_conditional_edges(
+    "call_debug_prints_tool",
+    route_on_debug_prints_tool,
+    {"retest_debug_prints_tool": "retest_debug_prints_tool", END: END},
+)
+graph_builder.add_edge(
+    "retest_debug_prints_tool",
+    "check_debug_trace"
+)
+graph_builder.add_edge(
+    "check_debug_trace",
     "depsRAG",
 )
 graph_builder.add_edge(
@@ -542,6 +755,10 @@ This message can be suppressed by setting PYTORCH_PRINT_REPRO_ON_FAILURE=0
     except Exception as e:
         # Catch any other unexpected exceptions
         print(f"An unexpected error occurred: {e}")
+        import sys
+        exc_type, exc_val, exc_tb = sys.exc_info()
+        import traceback
+        traceback.print_exception(exc_type, exc_val, exc_tb)
 
         ## fallback if input() is not available
         #user_input = "What do you know about LangGraph?"
