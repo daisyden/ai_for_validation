@@ -121,7 +121,7 @@ def retest_debug_prints_tool(test_file: str, test_case: str, base_test_file: str
     except FileNotFoundError:
         return f"Error: Command '{command.split()[0]}' not found."
     
-    command = f"tmux send-keys -R -t {tmux}  \"tmux clear-history; clear ; PYTORCH_ENABLE_XPU_FALLBACK=1 PYTORCH_TEST_WITH_SLOW=1 pytest -vs {test_file} -k {test_case} 2>&1|tee /tmp/log ; mv {base_test_file}.saved {base_test_file} ; tmux wait -S my_lock \" C-m ; tmux wait my_lock ; tmux capture-pane -S - -E - -p -t {tmux}"
+    command = f"tmux send-keys -R -t {tmux}  \"tmux clear-history; clear ; PYTORCH_ENABLE_XPU_FALLBACK=1 PYTORCH_TEST_WITH_SLOW=1 pytest --show-capture=no -vs {test_file} -k {test_case} --capture=no --tb=native 2>&1|tee /tmp/log ; mv {base_test_file}.saved {base_test_file} ; tmux wait -S my_lock \" C-m ; tmux wait my_lock ; tmux capture-pane -S - -E - -p -t {tmux}"
     print(command)
     try:
         result = subprocess.run(
@@ -266,9 +266,6 @@ def triage_start(
 
 def check_for_dependency(state: State):
     executed_nodes, last_node = get_history(state, "check_for_dependency")
-    import pdb
-    pdb.set_trace()
-
     prompt = ChatPromptTemplate.from_messages([
         ("system", "You are a helpful assistant that rerun the failed pytest test case according to torch ops, rerun with \"DNNL_VERBOSE=1\" for oneDNN dependent ops or \"MKL_VERBOSE=1\" for MKL dependent ops in tmux session, for other dependency do nothing."),
         ("human", "{text}")
@@ -280,8 +277,6 @@ def check_for_dependency(state: State):
 
 def check_for_error_type(state: State): 
     executed_nodes, last_node = get_history(state, "check_for_error_type")
-    import pdb
-    pdb.set_trace()
     prompt = ChatPromptTemplate.from_messages([
         ("system", """You are an intelligent test debugging assistant specialized in automatically rerunning failed pytest cases with appropriate debugging instrumentation based on the error type. 
          Follow these precise rules:
@@ -299,19 +294,64 @@ def check_for_error_type(state: State):
 
 def check_debug_trace(state: State):
     executed_nodes, last_node = get_history(state, "check_reproducible")
-    import pdb
-    pdb.set_trace()
     prompt = ChatPromptTemplate.from_messages([
-        ("system", """You are a helpful assistant that check a debugging log to get the code execution trace and determine the shape of torch ops input that cause the error.
-            Please list the code trace with format <code snippet> [file:line_no]
-            Please also point the root cuase of the error. 
-            Then please write a small python script that reproduce the error. 
+        # ("system", """You are a helpful assistant that check a debugging log to get the code execution trace and determine the shape of torch ops input that cause the error.
+        #     Please list the code lines in the log.
+        #     Please also point the root cuase of the error. 
+        #     Then please write a small python script that reproduce the error, espeically if the failure is caused by XPU tensor please write the small script with XPU tensor and make sure the script can work without grammar issue. 
+        #  """),
+        ("system", """
+You are an advanced debugging assistant specialized in PyTorch error analysis. Please do the following and out put a beautified json with keys "code_execution_trace",  "error_root_cuase", and "reproduce_script".
+
+1. CODE TRACE ANALYSIS:
+   - Extract and list all relevant code execution paths from the log and the backtrace of the original error message, please avoid to use the new backtrace. 
+   - Format as: `<code snippet> [file:line_number]`
+   - Include all variable assignments and function calls leading to the error
+
+2. ERROR ROOT CAUSE:
+   - Identify the exact operation causing failure
+   - Determine the problematic tensor characteristics:
+     * Shape
+     * Data type
+     * Device (CPU/XPU/CUDA)
+     * Values (if special values like inf/nan are involved)
+   - Explain why the operation fails with these inputs
+
+3. ERROR REPRODUCTION SCRIPT:
+   - Create a minimal Python script that reproduces the error
+   - Mimic the input data shape and data distributions in the exeuction trace of the log
+   - For XPU-related errors:
+     * Use `torch.xpu` device when available
+     * Include proper device availability checks
+     * Maintain XPU-specific syntax correctness
+   - Include all necessary imports
+   - Add clear comments explaining each step
+   - Ensure the script can run without syntax errors
+   - If the case failed in output comparision, also include expected vs actual output comparison in the small script and ensure the expected and actual data are on the same device
+
+4. OUTPUT REQUIREMENTS:
+   - Present information in this exact structure:
+     a) Code Execution Trace
+     b) Error Root Cause Analysis
+     c) Reproduction Script
+   - Use clear section headers with border lines
+   - Maintain proper code formatting
+   - Keep all technical details accurate
+
+5. SPECIAL CONSIDERATIONS:
+   - For shape-related errors: show tensor shape propagation
+   - For dtype errors: highlight type mismatches
+   - For device errors: compare CPU vs XPU behavior
+   - For numerical errors: show value differences
+   - Always verify the script runs correctly on the target device
+          
          """),
         ("human", "{text}")
     ])
-    chain = {"text": RunnablePassthrough()} | prompt | llm    
-    result = chain.invoke(state["messages"][-1])
 
+    
+    chain = {"text": RunnablePassthrough()} | prompt | llm    
+    
     if isinstance(state, list):
         ai_message = state[-3]
     elif messages := state.get("messages", []):
@@ -322,9 +362,13 @@ def check_debug_trace(state: State):
     json_string = ai_message.content
     
     python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
+    error_message =  python_object['error_message']
+
+    result = chain.invoke(state["messages"][-1] + "\n ### original error message: \n" + error_message)
+
     python_object['reproduce_code'] = result.content
-    pdb.set_trace()
     json_string = json.dumps(python_object)
+    print('"""\n' + json_string + '"""')
     return {"messages": AIMessage(content=json_string),
             "execution_path": state.get("execution_path", []) + ["check_debug_trace"]
     }
@@ -336,8 +380,8 @@ def summary(state: State):
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", """You are a helpful assistant that summary the bug root cause based on the input.
-                   If oneDNN verbose in the log, also create a benchdnn command to reproduce the issue.
-                   If a gdb traceback in the log, also highlight the C++ component or code caused the issue.
+                   If oneDNN verbose in the log, lines staring with 'onednn_verbose', please also create a benchdnn command to reproduce the issue.
+                   If a gdb traceback in the log, please also highlight the C++ component or code caused the issue.
                    If a do nothing tool is called just return N/A."""),
         ("human", "{text}")
     ])
@@ -501,8 +545,6 @@ def router(
     json_string = ai_message.content
     python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
     
-    import pdb
-    pdb.set_trace()
     if python_object['error_type_triaged'] == "":
         return 'check_for_error_type'
     elif python_object['dependency_triaged'] == "":
@@ -734,6 +776,38 @@ To execute this test, run the following from the base repo dir:
 
 This message can be suppressed by setting PYTORCH_PRINT_REPRO_ON_FAILURE=0
 """
+        elif user_input == "3":
+            test_file = "test/xpu/test_unary_ufuncs_xpu.py"
+            base_test_file = "test/test_unary_ufuncs.py"
+            test_class = "TestUnaryUfuncsXPU" 
+            test_case = "test_reference_numerics_extremal__refs_asinh_xpu_complex64"
+            tmux = "python_test" 
+            error_message ="""
+__________________________ TestUnaryUfuncsXPU.test_reference_numerics_extremal__refs_asinh_xpu_complex64 ___________________________
+Traceback (most recent call last):
+  File "/home/daisyden/upstream/pytorch/third_party/torch-xpu-ops/test/xpu/../../../../test/test_unary_ufuncs.py", line 311, in test_reference_numerics_extremal
+    self._test_reference_numerics(dtype, op, tensors)
+  File "/home/daisyden/upstream/pytorch/third_party/torch-xpu-ops/test/xpu/../../../../test/test_unary_ufuncs.py", line 260, in _test_reference_numerics
+    _helper_reference_numerics(
+  File "/home/daisyden/upstream/pytorch/third_party/torch-xpu-ops/test/xpu/../../../../test/test_unary_ufuncs.py", line 226, in _helper_reference_numerics
+    self.assertEqualHelper(
+  File "/home/daisyden/upstream/pytorch/third_party/torch-xpu-ops/test/xpu/../../../../test/test_unary_ufuncs.py", line 171, in assertEqualHelper
+    self.assertEqual(
+  File "/home/daisyden/miniforge3/envs/pytorch/lib/python3.10/site-packages/torch/testing/_internal/common_utils.py", line 4178, in assertEqual
+    raise error_metas.pop()[0].to_error(  # type: ignore[index]
+AssertionError: Tensor-likes are not close!
+
+Mismatched elements: 36 / 81 (44.4%)
+Greatest absolute difference: nan at index (0,) (up to 1e-05 allowed)
+Greatest relative difference: nan at index (0,) (up to 1.3e-06 allowed)
+
+To execute this test, run the following from the base repo dir:
+    python ../../test/test_unary_ufuncs.py TestUnaryUfuncsXPU.test_reference_numerics_extremal__refs_asinh_xpu_complex64
+
+This message can be suppressed by setting PYTORCH_PRINT_REPRO_ON_FAILURE=0
+
+            """
+
         #RuntimeError: could not create a primitive descriptor for a deconvolution forward propagation primitive" 
         else:
             continue

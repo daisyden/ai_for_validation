@@ -115,9 +115,9 @@ try:
         import inspect
         _func_def_path = inspect.getsourcefile({func_name})
         _line_number = inspect.getsourcelines({func_name})[1]
-        print(f"\tFunction {func_name} is defined at {{_func_def_path}}:{{_line_number}}")
+        print(f"\tFunction {func_name} is defined at {{_func_def_path}}:{{_line_number}}", flush=True)
 except Exception as e:
-    print(f"\tCannot inpect {func_name} source file")
+    print(f"\tCannot inpect {func_name} source file", flush=True)
 """
         return ast.parse(debug_code).body[0]
 
@@ -128,14 +128,16 @@ except Exception as e:
         # shape={{tuple({var_name}.shape)}} dtype={{str({var_name}.dtype)}}")
         debug_code = f"""
 try:
-    if isinstance({var_name}, (torch.Tensor, np.ndarray)):
-        print(f"\t{'VAR ' + prefix + ': ' if prefix else 'VAR '}{var_name}: shape={{tuple({var_name}.shape)}} dtype={{str({var_name}.dtype)}}")
+    if isinstance({var_name}, (torch.Tensor,)):
+        print(f"\t{'VAR ' + prefix + ': ' if prefix else 'VAR '}{var_name}: shape={{tuple({var_name}.shape)}} dtype={{str({var_name}.dtype)}} device={{str({var_name}.device)}}", flush=True)
+    elif isinstance({var_name}, (np.ndarray, )):
+        print(f"\t{'VAR ' + prefix + ': ' if prefix else 'VAR '}{var_name}: shape={{tuple({var_name}.shape)}} dtype={{str({var_name}.dtype)}}", flush=True)
     elif hasattr({var_name}, 'shape') and hasattr({var_name}, 'dtype'):
-        print(f"\t{'VAR ' + prefix + ': ' if prefix else 'VAR '}{var_name}: shape={{tuple({var_name}.shape)}} dtype={{str({var_name}.dtype)}}")
+        print(f"\t{'VAR ' + prefix + ': ' if prefix else 'VAR '}{var_name}: shape={{tuple({var_name}.shape)}} dtype={{str({var_name}.dtype)}}", flush=True)
     else:
-        print(f"\t{'VAR ' + prefix + ': ' if prefix else 'VAR '}{var_name}: {{type({var_name}).__name__}} = {{repr({var_name})[:250]}} ")
+        print(f"\t{'VAR ' + prefix + ': ' if prefix else 'VAR '}{var_name}: {{type({var_name}).__name__}} = {{repr({var_name})[:250]}} ", flush=True)
 except Exception as e:
-    print(f"\t{'VAR ' + prefix + ': ' if prefix else 'VAR '}{var_name}: [Error during inspection: {{str(e)}}]")
+    print(f"\t{'VAR ' + prefix + ': ' if prefix else 'VAR '}{var_name}: [Error during inspection: {{str(e)}}]", flush=True)
 """
         return ast.parse(debug_code).body[0]
     
@@ -151,13 +153,13 @@ except Exception as e:
 try:
     if isinstance({arg1.id}, (torch.Tensor, np.ndarray)) and isinstance({arg2.id}, (torch.Tensor, np.ndarray)):
         _diff_indices = ({arg1.id} != {arg2.id}).nonzero()
-        print(f"\t Diff_indices: {{_diff_indices}}")
+        print(f"\t Diff_indices: {{_diff_indices}}", flush=True)
         # for _indices in _diff_indices:
         #     a = {arg1.id}[_indices]
         #     b = {arg2.id}[_indices]
         #     print(f"\t\t {{_indices}}: {{a}} .vs {{b}}")        
 except Exception as e:
-    print(f"\tGet differing indices failed")
+    print(f"\tGet differing indices failed", flush=True)
 """
         return ast.parse(debug_code).body[0]
 
