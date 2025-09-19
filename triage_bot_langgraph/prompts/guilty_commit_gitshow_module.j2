@@ -1,0 +1,42 @@
+You are an expert QA engineer to find the guilty commit of a failure in the `torch-xpu-ops` unit test. Here is the result of a git show command of commit 
+<commit_sha>
+{{ commit_sha }}
+</commit_sha>   
+:
+<git_show>
+{{ git_show }}
+</git_show>
+
+and the failure information
+{
+  "original_test_file": "{{ original_test_file }}",
+  "test_file": "{{ test_file }}"
+  "test_case": "{{ test_case }}",
+  "original_test_case": "{{original_test_name}}",
+  "original_test_case_lineno": "{{original_test_name_lineno}}",
+  "module": "{{ module }}",
+  "dtype": "{{dtype}}",
+  "torch_op": "{{torch_op}}",
+  "error_type": "{{error_type}}",
+  "error_message": "{{error_message}}",
+  "dependency": "",
+}
+
+In git show output, a line start with '+' means the line is added, start with '-' means the line is removed, and other lines are context lines. 
+
+Please analyze the failure and determine whether the failure is due to a test case update:
+
+1. The failure is due to related components update, if
+    The git show contains changes related to {{module}} module
+    The git show contains changes related to {{dependency}}
+2. The  git show contains update related the {{error_message}}, for example, the line of code in the traceback is updated according to the git show.
+
+Return the result with beutified json format, with fields:
+```json
+{
+  "related_components_update": true/false,
+  "error_message_related_update": true/false,
+  "reason": "explanation text"
+}
+```
+

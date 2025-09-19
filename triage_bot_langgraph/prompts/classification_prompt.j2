@@ -20,10 +20,10 @@ The test file is
 {{ test_file }}
 </test_file>
 
-and as a wrapper file it calls code in the base test file 
-<base_test_file>
-{{ base_test_file }}
-</base_test_file>
+and as a wrapper file it calls code in the original test file 
+<original_test_file>
+{{ original_test_file }}
+</original_test_file>
 .\n
 
 The test tmux enviroment is 
@@ -42,7 +42,7 @@ The test tmux enviroment is
       <test_class>
       {{ test_class }}
       </test_class>
-   is parameterized (e.g., `test_compare_cpu__batch_norm_with_update_xpu_bool`), extract the base test name from the traceback of 
+   is parameterized (e.g., `test_compare_cpu__batch_norm_with_update_xpu_bool`), extract the original test class and test name from the traceback of 
       <error_message>
       {{ error_message }}
       </error_message>
@@ -61,11 +61,11 @@ The test tmux enviroment is
    - Infer from test name/trace (e.g., `xpu_bool` → `bool`, `f32` → `float32`).
 
 5. **Resolve the torch operation or tensor info**:
-   - **If parameterized**: Parse the op name from the test case (e.g., `batch_norm` from `...batch_norm...`), the op name is usually right after the base test name.
+   - **If parameterized**: Parse the op name from the test case (e.g., `batch_norm` from `...batch_norm...`), the op name is usually right after the original test name.
    - **Otherwise**: Trace the failure in 
-     <base_test_file>
-     {{ base_test_file }}
-     </base_test_file>
+     <original_test_file>
+     {{ original_test_file }}
+     </original_test_file>
      to find the tensor/op (ignore backends like `xpu/cpu`).
 
 6. **Classify the error type**:
@@ -80,11 +80,12 @@ The test tmux enviroment is
 Please return a beutified JSON with the following structure, only return the json and not output other text:
 ```json
 {
-  "base_test_file": "../../{{ base_test_file }}",
+  "original_test_file": "{{ original_test_file }}",
   "test_file": "{{ test_file }}"
   "test_case": "{{ test_case }}",
-  "original_test_case": "base_test_name",
-  "original_test_case_lineno": "base_test_name_lineno",
+  "original_test_class": "original_test_class",
+  "original_test_case": "original_test_case",
+  "original_test_case_lineno": "original_test_case_lineno",
   "module": "torch operation/distributed/runtime/inductor/torchbench",
   "dtype": "float32/bool/int64/etc",
   "torch_op": "op_name_or_None",
@@ -93,7 +94,8 @@ Please return a beutified JSON with the following structure, only return the jso
   "tmux": "The tmux session"
   "error_type_triaged": "",
   "dependency_triaged": "",
-  "reproduce_code": "true for reproduced issue",
+  "module_triaged": "",
+  "reproduce_code": "information for reproduced issue",
   "dependency": "",
 }
 ```
