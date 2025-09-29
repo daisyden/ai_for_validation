@@ -22,19 +22,26 @@ and the failure information
   "dependency": "",
 }
 
-In git show output, a line start with '+' means the line is added, start with '-' means the line is removed, and other lines are context lines. 
+In git show output, a line starts with '+' means the line is added, starts with '-' means the line is removed, and other lines are context lines. 
 
-Please analyze the failure and determine whether the failure is due to a test case update:
+Please analyze the failure information and determine whether the failure is due to a test case update:
 
-1. The {{original_test_name}} function is updated
-2. The decorators of the test {{original_test_name}} is updated or with more parameters added
-3. If any one of the callee functions of {{original_test_name}} are updated: {{called_functions}}
-4. The op_db definition of op {{test_ops}} is updated, for example dtypes added, skips, or decorators.
+The {{original_test_name}} function or the {{called_functions}} are updated if any of the following cases:
+  a. The {{original_test_name}} or {{called_functions}} have decorators updated, added or removed.
+  b. The {{original_test_name}} or {{called_functions}} have code about skips or unittest.SkipTest are updated, added or removed.
+  c. The {{original_test_name}} or {{called_functions}} have code with a path generalized for more devices including xpu backend.
+  d. The op_db definition of op {{test_ops}} is updated, for example dtypes added, skips, or decorators added or removed.
+  e. The {{original_test_name}} or {{called_functions}} have other updates that are related to the failure.
 
-Return the result with beutified json format, with fields:
+Return the result with beutified json format only, with fields:
 ```json
 {
   "test_case_update": true/false,
+  "skip_update": true/false,
+  "op_db_update": true/false,
+  "decorators_update": true/false,
+  "path_generalized_update": true/false,
+  "other_relevant_update": true/false,
   "reason": "explanation text"
 }
 ```

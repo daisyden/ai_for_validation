@@ -49,8 +49,6 @@ To execute this test, run the following from the base repo dir:
             template = env.get_template('classification_prompt.j2')
             return template.render(test_file=test_file, original_test_file=original_test_file, test_class=test_class, test_case=test_case, error_message=error_message, tmux=tmux)
 
-        import pdb
-        pdb.set_trace()
         prompt = generate_prompt(test_file, original_test_file, test_class, test_case, error_message, tmux)
         user_input = prompt
         # collect the failure information
@@ -59,18 +57,18 @@ To execute this test, run the following from the base repo dir:
         if len(json_string) > 0:
             try:
                 failure_info = json.loads(json_string.replace("```json\n","").replace("```", ""))
-                import pdb
-                pdb.set_trace()
 
                 ##################
                 # Check git log  #
                 ##################
 
+                # The tmux by default is under pytorch folder!
                 git_log = get_git_log_in_tmux(args.last_good_commit, tmux)
 
                 def generate_prompt_gitlog(python_object: dict) -> str:
                     env = Environment(loader=FileSystemLoader('prompts'))
                     template = env.get_template('guilty_commit_gitlog.j2')
+                    # use original test file because we want to check pytorch git log
                     return template.render(git_log=git_log,
                                             original_test_file=python_object["original_test_file"],
                                             original_test_case=python_object["original_test_case"],
@@ -80,18 +78,17 @@ To execute this test, run the following from the base repo dir:
                                             dependency=python_object["dependency"],
                                             error_message=python_object["error_message"])
                 
-                prompt = generate_prompt_gitlog(failure_info)
-                user_input = prompt
-                json_string = stream_graph_updates(user_input, graph)
-                print(json_string)
+                # prompt = generate_prompt_gitlog(failure_info)
+                # user_input = prompt
+                # json_string = stream_graph_updates(user_input, graph)
+                # print(json_string)
 
-                python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
+                # python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
 
-                if python_object.get("test_case_update") == "false" and python_object.get("related_components_update") == "false" and python_object.get("error_message_related_update") == "false":
-                    print(f"Cannot find the guilty commit from git log.")
-                else:
-                    print(f"guilty commit is found from git log. {python_object}")
-                    continue
+                # if python_object.get("test_case_update") == "false" and python_object.get("related_components_update") == "false" and python_object.get("error_message_related_update") == "false":
+                #     print(f"Cannot find the guilty commit from git log.")
+                # else:
+                #     print(f"Potential guilty commit is found from git log. {python_object}")
                 
                 ###############################
                 # Collect realted commit:
@@ -101,35 +98,45 @@ To execute this test, run the following from the base repo dir:
                 # 4. commit updated the related module
                 # 5. commit updated the related dependency component
                 ###############################
-                
+             
+
                 blamed_commits, called_functions = get_blamed_commits_case_update(tmux, failure_info, last_good_commit)
 
                 for commit in blamed_commits:
                     print(f"Check blamed commit: {commit}.")
 
-                    show_results = git_show_in_tmux(failure_info["original_test_file"], commit, tmux)
+                    show_results = git_show_in_tmux(commit, tmux)
+                    import pdb
+                    pdb.set_trace()
                     
                     def generate_prompt_gitshow(commit_sha: str, git_show: str, python_object: dict, called_functions) -> str:
                         env = Environment(loader=FileSystemLoader('prompts'))
                         template = env.get_template('guilty_commit_gitshow_newcase.j2')
+                        # use original test file because we want to check pytorch git log
                         return template.render(commit_sha=commit_sha, 
                                                git_show=git_show,
                                                original_test_file=python_object["original_test_file"],
                                                original_test_case=python_object["original_test_case"],
                                                original_test_class=python_object["original_test_class"],
                                                called_functions=called_functions,
-                                               test_ops=python_object["test_ops"],
+                                               torch_op=python_object["torch_op"],
                                                module=python_object["module"],
                                                dependency=python_object["dependency"],
                                                error_message=python_object["error_message"])
                     called_functions = [func[0] for func in called_functions]
-                    prompt = generate_prompt(commit_sha=commit, 
+                    prompt = generate_prompt_gitshow(commit_sha=commit, 
                                                git_show=show_results,
-                                               python_object=failure_info)
+                                               python_object=failure_info,
+                                               called_functions=called_functions)
                     user_input = prompt
                     json_string = stream_graph_updates(user_input, graph)
 
-                    python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
+                    import pdb
+                    pdb.set_trace()
+
+                    index = json_string.find("```json\n")
+
+                    python_object = json.loads(json_string[index + len("```json\n"):].replace("```", ""))
 
                     if python_object.get("test_case_update") == "true":
                         print(f"Guilty commit is found from git show: {commit}. {python_object}")
