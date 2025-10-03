@@ -179,21 +179,19 @@ def run_in_tmux_wait(command: str, tmux_session: str) -> str:
     except Exception as e:
         return f"An error occurred: {e}"
     
-def get_git_log_in_tmux(last_good_commit: str, tmux_session: str) -> str:
+def get_git_log_by_module_in_tmux(blame_range: str, tmux_session: str, match: str = "aten") -> str:
     """
     Use `git log` to get the commit history since the last good commit.
     
     Args:
-        last_good_commit: The last known good commit (SHA or ref).
-        tmux_session: The tmux session name to run the command in.
-        
+        blame_range: The commit range to blame.
+        tmux_session: The tmux session name to run the command in.        
     Returns:
         The git log output as a string, or an error message.
     """
     
-    full_command = f"git --no-pager log {last_good_commit}..HEAD --oneline --pretty=format:'%H%nAuthor: %an%nDate: %ad%n%s%n%b%n---END---'"
-    return run_in_tmux_wait(full_command, tmux_session)
-       
+    full_command = f"git --no-pager log {blame_range} -p --oneline --pretty=format:'%H%nAuthor: %an%nDate: %ad%n%s%n%b%n---END---' {match} "
+    return run_in_tmux_wait(full_command, tmux_session)       
 
 
 ###############################
@@ -210,7 +208,8 @@ def retest_with_pytest_hook_in_tmux(
         original_test_file: str,
         test_class: str,
         test_case: str,
-        test_file: str
+        test_file: str,
+        match: str = "test"
     ) -> List[Tuple[str, str, int, int]]:
         """
         Run the specific test inside an existing tmux session (async inside tmux),
@@ -222,36 +221,43 @@ def retest_with_pytest_hook_in_tmux(
 
         # Pytest command (no redirection needed; we let pytest create log via -s redirected)
         setup_command = (
-            f"pushd /tmp/triage_bot_langgraph/call_tracer ; python setup_call_tracer.py develop > /dev/null 2>&1 ; popd ; pip list|grep call-tracer "
+            f"pushd /tmp/triage_bot_langgraph/call_tracer ; python setup.py develop > /dev/null 2>&1 ; popd ; pip list|grep call-tracer "
         )
 
         pushd_xpu_ops = ""
         if test_file != original_test_file:
             pushd_xpu_ops = (
-                f"pushd ./third_party/torch-xpu-ops "
+                f"pushd ./third_party/torch-xpu-ops ;"
             )
 
         pytest_command = (
             f"pytest -p call_tracer "
-            f"-s {test_file}::{test_class}::{test_case} > log 2>&1 "
+            f"-s {test_file}::{test_class}::{test_case} > log 2>&1 ;"
         )
 
-        # Build grep pipelines
-        grep_test_called = (
-            "grep 'at .*\/test\/' log | grep 'CALL:' | "
-            "awk -F' ' '{ print $2 " " $3 " " $4 }' | sort | uniq > called.csv "
-        )
-        grep_torch_called = (
-            "grep 'at .*\/torch\/' log | grep 'CALL:' | sort | uniq >> called.csv "
-        )
+        greps = ""
+        import pdb
+        pdb.set_trace
+        if "test" in match:
+            # Build grep pipelines
+            greps = (
+                "grep 'at .*\/test\/' log | grep 'CALL:' | grep -v 'CALL: <' | sort | uniq > called.csv ;"
+            )
+        if "torch" in match:
+            # Build grep pipelines
+             greps += (
+                "grep 'at .*\/torch\/' log | grep 'CALL:' | grep -v 'CALL: <' | sort | uniq >> called.csv ;"
+            )
 
         popd_xpu_ops = ""
         if len(pushd_xpu_ops):
             popd_xpu_ops = (
-                f"mv called.csv ../../called.csv ; popd "
+                f"mv called.csv ../../called.csv ; popd ;"
             )
 
-        full_command = f"{setup_command} ; pwd ; {pushd_xpu_ops} ; {pytest_command} ; {grep_test_called} ; {grep_torch_called} ; {popd_xpu_ops} ; pwd ; cat called.csv "
+        full_command = f"{setup_command} ; pwd ; {pushd_xpu_ops} {pytest_command} {greps} {popd_xpu_ops} pwd ; cat called.csv "
+        import pdb
+        pdb.set_trace()
         output, _ = run_in_tmux_wait(full_command, tmux_session)
 
         # Parse called.csv
@@ -275,7 +281,7 @@ def retest_with_pytest_hook_in_tmux(
         return results
 
 
-def git_blame_in_tmux(file_path: str, function_name: str, start_line: int, end_line: int, last_good_commit: str, tmux_session: str) -> list:
+def git_blame_in_tmux(file_path: str, function_name: str, start_line: int, end_line: int, blame_range: str, tmux_session: str, since: str) -> list:
     """
     Use `git blame` to find the commit that last modified the specified function.
     
@@ -284,7 +290,7 @@ def git_blame_in_tmux(file_path: str, function_name: str, start_line: int, end_l
         function_name: Name of the function.
         start_line: Starting line number of the function.
         end_line: Ending line number of the function.
-        last_good_commit: The last known good commit (SHA or ref).
+        blame_range: The commit range to blame.
         tmux: The tmux session name to run the command in.
         
     Returns:
@@ -295,15 +301,22 @@ def git_blame_in_tmux(file_path: str, function_name: str, start_line: int, end_l
     try:
         file_path = file_path.split("site-packages/")[1] if "site-packages" in file_path else file_path
         # Get unique abbreviated (12-char) commit hashes for the blamed lines, then
-        # keep only those that are in the range last_good_commit..HEAD.
+        # keep only those that are in the blame_range.
         # The previous xargs+grep approach failed when grep found no match (exit codes) or
         # when brace expansion / quoting caused issues; this loop is safer.
+        # full_command = (
+        #     f"if [ ! -e git_log.csv ]; then git log --no-pager {blame_range} > git_log.csv; fi; "
+        #     f"git --no-pager blame HEAD -L {start_line},{end_line} -- {file_path} "
+        #     "| awk '{print $1}' "
+        #     f"| while read c; do cat git_log.csv | awk -v c=$c '{{if(c ~ $1){{print $1}}}}'; done"
+        #     " 2>&1|tee blamed_commits.log"
+        # )
+
         full_command = (
-            f"git --no-pager blame HEAD -L {start_line},{end_line} -- {file_path} "
+            f"git --no-pager blame {since} HEAD -L {start_line},{end_line} -- {file_path} "
+            "| grep -v '^^'"
+            "| sort | uniq "
             "| awk '{print $1}' "
-            "| sort -u "
-            f"| while read c; do git --no-pager log --format='%h' {last_good_commit}..HEAD | awk -v c=$c '{{if(c ~ $1){{print $1}}}}'; done"
-            " 2>&1|tee blamed_commits.log"
         )
 
         # Get the blame information for the specified line range
@@ -321,30 +334,28 @@ def git_blame_in_tmux(file_path: str, function_name: str, start_line: int, end_l
                 commit_sha = line.strip()
 
                 def is_commit_hash(commit_str):
-                    """Check if string is longer than 11 characters SHA-1 commit hash"""
-                    if not commit_str or len(commit_str) < 11:
+                    """Check if string is longer than 12 characters SHA-1 commit hash"""
+                    if not commit_str or len(commit_str) < 12:
                         return False
                     import re
-                    return bool(re.match(r'^[a-f0-9]{11}$', commit_str, re.IGNORECASE))
+                    return bool(re.match(r'^[a-f0-9]{12}$', commit_str, re.IGNORECASE))
 
                 if is_commit_hash(commit_sha) and commit_sha not in commit_list:
+                    print(full_command)
                     print("blamed commit_sha: " + commit_sha)
                     commit_list.append(commit_sha)
         return commit_list
     
     except subprocess.CalledProcessError as e:
-        import pdb 
-        pdb.set_trace()
         return f"Error executing git command: {e}"
     except Exception as e:
-        import pdb 
-        pdb.set_trace()
         return f"An error occurred: {e}"
     
 def git_blame_commit(
     results: list[Tuple[str, str, int, int]],
-    last_good_commit: str,
-    tmux_session: str
+    blame_range: str,
+    tmux_session: str,
+    since: str = ""
 ) -> set:
     """
     For each (symbol, file_path, start_line, end_line) tuple in `results`,
@@ -370,8 +381,9 @@ def git_blame_commit(
                 function_name=symbol,
                 start_line=start_line,
                 end_line=end_line,
-                last_good_commit=last_good_commit,
-                tmux_session=tmux_session
+                blame_range=blame_range,
+                tmux_session=tmux_session,
+                since=since
             )
 
             blamed_commit_list.extend(commit_sha_list)
@@ -382,44 +394,11 @@ def git_blame_commit(
         traceback.print_exc()
     return blamed_commit_set
 
-def get_blamed_commit_of_module(depency: str, module: str, last_good_commit: str, tmux_session: str) -> set:
-    """
-    Use `git blame` to find commits that modified files related to the dependency or module.
-    Args:
-        dependency: The related dependency component.
-        module: The related module.
-        last_good_commit: The last known good commit (SHA or ref).
-        tmux: The tmux session name to run the command in.
-    Returns:
-        A set of commit SHAs that modified files related to the dependency or module, or an error message since last_good_commit.
-    """
-    import subprocess
-    
-    try:
-        
-        full_command = "find ./aten ./torch ./third_party -name '*{depency}*|*{module}*' -exec sh -c 'git blame {last_good_commit} \"{{}}\"' \;"
-        # Get the blame information for the specified line range
-        blame_output = subprocess.check_output(
-            ["tmux", "send-keys", "-t", tmux_session, full_command, "tmux wait -S my_lock", "C-m", "tmux wait my_lock", f"tmux capture-pane -J -S - -E - -p -t {tmux_session}"],
-            text=True
-        )
-        
-        # Parse the output to extract commit SHAs
-        commits = list()
-        for line in blame_output.splitlines():
-            if line:
-                commit_sha = line.split()[0]
-                commits.extend(commit_sha)        
-        return set(commits)
-    
-    except subprocess.CalledProcessError as e:
-        return f"Error executing git command: {e}"
-    except Exception as e:
-        return f"An error occurred: {e}"
 
 def get_blamed_commits_case_update(tmux_session: str,
         failure_info: dict,
-        last_good_commit: str) -> set:
+        blame_range: str,
+        match: str) -> set:
     
     run_shell_command("mkdir -p /tmp/triage_bot_langgraph ; cp -rf call_tracer /tmp/triage_bot_langgraph/.")
 
@@ -428,18 +407,18 @@ def get_blamed_commits_case_update(tmux_session: str,
         original_test_file=failure_info["original_test_file"],
         test_class=failure_info["test_class"],
         test_case=failure_info["test_case"],
-        test_file=failure_info["test_file"])
+        test_file=failure_info["test_file"],
+        match=match)
 
-    commits_sha_set = git_blame_commit(called_functions, last_good_commit, failure_info["tmux"])
+    since = ""
+    if re.search(r'--since (\d{4}-\d{2}-\d{2})', blame_range) is not None:
+        since = re.search(r'--since (\d{4}-\d{2}-\d{2})', blame_range).group(1)
+
+    commits_sha_set = git_blame_commit(called_functions, blame_range, failure_info["tmux"], since=f"--since {since}")
+
+    import pdb
+    pdb.set_trace()
     return commits_sha_set, called_functions
-    
-def get_blamed_commits_module_update(tmux_session: str,
-        failure_info: dict,
-        last_good_commit: str) -> set:
-    commits_sha_set = get_blamed_commit_of_module(failure_info["dependency"], failure_info["module"], last_good_commit, failure_info["tmux"])
-    return commits_sha_set
- 
-
 
 def git_show_in_tmux(commit_sha: str, tmux_session: str) -> str:
     """
