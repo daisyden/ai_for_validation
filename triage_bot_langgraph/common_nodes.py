@@ -1,6 +1,6 @@
 from typing import Annotated
 from typing_extensions import TypedDict
-from langgraph.graph import StateGraph
+from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from vllm_service import llm
 from langchain_core.messages import HumanMessage
@@ -120,11 +120,38 @@ def stream_graph_updates(user_input: str, graph: StateGraph):
 
             if len(json_string) > 0:
                 try:
-                    python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
-                    print(python_object["module_triaged"] + "=========\n" + python_object["reproduce_code"] + "=========\n")
+                    index0 = json_string.find("```json\n")
+                    json_string = json_string[index0 + len("```json\n"):]
+                    index1 = json_string.rfind("}\n```")
+                    json_string = json_string[:index1+1]                    
+
+                    python_object = json.loads(json_string)
+
                     json_string = json.dumps(python_object, indent=4)
                     print(f"### Assistant output json: {json_string}")
+                    return json_string
                 except:
                     print(f"### Assistant output text: {json_string}")
-            return json_string
+                    return ""
+         
+
+def classify_depsrag_graph():
+    graph_builder = StateGraph(State)
+    graph_builder.add_node("classify", classify)
+    graph_builder.add_node("depsRAG", depsRAG)
+    graph_builder.add_edge(START, "classify")
+    graph_builder.add_edge("classify", "depsRAG")
+    graph_builder.add_edge("depsRAG", END)
+    graph = graph_builder.compile()
+    return graph
+
+
+def classify_graph():
+    graph_builder = StateGraph(State)
+    graph_builder.add_node("classify", classify)
+    graph_builder.add_edge(START, "classify")
+    graph_builder.add_edge("classify", END)
+    graph = graph_builder.compile()
+    return graph
+
                 

@@ -1,0 +1,69 @@
+You are a world class expert in extracting information from github issues.
+
+Here is a github issue of pytorch to DISABLE test cases, the link is {{link}}. This is the title {{title}} and here is the body:
+{{body}}
+
+Please extract the following information from the issue description, especially from the traceback in the issue body and return with a beautified json file.
+
+1. **Extract the pytest test file from the log**:
+    - Identify the pytest test file path from the failure log. The test file path usually starts with `test_` and ends with `.py`.
+2. **Extract the test class name**:
+    - Identify the test class name from the failure log. The test class name usually starts with `Test` and is in CamelCase.
+3. **Extract the test case name**:
+   - Identify the full test case name starting with `test_` from the failure log.       
+4. **The original test file is the same as test file**.
+5. **Determine the original test case**:
+   - The test case is started with "test_".
+   - Please extract test case name from the traceback of the issue body. 
+   - If the test case is parameterized (e.g., `test_compare_cpu__batch_norm_with_update_xpu_bool`), extract the original test class and test name from the traceback of the issue body
+   (e.g., `test_compare_cpu`). Please also get the line number of the testcase from the traceback.
+6. **Identify the test module**:
+   - Categorize the test into one of:
+     - `torch operation` (aten ops)
+     - `distributed` (multi-process/device)
+     - `runtime` (execution environment)
+     - `inductor` (compiler)
+     - `torchbench` (benchmarking)
+7. **Extract the data type (`dtype`)**:
+    - Identify the data type involved in the test failure (e.g., `float32`, `int64`, `bool`, etc.) from the traceback or error message.
+8. **Extract the torch operation (`torch_op`)**:
+   - Identify the specific PyTorch operation involved in the test failure (e.g., `add`, `matmul`, `conv2d`, etc.) from the traceback or error message. If not applicable, return `None`.
+9. **Extract the error type**:
+   - Identify the type of error that caused the test failure (e.g., `AssertionError`, `RuntimeError`, etc.) from the traceback.
+10. **Extract the error message**:  
+    - Capture the complete error message associated with the test failure, including the full traceback. 
+11. **The tmux environment is empty**.
+12. **The error type triaged is empty**.
+13. **The dependency triaged is empty**.
+14. **The module triaged is empty**.
+15. **The reproduce code is empty**.
+16. ""The dependency is empty"".
+17. **Extract the date the issue start to occur from issue body and the 'since' field is two days before the issue start to occur**.
+18. **The until is the date when the issue is submitted**.
+19. **The last good commit if mentioned in the issue, otherwise empty**.
+
+{
+  "original_test_file": "the same as test_file",
+  "test_file": "the pytest test file path",
+  "test_class": "the test class name",
+  "test_case": "the test case",
+  "original_test_class": "same as test class",
+  "original_test_case": "same as test case",
+  "original_test_case_lineno": "the line number of the original test case",
+  "module": "torch operation/distributed/runtime/inductor",
+  "dtype": "float32/bool/int64/etc",
+  "torch_op": "op_name_or_None",
+  "error_type": "AssertionError/RuntimeError/etc",
+  "error_message": "Raw error text",
+  "tmux": "",
+  "error_type_triaged": "",
+  "dependency_triaged": "",
+  "module_triaged": "",
+  "reproduce_code": "",
+  "reproduce_command": "the pytest command extracted from log",
+  "dependency": "dependency": "the dependent componets, such as mkldnn or mkl",
+  "since": "two days before the issue start to occur, with format year-month-day, for example 2023-10-01",
+  "until": "the date when the issue is submitted, with format year-month-day, for example 2023-10-03",
+  "last_good_commit": "the last good commit if mentioned in the issue, otherwise empty"
+  }
+

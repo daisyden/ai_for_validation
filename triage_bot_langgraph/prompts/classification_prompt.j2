@@ -26,11 +26,6 @@ and as a wrapper file it calls code in the original test file
 </original_test_file>
 .\n
 
-The test tmux enviroment is 
-<tmux>
-{{ tmux }}
-</tmux>
-
 1. **Extract the test case name**:
    - Identify the full test case name starting with `test_` from the failure log.
 
@@ -82,20 +77,24 @@ Please return a beutified JSON with the following structure, only return the jso
 {
   "original_test_file": "{{ original_test_file }}",
   "test_file": "{{ test_file }}"
+  "test_class": "{{ test_class }}",
   "test_case": "{{ test_case }}",
   "original_test_class": "original_test_class",
   "original_test_case": "original_test_case",
   "original_test_case_lineno": "original_test_case_lineno",
-  "module": "torch operation/distributed/runtime/inductor/torchbench",
+  "module": "torch operation/distributed/runtime/inductor",
   "dtype": "float32/bool/int64/etc",
   "torch_op": "op_name_or_None",
   "error_type": "AssertionError/RuntimeError/etc",
   "error_message": "Raw error text"
-  "tmux": "The tmux session"
+  "tmux": ""
   "error_type_triaged": "",
   "dependency_triaged": "",
   "module_triaged": "",
   "reproduce_code": "information for reproduced issue",
-  "dependency": "",
+  "dependency": "the dependent componets, such as mkldnn or mkl",
+  "since": {{ since }},
+  "until": {{ until }},
+  "last_good_commit": {{ last_good_commit }}
 }
 ```
