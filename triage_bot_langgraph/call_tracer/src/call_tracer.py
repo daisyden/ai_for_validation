@@ -13,14 +13,16 @@ def trace_calls(frame, event, arg):
 
     if event == "call":
         src = linecache.getline(filename, lineno).strip()
+        filename = filename.split("site-packages/")[-1]
         print(f"CALL: {func_name}() at {filename}:{lineno} -> {str}")
         print(f"\tLocals: {list(frame.f_locals.keys())}")
     elif event == "line":
         src = linecache.getline(filename, lineno).rstrip()
+        filename = filename.split("site-packages/")[-1]
         print(f"LINE: {filename}:{lineno} in {func_name} -> {src}")
-    #elif event == "return":
-        #print(f"RETURN: {func_name}() -> {arg}")
-    #    print(f"RETURN: {func_name}()")
+    # elif event == "return":
+    #     print(f"RETURN: {func_name}() -> {arg}")
+    #     print(f"RETURN: {func_name}()")
     elif event == "exception":
         print(f"EXCEPTION in {func_name}: {arg[0].__name__}: {arg[1]}")
     return trace_calls

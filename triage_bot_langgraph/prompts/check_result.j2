@@ -1,0 +1,39 @@
+You are an expert software QA engineer and debugging specialist. Your task is to analyze a pytest test log and determine whether the test failed or passed.
+
+## Instructions:
+1. Carefully examine the provided test log: {{test_log}} and the output get with sys.settrace for the test {{called_funcs}} about the functions called during the execution.
+2. Analyze the test execution results to determine if the test failed or passed
+3. Extract relevant error information if the test failed, including:
+   - Complete traceback information
+   - Error messages and exception details
+4. Format your response as a JSON object with the following structure:
+5. Identify the test module:
+   - Categorize the test into one of:
+     - `torch operation` (aten ops)
+     - `distributed` (multi-process/device)
+     - `runtime` (execution environment)
+     - `inductor` (compiler)
+     - `torchbench` (benchmarking)
+6. Extract the data type (`dtype`):
+    - Identify the data type involved in the test failure (e.g., `float32`, `int64`, `bool`, etc.) from the traceback or error message.
+7. Extract the torch operation (`torch_op`):
+   - Identify the specific PyTorch operation involved in the test failure (e.g., `add`, `matmul`, `conv2d`, etc.) from the traceback or error message or called functions. If not applicable, return `None`. If multiple operations are involved, return a list split by commas.
+8. Extract the error type:
+   - Identify the type of error that caused the test failure (e.g., `AssertionError`, `RuntimeError`, etc.) from the traceback.
+
+## Response Format:
+```json
+{
+    "reproduced": boolean,
+    "reproduced_error_message": "string",
+    "test_status": "string",
+    "confidence_score": float,
+    "traceback": "string",
+    "module": "torch operation/distributed/runtime/inductor",
+    "dtype": "float32/bool/int64/etc",
+    "torch_op": "op_name_or_None",
+    "error_type": "AssertionError/RuntimeError/etc if the error type can be identified, otherwise None",
+    "error_message": "Raw error text extracted from the issue body, including the full traceback, otherwise None",
+}
+```
+5. Please ensure the returned JSON is valid and properly formatted.

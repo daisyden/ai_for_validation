@@ -3,22 +3,29 @@ You are a world class expert in extracting information from github issues.
 Here is a github issue of pytorch to DISABLE test cases, the link is {{link}}. This is the title {{title}} and here is the body:
 {{body}}
 
-Please extract the following information from the issue description, especially from the traceback in the issue body and return with a beautified json file.
+Please extract the following information from the issue description, especially from the traceback in the issue body and return with a beautified json file. If the issue body records mulitple cases, only extract the one case with most information.
 
 1. **Extract the pytest test file from the log**:
-    - Identify the pytest test file path from the failure log. The test file path usually starts with `test_` and ends with `.py`.
+    - If https://www.torch-ci.com/failure?failureCaptures is detected in the issue body, please extract the test file path from the URL. For example, in the URL https://www.torch-ci.com/failure?failureCaptures=%5B%22inductor%2Ftest_torchinductor_codegen_dynamic_shapes.py%3A%3ADynamicShapesCodegenGPUTests%3A%3Atest_conv1d_depthwise_dynamic_shapes_xpu%22%5D, 
+     the test_file is test/inductor/test_torchinductor_codegen_dynamic_shapes.py instead of test_torchinductor_codegen_dynamic_shapes.py only.
+    - If the {{link}} contains "torch-xpu-ops", the test file is under torch-xpu-ops repo, so for example if "python ./../test/quantization/core/test_quantized_op.py" is detected in the log, the test file is test/xpu/quantization/core/test_quantized_op_xpu.py, the test file is with "_xpu" as postfix.
+    - Otherwise, identify the pytest test file path from the failure log. The test file path usually starts with `test_` and ends with `.py`.
 2. **Extract the test class name**:
-    - Identify the test class name from the failure log. The test class name usually starts with `Test` and is in CamelCase.
+    - Please note if https://www.torch-ci.com/failure?failureCaptures is detected in the issue body, please extract the test file path from the URL. For example, in the URL https://www.torch-ci.com/failure?failureCaptures=%5B%22inductor%2Ftest_torchinductor_codegen_dynamic_shapes.py%3A%3ADynamicShapesCodegenGPUTests%3A%3Atest_conv1d_depthwise_dynamic_shapes_xpu%22%5D, 
+     the test class is DynamicShapesCodegenGPUTests. 
+    - Otherwise, identify the test class name from the failure log. The test class name usually starts with a capital letter and is in CamelCase.
 3. **Extract the test case name**:
-   - Identify the full test case name starting with `test_` from the failure log.       
-4. **The original test file is the same as test file**.
+   - Please note if https://www.torch-ci.com/failure?failureCaptures is detected in the issue body, please extract the test file path from the URL. For example, in the URL https://www.torch-ci.com/failure?failureCaptures=%5B%22inductor%2Ftest_torchinductor_codegen_dynamic_shapes.py%3A%3ADynamicShapesCodegenGPUTests%3A%3Atest_conv1d_depthwise_dynamic_shapes_xpu%22%5D, 
+     the test case is test_conv1d_depthwise_dynamic_shapes_xpu.   
+   - Otherwise, identify the full test case name starting with `test_` from the failure log.  
+4. **According to issue link {{link}} if the repo is pytorch/pytorch, the original test file is the same as test file; otherwise if the repo is torch-xpu-ops the original test file is the in pytorch repo and the test file with '_xpu' removed. For example test/xpu/quantization/core/test_quantized_op_xpu.py the original file is test/xpu/quantization/core/test_quantized_op.py**.
 5. **Determine the original test case**:
    - The test case is started with "test_".
    - Please extract test case name from the traceback of the issue body. 
    - If the test case is parameterized (e.g., `test_compare_cpu__batch_norm_with_update_xpu_bool`), extract the original test class and test name from the traceback of the issue body
    (e.g., `test_compare_cpu`). Please also get the line number of the testcase from the traceback.
 6. **Identify the test module**:
-   - Categorize the test into one of:
+   - According to the test file path and issue body categorize the test into one of:
      - `torch operation` (aten ops)
      - `distributed` (multi-process/device)
      - `runtime` (execution environment)
@@ -38,11 +45,12 @@ Please extract the following information from the issue description, especially 
 14. **The module triaged is empty**.
 15. **The reproduce code is empty**.
 16. ""The dependency is empty"".
-17. **Extract the date the issue start to occur from issue body and the 'since' field is two days before the issue start to occur**.
-18. **The until is the date when the issue is submitted**.
+17. **The 'since' field is two days before the issue is created {{date_created}}**.
+18. **The until is the date when the issue is submitted {{date_created}}**.
 19. **The last good commit if mentioned in the issue, otherwise empty**.
 
 {
+  "link": "{{link}}",
   "original_test_file": "the same as test_file",
   "test_file": "the pytest test file path",
   "test_class": "the test class name",
@@ -53,14 +61,14 @@ Please extract the following information from the issue description, especially 
   "module": "torch operation/distributed/runtime/inductor",
   "dtype": "float32/bool/int64/etc",
   "torch_op": "op_name_or_None",
-  "error_type": "AssertionError/RuntimeError/etc",
-  "error_message": "Raw error text",
+  "error_type": "AssertionError/RuntimeError/etc if the error type can be identified, otherwise None",
+  "error_message": "Raw error text extracted from the issue body, including the full traceback, otherwise None",
   "tmux": "",
   "error_type_triaged": "",
   "dependency_triaged": "",
   "module_triaged": "",
   "reproduce_code": "",
-  "reproduce_command": "the pytest command extracted from log",
+  "reproduce_command": "the pytest command extracted from log, else pytest -v test_file -k test_case",
   "dependency": "dependency": "the dependent componets, such as mkldnn or mkl",
   "since": "two days before the issue start to occur, with format year-month-day, for example 2023-10-01",
   "until": "the date when the issue is submitted, with format year-month-day, for example 2023-10-03",

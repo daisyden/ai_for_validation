@@ -26,13 +26,14 @@ In git show output, a line starts with '+' means the line is added, starts with 
 
 Please analyze the failure information and determine whether the failure is due to a test case update:
 
-The {{original_test_name}} function or the {{called_functions}} meet any of the following cases:
+1. The {{original_test_name}} function or the called_functions of it {{called_functions}} meet any of the following cases:
   a. have decorators updated, added or removed.
   b. have code about skips or unittest.SkipTest are updated, added or removed.
   c. have code with a path generalized for more devices including xpu backend.
-  d. have other updates that could do updates on the test case.
+2. Or the op_db definition of op {{test_ops}} is updated, for example dtypes added, skips, or decorators added or removed.
 
-Or the op_db definition of op {{test_ops}} is updated, for example dtypes added, skips, or decorators added or removed.
+And whether the commit is related to the failure in other ways:
+3. The commit updates other relevant code that could be related to the failure
 
 Return the result with beutified json format only, with fields:
 ```json

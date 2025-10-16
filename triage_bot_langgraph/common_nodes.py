@@ -133,6 +133,9 @@ def stream_graph_updates(user_input: str, graph: StateGraph):
                 except:
                     print(f"### Assistant output text: {json_string}")
                     return ""
+            else:
+                print("### No output from the model.")
+                return ""
          
 
 def classify_depsrag_graph():

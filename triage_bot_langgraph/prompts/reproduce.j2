@@ -1,0 +1,88 @@
+You are an expert software QA engineer and debugging specialist. Your task is to determine whether a specific error message is reproduced in a test log and extract comprehensive debugging information.
+
+This is the execution trace of the test case: {{casecode}}.
+
+## Instructions:
+1. Analyze the provided test log: {{test_log}} and the callee function get with sys.settrace for the test {{called_funcs}} about the functions called during the execution.
+2. If the expected error message {{error_message}} is **not empty and not None**, check if the exact text or key components appear in `{{test_log}}`
+3. Extract critical debugging components from the test log:
+   - Complete traceback information
+   - Error messages and exception details
+   - The inductor graph code if applicable
+4. Determine reproduction status based on the following criteria:
+5. Identify the test module:
+   - Categorize the test into one of:
+     - `torch operation` (aten ops)
+     - `distributed` (multi-process/device)
+     - `runtime` (execution environment)
+     - `inductor` (compiler)
+     - `torchbench` (benchmarking)
+6. Extract the data type (`dtype`):
+    - Identify the data type involved in the test failure (e.g., `float32`, `int64`, `bool`, etc.) from the case code or test log.
+7. Infer the torch operation (`torch_op`):
+   - Objective: Infer the specific PyTorch operation(s) most directly associated with the failure by inspecting the following sources:
+     a. The test case name ({{test_name}}).
+     a. The the execution trace of the test case.
+     b. the test log, including the traceback and inductor output code dumps.
+     Return a comma-separated list of canonical op names in order of relevance (most failure-proximal first). If none can be confidently determined, return `None`.
+   - Primary evidence sources (highest to lowest priority):
+     a. Innermost traceback frames referencing PyTorch / ATen / Inductor / FX code (file paths, function qualifiers, lowered graph).
+     b. Explicit op strings or IR containing patterns (regex-style):
+        - aten::OP, at::OP, torch.ops.aten.OP
+        - torch.OP(, torch.nn.functional.OP(, nn.functional.OP(
+        - call_function[target=OP], call_method[target=OP], call_module[...] if an underlying aten op or nn.functional op is implied
+        - FX / IR lines like: "%t = aten.OP", "%t = call_function[target=aten.OP]", "%t = call_method[target=tensor.OP]"
+        - Graph / Inductor dumps, e.g., "IRGraph", "triton_", "lowered graph", "kernel ..." followed by aten ops
+     c. Case code semantics:
+        - Direct calls: torch.add(...), x.add_(...), F.relu(...), torch.matmul(...), torch.nn.Linear(...), tensor.view(...)
+        - Module constructions whose forward implies core ops (e.g., nn.Linear -> addmm; Conv2d -> convolution)
+        - Method-style ops: tensor.relu(), tensor.detach(), tensor.softmax(dim=...)
+        - Tensor operations: x + y, x @ y,or tensor.op() where op is a known tensor method
+     d. Error messages mentioning an op explicitly (e.g., "RuntimeError: expected scalar type ... for argument #1 'mat2' (mm)").
+   - Normalization rules:
+     - Strip namespaces: torch., torch.ops.aten., aten::, at::, nn.functional., torch._C._nn. → keep base op (e.g., aten::add.Tensor -> add).
+     - Preserve in-place suffix underscore (add_).
+     - Drop overload qualifiers (.Tensor, .Scalar) unless ONLY form available.
+     - Map method calls to op names (x.add_ -> add_ ; x.relu() -> relu).
+     - Expand recognizable composite modules only if BOTH composite and lowered ops explicitly occur (e.g., addmm, linear). If only module name is present (e.g., Linear without addmm evidence) include linear only.
+   - Ordering:
+     1. Op at (or immediately above) failing frame.
+     2. Ops in same traceback cluster near exception.
+     3. Ops in inductor / FX lowered graph tied to failing section.
+     4. Case code explicit calls relevant to tensors involved in failure.
+   - Exclusions (never treat as ops): forward, run, wrapper, call_function, call_method, call_module, interpret, compile_fx, __call__, <lambda>, python builtins.
+   - Kernel / fused names:
+     - Prefer canonical aten op if a fused/triton name clearly corresponds (e.g., triton_red_fused_mean_div -> mean, div if both appear separately; else keep fused name as last resort).
+   - Type / shape / dtype mismatch errors:
+     - Infer candidate op from phrasing (e.g., "mat1 and mat2 shapes cannot be multiplied" => mm or matmul; "The size of tensor a (X) must match tensor b (Y) at non-singleton dimension" in context of add => add).
+     - Only include inferred op if HIGH confidence (explicit in message or surrounding frames); otherwise ignore.
+   - Return value:
+     - Comma-separated unique op names in relevance order.
+     - Return None (exact literal) if no confidently identifiable ops.
+8. Extract the error type:
+   - Identify the type of error that caused the test failure (e.g., `AssertionError`, `RuntimeError`, etc.) from the traceback.
+
+## Reproduction Criteria:
+- If `{{error_message}}` is **not empty and not None**, check if the exact text or key components appear in `{{test_log}}`
+- If `{{error_message}}` is **empty, None, or contains only whitespace**, default to `false` for reproduction
+- Consider partial matches and key error patterns when evaluating reproduction
+
+## Response Format:
+```json
+{
+    "reproduced": boolean,
+    "reproduced_error_message": "string",
+    "match_confidence": float,
+    "match_type": "string",
+    "extracted_error_snippet": "string",
+    "traceback": "string",
+    "exception_type": "string",
+    "failing_test": "string"
+    "module": "torch operation/distributed/runtime/inductor",
+    "dtype": "float32/bool/int64/etc",
+    "torch_op": "op_name_or_None",
+    "error_type": "AssertionError/RuntimeError/etc if the error type can be identified, otherwise None",
+    "error_message": "Raw error text extracted from the test log, otherwise None",
+}
+
+Please ensure the returned JSON is valid and properly formatted.

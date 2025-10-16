@@ -141,11 +141,11 @@ def run_shell_command(command: str) -> str:
     except subprocess.CalledProcessError as e:
         return f"Error executing command: {e}"
 
-def run_in_tmux_wait(command: str, tmux_session: str) -> str:
+def run_in_tmux_wait(command: str, tmux_session: str) -> Tuple[str, float]:
     """
     Execute a shell command inside a tmux session, wait for its completion (via tmux wait),
     then capture and return the pane output.
-    """
+    """ 
     import subprocess
     try:
         # Send the command to the tmux session:
@@ -204,12 +204,9 @@ def get_git_log_by_module_in_tmux(blame_range: str, tmux_session: str, match: st
 ###############################
 
 def retest_with_pytest_hook_in_tmux(
-        tmux_session: str,
-        original_test_file: str,
-        test_class: str,
-        test_case: str,
-        test_file: str,
-        match: str = "test"
+        python_object: object,
+        match: str = "test",
+        blame_callee: bool = False
     ) -> List[Tuple[str, str, int, int]]:
         """
         Run the specific test inside an existing tmux session (async inside tmux),
@@ -218,67 +215,106 @@ def retest_with_pytest_hook_in_tmux(
 
         Returns empty list on failure or if file not produced in time.
         """
+        tmux_session = python_object["tmux"]
+        original_test_file = python_object["original_test_file"]
+        test_class = python_object["test_class"]
+        test_case = python_object["test_case"]
+        test_file = python_object["test_file"]
+        module = python_object["module"]
+
+        run_shell_command("mkdir -p /tmp/triage_bot_langgraph ; cp -rf call_tracer /tmp/triage_bot_langgraph/.")
 
         # Pytest command (no redirection needed; we let pytest create log via -s redirected)
         setup_command = (
             f"pushd /tmp/triage_bot_langgraph/call_tracer ; python setup.py develop > /dev/null 2>&1 ; popd ; pip list|grep call-tracer "
         )
+        run_in_tmux_wait(setup_command, tmux_session)
 
         pushd_xpu_ops = ""
         if test_file != original_test_file:
             pushd_xpu_ops = (
                 f"pushd ./third_party/torch-xpu-ops ;"
             )
+            run_in_tmux_wait(pushd_xpu_ops, tmux_session)
 
         pytest_command = (
             f"pytest -p call_tracer "
-            f"-s {test_file}::{test_class}::{test_case} > log 2>&1 ;"
+            f"-s {test_file}::{test_class}::{test_case} > log 2>&1 "
         )
-
-        greps = ""
-        import pdb
-        pdb.set_trace
+        run_in_tmux_wait(pytest_command, tmux_session)
+        
+        greps = ""        
         if "test" in match:
             # Build grep pipelines
             greps = (
                 "grep 'at .*\/test\/' log | grep 'CALL:' | grep -v 'CALL: <' | sort | uniq > called.csv ;"
+                "grep 'at .*\/testing\/' log | grep 'CALL:' | grep -v 'CALL: <' | sort | uniq >> called.csv ;"
             )
         if "torch" in match:
             # Build grep pipelines
-             greps += (
-                "grep 'at .*\/torch\/' log | grep 'CALL:' | grep -v 'CALL: <' | sort | uniq >> called.csv ;"
+            greps += (
+                "grep 'at torch\/' log | grep 'CALL:' | grep -v 'CALL: <' | sort | uniq >> called.csv ;"
             )
 
+        base_file = original_test_file.split("/")[-1]
+        greps += (
+                f"grep '\/test\/' log | grep 'LINE:' > casecode.csv ;"
+        )
+        
         popd_xpu_ops = ""
         if len(pushd_xpu_ops):
             popd_xpu_ops = (
                 f"mv called.csv ../../called.csv ; popd ;"
             )
 
-        full_command = f"{setup_command} ; pwd ; {pushd_xpu_ops} {pytest_command} {greps} {popd_xpu_ops} pwd ; cat called.csv "
-        import pdb
-        pdb.set_trace()
-        output, _ = run_in_tmux_wait(full_command, tmux_session)
-
-        # Parse called.csv
-        results: List[Tuple[str, str, int, int]] = []
-        try:
-            for line in output.split('\n'):
-                if not line or not line.startswith('CALL:'):
-                    continue
-                parts = [p.strip() for p in line.split(' ') if p.strip()]
-                if len(parts) >= 4:
-                    file = parts[3].split(":")[0]
-                    line = int(parts[3].split(":")[1]) if len(parts[3].split(":"))>=2 else 0
-                    start, end = get_function_line_range(file, parts[1], line)
-                    results.append((parts[1], file, start, end))
-        except Exception as e:
-            print(f"[retest_with_pytest_hook_in_tmux] Error parsing called.csv (returning partial results): {e}")
-            traceback.print_exc()
-            return results
+        full_command = f"{greps} {popd_xpu_ops} pwd ; cat called.csv | awk -F' ' '{{print $2}}' | sort | uniq"
         
-        print(results)
-        return results
+        run_in_tmux_wait(full_command, tmux_session)
+
+        full_command = f"cat log"
+        log, _ = run_in_tmux_wait(full_command, tmux_session)
+        log = re.split(r"\n=+\s+FAILURES\s+=+", log, maxsplit=1)[-1]
+
+        full_command = f"grep '\/test\/' casecode.csv | grep 'LINE:' |awk -F'->' '{{ print $NF }}'"
+        casecode, _ = run_in_tmux_wait(full_command, tmux_session)
+
+        full_command = f"cat called.csv | awk -F' ' '{{print $2}}' | sort | uniq"
+        called_func, _ = run_in_tmux_wait(full_command, tmux_session)
+
+        if module == "inductor":
+            environments = "TORCH_LOGS=\"+output_code\" "
+        
+            pytest_command = (
+            f"{environments}"
+            f"pytest "
+            f"-s {test_file}::{test_class}::{test_case} > inductor.log 2>&1 "
+            )
+            run_in_tmux_wait(pytest_command, tmux_session)
+            full_command = f"cat inductor.log"
+            log, _ = run_in_tmux_wait(full_command, tmux_session)
+
+        if blame_callee == False:
+            return called_func, log, casecode
+        else: 
+            # Parse called.csv
+            results: List[Tuple[str, str, int, int]] = []
+            try:
+                for line in called_func.split('\n'):
+                    if not line or not line.startswith('CALL:'):
+                        continue
+                    parts = [p.strip() for p in line.split(' ') if p.strip()]
+                    if len(parts) >= 4:
+                        file = parts[3].split(":")[0]
+                        line = int(parts[3].split(":")[1]) if len(parts[3].split(":"))>=2 else 0
+                        start, end = get_function_line_range(file, parts[1], line)
+                        results.append((parts[1], file, start, end))
+            except Exception as e:
+                print(f"[retest_with_pytest_hook_in_tmux] Error parsing called.csv (returning partial results): {e}")
+                traceback.print_exc()
+                return results
+            
+            print(results)
+            return results
 
 
 def git_blame_in_tmux(file_path: str, function_name: str, start_line: int, end_line: int, blame_range: str, tmux_session: str, since: str) -> list:
@@ -394,13 +430,35 @@ def git_blame_commit(
         traceback.print_exc()
     return blamed_commit_set
 
+def get_git_log(
+        failure_info: dict,
+        blame_range: str,
+        match: str) -> set:
+    """
+    Use `git log` to find commits that modified files matching `match`
+    in the specified `blame_range`.
+    
+    Args:
+        failure_info: Dictionary containing failure details, including 'tmux'.
+        blame_range: The commit range to blame.
+        match: File path or pattern to filter commits (e.g., "aten", "test").
+        
+    Returns:
+        A set of commit SHAs that modified files matching `match` in the blame range.
+    """
+    try:
+        command = f"git --no-pager log {blame_range} --name-only {match}"
+        git_log_output, _ = run_in_tmux_wait(command, failure_info["tmux"])
+        return git_log_output
+    except Exception as e:
+        print(f"[get_blamed_commits_git_log] Error processing git log: {e}")
+        traceback.print_exc()
+        return {f"Error processing git log: {e}"}
 
 def get_blamed_commits_case_update(tmux_session: str,
         failure_info: dict,
         blame_range: str,
         match: str) -> set:
-    
-    run_shell_command("mkdir -p /tmp/triage_bot_langgraph ; cp -rf call_tracer /tmp/triage_bot_langgraph/.")
 
     called_functions = retest_with_pytest_hook_in_tmux(
         tmux_session=failure_info["tmux"],
@@ -408,6 +466,7 @@ def get_blamed_commits_case_update(tmux_session: str,
         test_class=failure_info["test_class"],
         test_case=failure_info["test_case"],
         test_file=failure_info["test_file"],
+        module=failure_info["module"],
         match=match)
 
     since = ""
@@ -416,8 +475,6 @@ def get_blamed_commits_case_update(tmux_session: str,
 
     commits_sha_set = git_blame_commit(called_functions, blame_range, failure_info["tmux"], since=f"--since {since}")
 
-    import pdb
-    pdb.set_trace()
     return commits_sha_set, called_functions
 
 def git_show_in_tmux(commit_sha: str, tmux_session: str) -> str:

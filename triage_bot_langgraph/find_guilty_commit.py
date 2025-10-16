@@ -1,11 +1,8 @@
 import argparse
-
 import json
-
-from langgraph.graph import StateGraph, START, END
 from jinja2 import Environment, FileSystemLoader
-from triage_bot_langgraph.guilty_commit import git_show_in_tmux, get_blamed_commits_case_update
-from common_nodes import State, classify, depsRAG, stream_graph_updates, classify_depsrag_graph, classify_graph
+from guilty_commit import git_show_in_tmux, get_blamed_commits_case_update, get_git_log
+from common_nodes import stream_graph_updates, classify_depsrag_graph, classify_graph
 from prepare import extract_issue_information, get_tmux_sessions, build_pytorch_enviroment, reproduce_issue_in_tmux
 
 parser = argparse.ArgumentParser()
@@ -13,78 +10,92 @@ parser.add_argument("--issue", type=str, help="The issue number to process", req
 parser.add_argument("--repo", type=str, help="The github repo of the issue", default='pytorch/pytorch', required=False)
 parser.add_argument("--token", type=str, help="The github token to the repo", required=True)
 parser.add_argument("--tmux", type=str, help="The tmux session to use, if not exists the script will create one", required=False)
-parser.add_argument("--build", type=str, help="The build method, source or nightly", default="source", required=False)
-parser.add_argument("--input", type=str, help="The input json file for the issue", required=False)
+parser.add_argument("--build", type=str, help="The build method, source or nightly or existing", default="nightly", required=False)
 parser.add_argument("--match", type=str, help="The pattern to match in git log", default="test")
+parser.add_argument("--since", type=str, help="The start time for git blame, e.g., '2023-10-01'", required=False)
+parser.add_argument("--until", type=str, help="The end time for git blame, e.g., '2023-10-31'", required=False) 
+parser.add_argument("--blame_range", type=str, help="The git blame range, e.g., 'commit1..commit2'", required=False)
+parser.add_argument("--retest", action="store_true", default=True, help="If set, do retest in tmux session.", required=False)
+parser.add_argument("--blame_callee", action="store_true", default=False, help="If set, use call tracer to trace the function calls and git blame callee functions.", required=False)
 args = parser.parse_args()
 
+import time
+start = time.time()
 ######## extract issue information ##########
-if args.input is None:
-    if args.issue is None or args.repo is None or args.token is None:
-        print("Please provide --input or --issue, --repo and --token when input is not provided")
-        exit(1)
-    issue_information = extract_issue_information(args.repo, int(args.issue), args.token)
-    issue_information["tmux"] = args.tmux
-else:
-    with open(args.input, 'r') as f:
-        issue_input = json.load(f)
+#if args.input is None:
+if args.issue is None or args.repo is None or args.token is None:
+    print("Please provide --input or --issue, --repo and --token when input is not provided")
+    exit(1)
 
-        test_file = issue_input["test_file"]
-        original_test_file = issue_input["original_test_file"]
-        test_class = issue_input["test_class"]
-        test_case = issue_input["test_case"]
-        error_message = issue_input["error_message"]
-        since = issue_input.get("since", None)
-        until = issue_input.get("until", None)
-        last_good_commit = issue_input.get("last_good_commit", None)
+json_string = extract_issue_information(args.repo, int(args.issue), args.token)
+issue_information = json.loads(json_string)
+issue_information["tmux"] = args.tmux
+if args.since is not None:
+    issue_information["since"] = args.since
+if args.until is not None:
+    issue_information["until"] = args.until
+# else:
+#     with open(args.input, 'r') as f:
+#         issue_input = json.load(f)
+
+#         test_file = issue_input["test_file"]
+#         original_test_file = issue_input["original_test_file"]
+#         test_class = issue_input["test_class"]
+#         test_case = issue_input["test_case"]
+#         error_message = issue_input["error_message"]
+#         since = issue_input.get("since", None)
+#         until = issue_input.get("until", None)
+#         last_good_commit = issue_input.get("last_good_commit", None)
               
-        def generate_prompt(test_file: str, original_test_file: str, test_class: str, test_case: str, error_message: str, since: str, until: str, last_good_commit: str) -> str:
-            env = Environment(loader=FileSystemLoader('prompts'))
-            template = env.get_template('classification_prompt.j2')
-            return template.render(test_file=test_file, original_test_file=original_test_file, test_class=test_class, test_case=test_case, error_message=error_message, since=since, until=until, last_good_commit=last_good_commit)
+#         def generate_prompt(test_file: str, original_test_file: str, test_class: str, test_case: str, error_message: str, since: str, until: str, last_good_commit: str) -> str:
+#             env = Environment(loader=FileSystemLoader('prompts'))
+#             template = env.get_template('classification_prompt.j2')
+#             return template.render(test_file=test_file, original_test_file=original_test_file, test_class=test_class, test_case=test_case, error_message=error_message, since=since, until=until, last_good_commit=last_good_commit)
 
-        prompt = generate_prompt(test_file, original_test_file, test_class, test_case, error_message, since, until, last_good_commit)
-        user_input = prompt
-        # collect the failure information
-        graph = classify_depsrag_graph()
-        json_string = stream_graph_updates(user_input, graph)
-        issue_information = json.loads(json_string)
-        issue_information["tmux"] = args.tmux
+#         prompt = generate_prompt(test_file, original_test_file, test_class, test_case, error_message, since, until, last_good_commit)
+#         user_input = prompt
+#         # collect the failure information
+#         graph = classify_depsrag_graph()
+#         json_string = stream_graph_updates(user_input, graph)
+#         issue_information = json.loads(json_string)
+#         issue_information["tmux"] = args.tmux
 
 test_file = issue_information["test_file"]
 original_test_file = issue_information["original_test_file"]
 test_class = issue_information["test_class"]
 test_case = issue_information["test_case"]
-tmux = issue_information["tmux"]
 error_message = issue_information["error_message"]
-last_good_commit = issue_information["last_good_commit"]
+#last_good_commit = issue_information["last_good_commit"]
 since = issue_information["since"]
 until = issue_information["until"]
 match = args.match
 
+# information would collect in retest
+graph = classify_graph()
+
 ######## Prepare the environment ##########
+tmux = issue_information["tmux"] = args.tmux
 get_tmux_sessions(args.tmux)
-build_pytorch_enviroment(args.build, args.tmux)
-if reproduce_issue_in_tmux(issue_information, args.tmux) == False:
+#build_pytorch_enviroment(args.build, args.tmux)
+
+issue_information["reproduced"], python_object = reproduce_issue_in_tmux(issue_information, match=match, blame_callee=args.blame_callee) 
+if issue_information["reproduced"] == False:
     print("Cannot reproduce the issue, exit the script.")
     exit(1)
+else:
+    print("The issue is reproduced, start to find the guilty commit.")
+    issue_information["error_message"] = python_object["error_message"]
+    issue_information["module"] = python_object["module"]
+    issue_information["dtype"] = python_object["dtype"]
+    issue_information["torch_op"] = python_object["torch_op"]
+    issue_information["error_type"] = python_object["error_type"]
 
 ######## Pepare the blame range ##########
-if since is not None or until is not None:
+if args.blame_range is not None:
+    blame_range = args.blame_range
+else:
     blame_range = f"--since {since}" if since is not None else ""
     blame_range += f" --until {until}" if until is not None else ""
-elif last_good_commit is not None:
-    blame_range = f"{last_good_commit}..HEAD"
-else:
-    blame_range = ""
-
-######## Define the map of module and file path ##########
-module_map = {
-    "torch operation": "aten",
-    "inductor": "torch/csrc/inductor",
-    "distributed": "torch/csrc/distributed",
-    "runtime": "torch/csrc/*.*",
-}
 
 # while True:
 #     try:
@@ -175,10 +186,10 @@ module_map = {
 # """  
 
 
-if issue_information.get("Reproduced", False) == True:
+if args.retest == False or issue_information.get("reproduced", False) == True:
     try:
         failure_info = issue_information
-        
+        print(f"Failure information: {failure_info}")
         ###############################
         # Collect realted commit:
         # 1. commit updated the test function
@@ -187,16 +198,40 @@ if issue_information.get("Reproduced", False) == True:
         # 4. commit updated the related module
         # 5. commit updated the related dependency component
         ###############################
-      
+        # 
 
-        blamed_commits, called_functions = get_blamed_commits_case_update(tmux, failure_info, blame_range, match)
-        called_functions = list(set([func[0] for func in called_functions]))
+        git_log_output = get_git_log(issue_information, blame_range, match=match)
+        def generate_prompt_git_log(git_log: str, python_object: dict) -> str:
+            env = Environment(loader=FileSystemLoader('prompts'))
+            template = env.get_template('guilty_commit_gitlog.j2')
+            # use original test file because we want to check pytorch git log
+            return template.render(git_log=git_log,
+                                  test_file=python_object["test_file"],
+                                  test_case=python_object["test_case"],
+                                  torch_op=python_object["torch_op"],
+                                  module=python_object["module"],
+                                  dependency=python_object["dependency"],
+                                  error_message=python_object["error_message"])
+        prompt = generate_prompt_git_log(git_log=git_log_output, python_object=failure_info)
+        user_input = prompt
+        json_string = stream_graph_updates(user_input, graph)
 
-        import pdb
-        pdb.set_trace()
+        python_object = json.loads(json_string.replace("```json\n","").replace("```", ""))
+        blamed_commits_git_log = []
+        for key in ["test_case_update", "related_components_update", "error_message_related_update"]:
+            if python_object.get(key) not in [False, "false"]:
+                blamed_commits_git_log += [ v.strip() for v in python_object.get(key).split(",")]
+        blamed_commits_git_log = list(set(blamed_commits_git_log))
+        print(f"Potential blamed commits from git log: {blamed_commits_git_log}")
 
-        print(f"Blamed commits: {blamed_commits}.")
-        for commit in blamed_commits:
+        blamed_commits = []
+        called_functions = []
+        if args.blame_callee == True:
+            blamed_commits, called_functions = get_blamed_commits_case_update(tmux, failure_info, blame_range, match)
+            called_functions = list(set([func[0] for func in called_functions]))
+            print(f"Potential blamed commits from git blame and call tracer: {blamed_commits}.")
+
+        for commit in set(list(blamed_commits) + list(blamed_commits_git_log)):
             print(f"Check blamed commit: {commit}.")
 
             try:
@@ -204,7 +239,7 @@ if issue_information.get("Reproduced", False) == True:
                 
                 def generate_prompt_gitshow(commit_sha: str, git_show: str, python_object: dict, called_functions) -> str:
                     env = Environment(loader=FileSystemLoader('prompts'))
-                    template = env.get_template('guilty_commit_gitshow_newcase.j2')
+                    template = env.get_template('guilty_commit_gitshow.j2')
                     # use original test file because we want to check pytorch git log
                     return template.render(commit_sha=commit_sha, 
                                           git_show=git_show,
@@ -220,27 +255,26 @@ if issue_information.get("Reproduced", False) == True:
                 prompt = generate_prompt_gitshow(commit_sha=commit, 
                                           git_show=show_results,
                                           python_object=failure_info,
-                                          called_functions=",".join(called_functions))
+                                          called_functions=",".join(called_functions) if len(called_functions) > 0 else "")
                 user_input = prompt
+                
                 json_string = stream_graph_updates(user_input, graph)
 
                 index0 = json_string.find("```json\n")
-                json_string = json_string[index0 + len("```json\n"):]
+                json_string = json_string[index0 + len("```json\n"):] if index0 > 0 else json_string
                 index1 = json_string.rfind("}\n```")
+                json_string = json_string[:index1+1] if index1 > 0 else json_string
 
-                json_string = json_string[:index1+1]                        
+                python_object = json.loads(json_string)    
+                print(f"Potential guilty commit is found from git show of commit {commit}. {python_object}")                                               
 
-                python_object = json.loads(json_string)                                                   
-
-                if python_object.get("test_case_update") == True:
-                    print(f"Guilty commit is found from git show: {commit}. {python_object}")
-                    break
             except json.JSONDecodeError as e:
                 print(f"Failed to decode JSON from git show of commit {commit}: {e}")
             except Exception as e:
                 print(f"An unexpected error occurred while processing commit {commit}: {e}")
         
-
+        end = time.time()
+        print(f"Time used: {end - start} seconds.")
         # ##################
         # # Check git log by module #
         # ##################

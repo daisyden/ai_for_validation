@@ -56,7 +56,8 @@ and as a wrapper file it calls code in the original test file
    - Infer from test name/trace (e.g., `xpu_bool` → `bool`, `f32` → `float32`).
 
 5. **Resolve the torch operation or tensor info**:
-   - **If parameterized**: Parse the op name from the test case (e.g., `batch_norm` from `...batch_norm...`), the op name is usually right after the original test name.
+   - **If parameterized**: Parse the op name from the test case (e.g., `batch_norm` from `...batch_norm...`), the op name is usually right after the original test name. For example, in `test_compare_cpu__batch_norm_with_update_xpu_bool`, the op is `batch_norm`. 
+   - **torch operation are usually a valid operation with statement `aten::<op_name>` or `torch::<op_name>` or `tensor_object.<op_name>`. If you can find a op_name in {{test_case}} or stack trace, please extract it.**
    - **Otherwise**: Trace the failure in 
      <original_test_file>
      {{ original_test_file }}
