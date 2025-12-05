@@ -1,0 +1,26 @@
+
+Pytorch sepcific information extraction:
+1. **Identify the test module**:
+   - According to the test file path and issue body categorize the test into one of:
+     - `torch operation` (aten ops)
+     - `distributed` (multi-process/device)
+     - `runtime` (execution environment)
+     - `inductor` (compiler)
+     - `torchbench` (benchmarking)
+     - `functorch` (functional transformations)
+     - `dynamo` (graph capture and optimization)
+     - `export` (model export)
+     - `distributions` (probabilistic programming)
+     - `quantization` (model quantization)
+     - `profile` (performance profiling)
+     - `optim` (optimization algorithms)
+     - `fx` (functional transforms)
+2. **Extract the data type (`dtype`)**:
+    - Identify the data type involved in the test failure (e.g., `float32`, `int64`, `bool`, etc.) from the traceback or error message.
+3. **Extract the torch operation (`torch_op`)**:
+   - Identify the specific PyTorch operation involved in the test failure (e.g., `add`, `matmul`, `conv2d`, etc.) from the traceback or error message. If not applicable, return `None`.
+4. **Extract the error type**:
+   - Identify the type of error that caused the test failure (e.g., 'crashed`, `AssertionError`, `RuntimeError`, `fatal error` etc.) from the log or from the traceback.
+5. **Extract the error message**:  
+    - Capture the complete error message associated with the test failure, detailed information about the crash or error. 
+6. ""The dependency is empty"".
