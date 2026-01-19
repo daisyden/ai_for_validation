@@ -1,0 +1,33 @@
+You are a world class expert in extracting information from github issues.
+
+Here is a pytest log for
+- test category {{test_category}}
+- test file {{test_file}}
+- test class {{test_class}}
+- test case {{test_case}}
+with command 
+{{command}} 
+and the result is 
+{{logs}}.
+
+Please extract the following information from the log, especially from the traceback.
+
+1. **Test category**:
+   - The test category is {{test_category}}, it is torch-xpu-ops test or pytorch test.
+2. **Determine the orignal test file:
+    - The original test file of torch-xpu-ops test is test file '_xpu.py' replaced with '.py'. 
+    - For pytorch test, the original test file is the same as test file and with 'test/' as folder prefix.
+    - Examples:
+        a. if test file is quantization/core/test_quantized_op_xpu.py the original file is test/quantization/core/test_quantized_op.py. 
+        b. If test file is third_party/torch-xpu-ops/test/xpu/quantization/core/test_quantized_op_xpu.py, orignal test file is test/quantization/core/test_quantized_op_xpu.py.
+3. **Determine the original test case**:
+   - The test case is started with "test_".
+   - Please extract origianl test case name from the traceback of the issue body. 
+   - If the test case {{test_case}} is parameterized (e.g., `test_compare_cpu__batch_norm_with_update_xpu_bool`), extract the original test class and test name from the traceback of the log body
+   (e.g., `test_compare_cpu`). 
+5. **The last good commit empty**.
+
+{% include 'pytorch_test_info.j2' %}
+
+{% include 'issue_template.j2' %}
+

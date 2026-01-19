@@ -1,0 +1,39 @@
+commit 1f9a64fa96bb52481334fe13f85cdab7658e4854
+Author: William Wen <williamwen@meta.com>
+Date:   Fri Dec 26 13:38:28 2025 -0800
+
+    [dynamo] refactor frame skips and error messages in dynamo (#170587)
+    
+    Fixes https://github.com/pytorch/pytorch/issues/170242.
+    
+    There are a number of changes here to improve frame skip error messages:
+    - SkipFrame is no longer used by Dynamo to signify graph breaks that should skip the frame. SkipFrame should now only be used to unconditionally skip the frame without a graph break. The `skip_frame` attribute of `Unsupported` is now used for graph breaks to signal a frame skip.
+    - Uncaught `Unsupported`s (unhandled graph breaks) are now logged in symbolic_convert rather than convert_frame in order to improve logging consistency. (I kept the convert_frame call though since there are some `unimplemented` calls that occur outside of symbolic_convert).
+    - Chained graph breaks (graph break in loop, graph break in generic ctx manager, reconstruction errors) have better error messages
+    
+    Pull Request resolved: https://github.com/pytorch/pytorch/pull/170587
+    Approved by: https://github.com/Lucaskabela
+commit 8c365b6fe1f77ddbcdd19c13ee84144c1e05cb40
+Author: Daisy Deng <daisy.deng@intel.com>
+Date:   Thu Dec 25 10:37:08 2025 +0800
+
+    clean up skiplist (#2633)
+    
+    According to latest test result
+    1. removed passed cases from skip list
+    2. moved bugs to dynamic skip issues.
+    3. Added comments for left cases according to latest result.
+    
+    disable_e2e
+    disable_distributed
+pytorch-triton-xpu        3.6.0+git225cdbde
+torch                     2.11.0.dev20251227+xpu
+ii  intel-igc-cm                         1.0.225.54093-1136~22.04                amd64        Intel(R) C for Metal Compiler -- CM Frontend lib
+ii  intel-media-va-driver-non-free:amd64 25.2.4-1146~22.04                       amd64        Video Acceleration API driver for the Intel Core processors
+ii  intel-metrics-discovery              1.14.180-1111~22.04                     amd64        Intel(R) Metrics Discovery Application Programming Interface --
+ii  intel-metrics-library                1.0.196-1111~22.04                      amd64        Intel(R) Metrics Library for MDAPI (Intel(R) Metrics Discovery
+ii  intel-ocloc                          25.18.33578.38-1146~22.04               amd64        ocloc compiler for Intel Graphics Compute Runtime
+ii  intel-opencl-icd                     25.18.33578.38-1146~22.04               amd64        OpenCL installable client driver for Intel Graphics Compute Runtime
+ii  libdrm-intel1:amd64                  2.4.121-2119~22.04                      amd64        Userspace interface to intel-specific kernel DRM services -- runtime
+ii  libze-intel-gpu1                     25.18.33578.38-1146~22.04               amd64        Shared library for Intel Graphics Compute Runtime
+

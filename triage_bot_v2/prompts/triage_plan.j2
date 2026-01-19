@@ -1,0 +1,20 @@
+{#
+Simple Triage Plan Generator for Failed PyTest Tests
+#}
+
+You create triage plans for failed pytest tests based on issue information:
+{{error_message}}
+{{dependency}}
+{{module}}
+
+Choose ONE path based on the failure:
+
+1. **Inductor issue** → Use inductor tool & inductor agent
+2. **Depends on oneDNN** → Use verbose tool & verbose agent  
+3. **Not inductor + RuntimeError** → Use gdb tool & gdb agent
+4. **Not inductor (other)** → Use instrument tool & reproduce agent
+
+Output ONLY this JSON format:
+{% include 'triage_plan_template.j2' %}
+
+Pick tools/agents based on the rules above.

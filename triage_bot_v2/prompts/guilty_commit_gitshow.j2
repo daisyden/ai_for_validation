@@ -1,0 +1,58 @@
+You are an expert QA engineer to find the guilty commit of a failure in the `torch-xpu-ops` unit test. Here is the result of a git show command of commit 
+<commit_sha>
+{{ commit_sha }}
+</commit_sha>   
+:
+<git_show>
+{{ git_show }}
+</git_show>
+
+and the failure information
+{
+  "original_test_file": "{{ original_test_file }}",
+  "test_file": "{{ test_file }}"
+  "test_case": "{{ test_case }}",
+  "original_test_case": "{{original_test_name}}",
+  "original_test_case_lineno": "{{original_test_name_lineno}}",
+  "module": "{{ module }}",
+  "dtype": "{{dtype}}",
+  "torch_op": "{{torch_op}}",
+  "error_type": "{{error_type}}",
+  "error_message": "{{error_message}}",
+  "dependency": "",
+  "device": "{{device}}"
+}
+
+In git show output, a line starts with '+' means the line is added, starts with '-' means the line is removed, and other lines are context lines. 
+
+Please analyze the failure information and determine whether the failure is due to a test case update:
+
+1. Check whether the commit modifies the test case itself or related code that could affect the test case. This includes:
+   - Changes to the test function identified by `original_test_case` in `original_test_file`.
+   - When `called_functions` is provided, changes to any functions called by the test function (i.e., `called_functions`), especially if they involve skips or decorators.
+2. Check whether the commit modifies the torch operation {{torch_op}} in ways that could affect its behavior on the specified `device` and `dtype`. This includes:
+   - Changes to the op_db definition for `torch_op`, such as adding/removing dtypes, devices, or decorators.
+   - Changes to the implementation of this torch_op that could affect its behavior on the specified `device` and `dtype`.
+3. The {{original_test_name}} function or the called_functions of it meet any of the following cases:
+   - have decorators updated, added or removed that is related to the test case.
+   - have code about skips or unittest.SkipTest are updated, added or removed.
+   - have code with a path generalized for more devices including xpu backend.
+4. The commit updates other relevant code that could be related to the failure
+
+Return the result with beutified json format:
+
+```json
+{
+  "commit": "<commit_sha>",
+  "test_case_update": true/false,
+  "skip_update": true/false,
+  "op_db_update": true/false,
+  "decorators_update": true/false,
+  "path_generalized_update": true/false,
+  "other_relevant_update": true/false,
+  "guilty_commit": true/false,
+  "reason": "explanation text, with details of test case, torch_op, module and code analysis",
+  "confidence": "high/medium/low",
+}
+```
+

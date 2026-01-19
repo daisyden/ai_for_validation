@@ -1,0 +1,62 @@
+You are a world class expert in extracting information from github issues.
+
+Here is a github issue of torch-xpu-ops to skip test cases, the link is {{link}}. This is the title {{title}} and here is the body:
+{{body}}
+
+Please extract the following information from the issue description, especially from the traceback in the issue body and return with a beautified json file. If the issue body records mulitple cases, only extract the one case with traceback and with most information.
+
+1. **skipped_type**:
+    - Please check if the issue is about skipped test cases in torch-xpu-ops repo.
+    - The skipped test cases information is usually described in the issue body with the pattern as below, <op_ut or op_extended>|<test class>|<test case>, for example
+    """:
+    Cases:
+    op_extended,third_party.torch-xpu-ops.test.xpu.extended.test_ops_xpu.TestCommonXPU,test_compare_cpu_nn_functional_huber_loss_xpu_float16
+    op_extended,third_party.torch-xpu-ops.test.xpu.extended.test_ops_xpu.TestCommonXPU,test_compare_cpu_nn_functional_huber_loss_xpu_bfloat16
+    """
+    or
+    """
+    Cases:
+    op_ut,third_party.torch-xpu-ops.test.xpu.test_expanded_weights_xpu.TestExpandedWeightModuleXPU,test_Conv1d_reflect_stride2_pad2_xpu
+    op_ut,third_party.torch-xpu-ops.test.xpu.test_expanded_weights_xpu.TestExpandedWeightModuleXPU,test_Conv2d_reflect_stride2_pad2_xpu
+    """
+    - If the pattern is detected it is a skipped issue.
+    - If no skipped test cases in the log, it is not a skipped issue and skipped_type is None.
+2. **Identify the major issue described in the issue **
+    - The issue with traceback and error message is the major issue.
+    - The first issue in the skipped test cases list.
+3. **Extract the pytest test file**:
+    - Only extract the information of major issue
+    - If it is a skipped issue, please extract the test file path from the skipped test case information. For example, in the above two examples, the test files are extended/test_ops_xpu.py and test_expanded_weights_xpu.py respectively.
+    - If is is not a skipped issue, please extract the pytest test file path form log. The test file path usually starts with `test_` and ends with `.py`.
+4. **Extract the test class name**:
+    - Only extract the information of major issue
+    - If it is a skipped issue, please extract the test class from the skipped test case information. For example, in the above two examples, the test classes are TestCommonXPU and TestExpandedWeightModuleXPU.
+    - Otherwise, identify the test class name from the failure log. The test class name usually starts with a capital letter and is in CamelCase.
+4. **Extract the test case name**:
+   - Only extract the information of major issue
+   - If it is a skipped issue, please extract the test case from the skipped test case information. For example, in the above two examples, the test cases are test_compare_cpu_nn_functional_huber_loss_xpu_float16 and test_Conv1d_reflect_stride2_pad2_xpu respectively.  
+   - Otherwise, identify the full test case name starting with `test_` from the failure log.  
+5. **Determine the orignal test file:
+    - The original test file for op_ut is the file under pytorch test folder and without _xpu postfix, for example test_expanded_weights_xpu.py original file is test/test_expanded_weights.py, test/xpu/nn/test_pooling_xpu.py original file is test/nn/test_pooling.py.
+    - The original test file for op_extended_ut is also under test folder and without _xpu postfix, for example test/xpu/extended/test_ops_xpu.py original file is test/test_ops.py
+6. **Determine the original test case**:
+   - Please also get the line number of the testcase from the traceback.
+   - The test case is started with "test_" and with the same prefix as test_case. For example, if the test case is parameterized (e.g., `test_compare_cpu__batch_norm_with_update_xpu_bool`), extract the original test class and test name from the traceback of the issue body
+   (e.g., `test_compare_cpu`).
+7. **Identify the reproduce code**:
+   - Return "pytest -v test_file::test_class -k test_case".
+8. **The report date**:
+   - The date when the issue is reported.
+8. **since**:
+   - last good pytorch commit mentioned in the issue.
+   - The date two days before the date the issue reported.
+9. **until**:
+   - The current pytorch commit mentioned in the issue.
+   - The date when the issue is reported.
+11. **skipped_type is disabled**
+12. **test_category is torch-xpu-ops issue**
+
+
+{% include 'pytorch_test_info.j2' %}
+
+{% include 'issue_template.j2' %}

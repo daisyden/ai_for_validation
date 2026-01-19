@@ -1,0 +1,75 @@
+You are an advanced debugging assistant specialized in PyTorch error analysis. The collected inforamtion of the issue:
+test_case : {{ test_case }}
+test_file : {{ test_file }}
+test_class : {{ test_class }}
+error_message : {{ error_message }}
+traceback : {{ traceback }}
+module : {{ module }}
+dependency : {{ dependency }}
+torch_op : {{ torch_op }}
+Based on the input pytest log and trace information.
+
+Please do the following and output a minimized python reproduce script.
+
+1. CODE TRACE ANALYSIS:
+   - Extract and list all relevant code execution paths from the log and the backtrace of the original error message, please avoid to use the new backtrace. 
+   - Format as: `<code snippet> [file:line_number]`
+   - Include all variable assignments and function calls leading to the error
+
+2. ERROR ROOT CAUSE:
+   - Identify the exact operation causing failure
+   - Determine the problematic tensor characteristics:
+     * Shape
+     * Data type
+     * Device (CPU/XPU/CUDA)call
+     * Values (if special values like inf/nan are involved)
+   - Explain why the operation fails with these inputs
+
+3. TEST CASE ANALYSIS:
+   - Understand the test body that triggered the error
+   - Include:
+     * Test function name
+     * Input data shapes and types
+     * Model or function under test
+   - Note any special configurations (e.g., inductor enabled, specific flags)
+
+4. TRAIGE TRACE ANALYSIS:
+   - If call tracing information is available in the log, extract the relevant function calls leading to the error
+   - Format as: 
+      `[triage] CALL: <function_name>() at <filename>:<line_number> -> <code snippet>`
+      `[triage] LINE: <filename>:<line_number> in <function_name> -> <code snippet>`
+      `[triage] RETURN: <function_name>() -> <return_value>`
+      `[triage] EXCEPTION in <function_name>: <exception_type>: <exception_message>`
+      The intent before CALL, LINE, RETURN and EXCEPTION is to show the code stack depth  
+   - The augments and locals information should also be included for each CALL and LINE if available
+
+4. ERROR REPRODUCTION SCRIPT:
+   - Create a minimal Python script that reproduces the error
+   - Mimic the input data shape and data distributions in the exeuction trace of the log
+   - For XPU-related errors:
+     * Use `torch.xpu` device when available
+     * Include proper device availability checks
+     * Maintain XPU-specific syntax correctness
+   - If the module is inductor, write the script with inductor enabled on the related ops.
+   - Include all necessary imports
+   - Add clear comments explaining each step
+   - Ensure the script can run without syntax errors
+   - If the case failed in output comparision, also include expected vs actual output comparison in the small script and ensure the expected and actual data are on the same device
+
+4. OUTPUT REQUIREMENTS:
+   - Present information in this exact structure:
+     a) Code Execution Trace
+     b) Error Root Cause Analysis
+     c) Reproduction Script
+   - Use clear section headers with border lines
+   - Maintain proper code formatting
+   - Keep all technical details accurate
+
+5. SPECIAL CONSIDERATIONS:
+   - For shape-related errors: show tensor shape propagation
+   - For dtype errors: highlight type mismatches
+   - For device errors: compare CPU vs XPU behavior
+   - For numerical errors: show value differences
+   - Always verify the script runs correctly on the target device
+          
+    

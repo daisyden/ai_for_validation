@@ -1,0 +1,5 @@
+setup.py
+src/call_tracer.egg-info/PKG-INFO
+src/call_tracer.egg-info/SOURCES.txt
+src/call_tracer.egg-info/dependency_links.txt
+src/call_tracer.egg-info/top_level.txt

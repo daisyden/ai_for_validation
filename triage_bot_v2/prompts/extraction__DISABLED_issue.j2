@@ -1,0 +1,39 @@
+You are a world class expert in extracting information from github issues.
+
+Here is a github issue of pytorch to DISABLE test cases, the link is {{link}}. This is the title {{title}} and here is the body:
+{{body}}
+
+Please extract the following information from the issue description, especially from the traceback in the issue body and return with a beautified json file. If the issue body records mulitple cases, only extract the one case with most information.
+
+1. **Extract the pytest test file from the log**:
+    - If https://www.torch-ci.com/failure?failureCaptures is detected in the issue body, please extract the test file path from the URL. For example, in the URL https://www.torch-ci.com/failure?failureCaptures=%5B%22inductor%2Ftest_torchinductor_codegen_dynamic_shapes.py%3A%3ADynamicShapesCodegenGPUTests%3A%3Atest_conv1d_depthwise_dynamic_shapes_xpu%22%5D, 
+     the test_file is test/inductor/test_torchinductor_codegen_dynamic_shapes.py instead of test_torchinductor_codegen_dynamic_shapes.py only.
+    - If the {{link}} contains "torch-xpu-ops", the test file is under torch-xpu-ops repo, so for example if "python ./../test/quantization/core/test_quantized_op.py" is detected in the log, the test file is test/xpu/quantization/core/test_quantized_op_xpu.py, the test file is with "_xpu" as postfix.
+    - Otherwise, identify the pytest test file path from the failure log. The test file path usually starts with `test_` and ends with `.py`.
+2. **Extract the test class name**:
+    - Please note if https://www.torch-ci.com/failure?failureCaptures is detected in the issue body, please extract the test file path from the URL. For example, in the URL https://www.torch-ci.com/failure?failureCaptures=%5B%22inductor%2Ftest_torchinductor_codegen_dynamic_shapes.py%3A%3ADynamicShapesCodegenGPUTests%3A%3Atest_conv1d_depthwise_dynamic_shapes_xpu%22%5D, 
+     the test class is DynamicShapesCodegenGPUTests. 
+    - Otherwise, identify the test class name from the failure log. The test class name usually starts with a capital letter and is in CamelCase.
+3. **Extract the test case name**:
+   - Please note if https://www.torch-ci.com/failure?failureCaptures is detected in the issue body, please extract the test file path from the URL. For example, in the URL https://www.torch-ci.com/failure?failureCaptures=%5B%22inductor%2Ftest_torchinductor_codegen_dynamic_shapes.py%3A%3ADynamicShapesCodegenGPUTests%3A%3Atest_conv1d_depthwise_dynamic_shapes_xpu%22%5D, 
+     the test case is test_conv1d_depthwise_dynamic_shapes_xpu.   
+   - Otherwise, identify the full test case name starting with `test_` from the failure log.  
+4. **the original test file is the same as test file**.
+5. **the original test class is similar to test class but without XPU postfix if any**.
+6. **the original test case has the same prefix as test_case, please extract it from traceback. Please also get the line number of the testcase from the traceback.
+7. **Identify the reproduce code**:
+   - Return "pytest -v test_file::test_class -k test_case".
+8. **since**:
+   - last good pytorch commit mentioned in the issue.
+   - The date two days before the date the issue reported.
+9. **until**:
+   - The current pytorch commit mentioned in the issue.
+   - The date when the issue is reported.
+10. **The last good commit if mentioned in the issue, otherwise empty**.
+11. **skipped_type is disabled**
+12. **test_category is pytorch issue**
+{% include 'prompts/pytorch_test_info.j2' %}
+
+{% set json_content = include('json/issue_template.json') %}
+{{ json_content | from_json }}
+
