@@ -66,8 +66,8 @@ Choose the steps based on the information, multiple steps could be choosen:
 4. **Non-inductor issue** → Use instrument_tool & draft_reproduce_agent agent
 
 For example:
-1. Inductor oneDNN op issue → Step 1 and Step 2
-2. Inductor non-oneDNN op issue → Step 1
+1. Inductor issue depend on oneDNN → Step 1 and Step 2
+2. Inductor issue does not depend on oneDNN → Step 1
 3. Non-inductor oneDNN op issue with Asserterror → Step 2 and Step 3 and Step 4
 4. Non-inductor non-oneDNN op issue and not Runtimeerror → Step 4
 5. Non-inductor non-oneDNN op issue with Runtimeerror → Step 3 and Step 4
@@ -90,7 +90,8 @@ Pick tools/agents based on the rules above.
             ("human", "{text}")
         ])
     chain = {"text": RunnablePassthrough()} | prompt | llm
-
+    import pdb
+    pdb.set_trace()
     triage_plan = chain.invoke(AIMessage(content=state["messages"][-1].content))
     try:
         issue_info['triage_plan'] = json.loads(triage_plan.content.replace("```json\n","").replace("```", ""))

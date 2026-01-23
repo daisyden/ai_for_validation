@@ -1,0 +1,48 @@
+You are a world class expert in extracting information from github issues.
+
+Here is a pytest information collected form pytest log with command {{ command }}:
+- test test_category {{ test_category }}
+- test file {{test_file}}
+- test class {{test_class}}
+- test case {{test_case}}
+- error message {{error_message}}
+- traceback {{traceback}}
+
+
+Please extract the following information from the log, especially from the traceback.
+1. **Determine the original test class**:
+   - The original test class is the same as test_class.
+2. **Determine the orignal test file:
+    - The original test file of torch-xpu-ops test is test file '_xpu.py' replaced with '.py'. 
+    - For pytorch test, the original test file is the same as test file and with 'test/' as folder prefix.
+    - Examples:
+        a. if test file is quantization/core/test_quantized_op_xpu.py the original file is test/quantization/core/test_quantized_op.py. 
+        b. If test file is third_party/torch-xpu-ops/test/xpu/quantization/core/test_quantized_op_xpu.py, orignal test file is test/quantization/core/test_quantized_op_xpu.py.
+3. **Determine the original test case**:
+   - The test case is started with "test_".
+   - Please extract origianl test case name from the traceback of the issue body. 
+   - If the test case {{test_case}} is parameterized (e.g., `test_compare_cpu__batch_norm_with_update_xpu_bool`), extract the original test class and test name from the traceback of the log body
+   (e.g., `test_compare_cpu`).
+
+
+{% include 'pytorch_test_info.j2' %}
+
+Please return the result with json format according to the template below, ensure the json format is correct for decoding, especially avoid Invalid \escape issue.
+
+Wrap the output in ```json code blocks with format
+{% raw %}
+```json
+{{
+"module": "torch module, such as aten operation, distributed, runtime, inductor, functorch, dynamo, export, distributions, quantization, profiling, optim, fx, gradients, etc",
+"dtype": "torch dtypes, such as torch.float32, torch.bool, torch.int64, etc",
+"torch_op": "op_name_or_None, such as aten::conv2d, torch.matmul, etc.",
+"dependency": "The dependent libraries or tools of the torch operation",
+"error_type": "error_type such as AssertionError/RuntimeError/fatal error/etc",
+"error_message": "{{ error_message }}",
+"original_test_file": "original test file under pytorch repo",
+"original_test_class": "original test class under pytorch repo",
+"original_test_case": "original test case under pytorch repo",
+"original_test_case_lineno": "the line number of the original test case in original_test_file",
+}}
+```
+{% endraw %}

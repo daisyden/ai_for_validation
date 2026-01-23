@@ -5,7 +5,11 @@ from jinja2 import Environment, FileSystemLoader
 
 from github_issue import Github_Issue
 from guilty_commit import run_in_docker
-from common_nodes import stream_graph_updates, classify_depsrag_graph, classify_graph
+from common_nodes import stream_graph_updates, depsrag_graph, document_analysis_graph
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.messages import AIMessage
+from vllm_service import llm
 import subprocess
 
 ###### Process the issue ##########
@@ -46,7 +50,7 @@ def extract_issue_information(issue_number: int, token: str, repo: str):
 
 
         ###### Define the graph ##########
-        graph = classify_depsrag_graph()
+        graph = depsrag_graph()
 
         def generate_prompt(link: str, title: str, body: str, date_created: str, repo: str) -> str:
             env = Environment(loader=FileSystemLoader('prompts'))
@@ -62,7 +66,7 @@ def extract_issue_information(issue_number: int, token: str, repo: str):
         python_object = json.loads(json_string)
         return python_object
 
-def extract_reproduce_commands(issue_number: int, token: str, repo: str):
+def get_issue_body(issue_number: int, token: str, repo: str):
     if issue_number is None or repo is None or token is None:
         print("Please provide input, repo and token.")
         return None
@@ -92,80 +96,156 @@ def extract_reproduce_commands(issue_number: int, token: str, repo: str):
         issue_contents = "Content of #" + str(issue.number) + " at " + link + " is : " + issue_contents
         body = issue_contents
 
-        import re
+        return body
 
-        if repo == "intel/torch-xpu-ops":
-            # Parse multiple lines of format: op_ut,<test_class>,<test_name>
-            
-            test_case_pattern = r'\n(op_ut|op_extended),([^,\n]+),([^,\n]+)$'
-            matches = re.findall(test_case_pattern, body, re.MULTILINE)
+def extract_commit_range(user_input: str):
+    def gen_prompt() -> str:
+        env = Environment(loader=FileSystemLoader('prompts'))
+        template = env.get_template('extract_commit_range.j2')
+        return template.render()
+    prompt_text = gen_prompt()
+    prompt = ChatPromptTemplate.from_messages([
+                                            ("system", prompt_text),
+                                            ("human", "{text}")
+                                            ])
+    chain = {"text": RunnablePassthrough()} | prompt | llm
+    json_string = chain.invoke(user_input).content
 
-            if not matches:
-                print("No valid test cases found in the expected format")
-                return None
+    try:
+        python_object = json.loads(json_string)
+        since = python_object.get("since", None)
+        until = python_object.get("until", None)
+    except:
+        print(f"### Failed to parse commit range output: {json_string}")
+        return "", ""
     
-            commands = []
-            for i, match in enumerate(matches, 1):
-                _, module_path, test_method = match
+    return since, until
+    
+    
+    
+def extract_reproduce_commands(user_input: str):    
+    body = user_input
+
+    import re        
+    # Parse multiple lines of format: op_ut,<test_class>,<test_name>
+    start = False
+    matches = []
+    
+    for line in body.splitlines():
+        print(line)
+        if start == False and line.strip().startswith("Cases:"):
+            start = True
+        elif start == True:
+            test_case_pattern = r'(op_ut|op_extended),([^,\n]+),([^,\n]+)'
+            _matches = re.findall(test_case_pattern, line)
+            if not _matches:
+                test_case_pattern = r'(op_ut|op_extended),([^,\n]+)'
+                _matches = re.findall(test_case_pattern, line)
+                if not _matches:
+                    start = False
+                    break
+                else:
+                    _matches.append("")
+            matches.extend(_matches)
+
+    if not matches:
+        print("No valid test cases found in the expected format")
+        return None
+
+    commands = []
+    for i, match in enumerate(matches, 1):
+        _, module_path, test_method = match
+        
+        if "third_party.torch-xpu-ops.test.xpu." not in module_path:
+            print(f"Skipping invalid module path in test case {i}: {module_path}")
+            continue
+        
+        # Could need to handle more corner cases for module path
+        module_path = module_path.replace('third_party.torch-xpu-ops.test.xpu.', '')
+        test_class = module_path.split('.')[-1]
+        module_path = "/".join(module_path.split('.')[:-1]) + ".py"            
+        
+        commands.append([module_path, test_class, test_method, "pytest --junit-xml={test_method}.xml -v -s {module_path} -k {test_method}".format(module_path=module_path, test_method=test_method)])
+        
+        print(f"Test Case {i}:")
+        print(f"  Module: {module_path}")
+        print(f"  Class: {test_class}")
+        print(f"  Method: {test_method}")
+        print()
+    return commands
+
+        # if repo == "pytorch/pytorch":
+        #     # Parse URL format: failureCaptures=["module/test_file.py::TestClass::test_method"]
+        #     url_pattern = r'failureCaptures=%5B%22([^%]+(?:%2F[^%]+)*?)%3A%3A([^%]+)%3A%3A([^%]+)%22%5D'
+        #     match = re.search(url_pattern, body)
+
+        #     if match:
+        #         module_path = match.group(1).replace('%2F', '/')
+        #         test_class = match.group(2)
+        #         test_method = match.group(3)
                 
-                # Could need to handle more corner cases for module path
-                module_path = module_path.replace('third_party.torch-xpu-ops.test.xpu.', '')
-                test_class = module_path.split('.')[-1]
-                module_path = "/".join(module_path.split('.')[:-1]) + ".py"
-            
-                commands.append([module_path, test_class, test_method, "pytest --junit-xml={test_method}.xml -v -s {module_path} -k {test_method}".format(module_path=module_path, test_method=test_method)])
-                print(f"Test Case {i}:")
-                print(f"  Module: {module_path}")
-                print(f"  Class: {test_class}")
-                print(f"  Method: {test_method}")
-                print()
-            return commands
-
-        if repo == "pytorch/pytorch":
-            # Parse URL format: failureCaptures=["module/test_file.py::TestClass::test_method"]
-            url_pattern = r'failureCaptures=%5B%22([^%]+(?:%2F[^%]+)*?)%3A%3A([^%]+)%3A%3A([^%]+)%22%5D'
-            match = re.search(url_pattern, body)
-
-            if match:
-                module_path = match.group(1).replace('%2F', '/')
-                test_class = match.group(2)
-                test_method = match.group(3)
+        #         print(f"Parsed from URL:")
+        #         print(f"  Module: {module_path}")
+        #         print(f"  Class: {test_class}")
+        #         print(f"  Method: {test_method}")
                 
-                print(f"Parsed from URL:")
-                print(f"  Module: {module_path}")
-                print(f"  Class: {test_class}")
-                print(f"  Method: {test_method}")
-                
-                command = f"pytest --junit-xml={test_method}.xml -v -s {module_path} -k {test_method}"
-                return [[module_path, test_class, test_method, command],]
-            else:
-                print("No valid test case found in URL format")
-                return None
+        #         command = f"pytest --junit-xml={test_method}.xml -v -s {module_path} -k {test_method}"
+        #         return [[module_path, test_class, test_method, command],]
+        #     else:
+        #         print("No valid test case found in URL format")
+        #         return None
+
+def group_failed_test_cases(issue_list: list):
+    def generate_prompt():
+        env = Environment(loader=FileSystemLoader('.'))
+        prompt_template = "./prompts/group_failed_test_cases.j2"
+        template = env.get_template(prompt_template)
+        prompt = template.render()
+        return prompt
+
+    issue_info_str = "\n".join([json.dumps(issue_info) for issue_info in issue_list])      
+    
+    prompt_text = generate_prompt()
+    
+    prompt = ChatPromptTemplate.from_messages([
+                                            ("system", prompt_text),
+                                            ("human", "{text}")
+                                            ])
+    chain = {"text": RunnablePassthrough()} | prompt | llm
+    
+    message = chain.invoke(AIMessage(content=issue_info_str))
+
+    return message.content
 
 
-def build_pytorch_docker_enviroment(download: bool=False, build: str="existing", container: str=""):
+
+def build_pytorch_docker_enviroment(download: bool=False, build: str="nightly", container: str="guilty_commit"):
     workdir = "/workdir"
     import os
     run_in_docker(f"""
-                     bash tools/build.sh {download} {build}
-                     """, container)
+                     bash /tools/build.sh {download} {build}
+                     """, container, workdir)
     
-    enviroments = run_in_docker(f"cat {workdir}/enviroments.txt", container)  
+    enviroments = run_in_docker(f"cat {workdir}/enviroments.txt", container, workdir)  
 
     return enviroments
 
 
-def reproduce_issues_with_docker_commands(folder: str, commands: list, container: str):
-    if folder is None or len(folder) == 0:
-        print("Please provide working folder.")
-        return None
+def reproduce_issues_with_docker_commands(commands: list, container: str, onlyone=False):    
+    status_info = []
     
     print("### Start to reproduce the issue in docker : " + container)
     for test_file, test_class, test_method, command in commands:
+        workdir = "/workdir"
+        folder = f"{workdir}/pytorch/third_party/torch-xpu-ops/test/xpu" if "_xpu.py" in test_file else f"{workdir}/pytorch/test"
+        if folder is None or len(folder) == 0:
+            print("Please provide working folder.")
+            return None
+    
         print("### Testing command: " + command + " in folder: " + folder)
         
-        run_in_docker(f"bash /tools/run_one_test.sh {folder} \'{command}\'", container)
-        xml_content = run_in_docker(f"cat {folder}/{test_method}.xml", container)
+        run_in_docker(f"bash /tools/run_one_test.sh {folder} \'{command}\'", container, workdir=folder)
+        xml_content = run_in_docker(f"cat {folder}/{test_method}.xml", container, workdir=folder)
         import os
         if len(xml_content) != 0:
             # Parse the pytest XML output to extract test results
@@ -191,68 +271,101 @@ def reproduce_issues_with_docker_commands(folder: str, commands: list, container
                         # Check for failure or error
                         failure = testcase.find('failure')
                         error = testcase.find('error')
+                        skipped = testcase.find('skipped')
                         
                         if failure is not None:
                             error_message = failure.get('message', '')
                             error_trace = failure.text or ''
                             print(f"### Test failed: {error_message}")
                             print(f"### Traceback: {error_trace}")
-                            return {"status": "failed", 
+                            status_info.append({"status": "failed", 
                                     "test_file": test_file, 
                                     "test_class": test_class,
                                     "test_case": test_method, 
-                                    "command": command, 
+                                    "reproduce_command": command, 
                                     "error_message": error_message, 
-                                    "trace": error_trace, 
-                                    }
+                                    "traceback": error_trace, 
+                                    "workdir": workdir
+                                    })
                         elif error is not None:
                             error_message = error.get('message', '')
                             error_trace = error.text or ''
                             print(f"### Test error: {error_message}")
                             print(f"### Traceback: {error_trace}")
-                            return {"status": "failed",
+                            
+                            status_info.append({"status": "failed",
                                     "test_file": test_file,
                                     "test_class": test_class,
                                     "test_case": test_method,
-                                    "command": command,
+                                    "reproduce_command": command,
                                     "error_message": error_message,
-                                    "trace": error_trace,
-                                    }
+                                    "traceback": error_trace,
+                                    "workdir": workdir
+                                    })
+                        elif skipped is not None:
+                            error_message = skipped.get('message', '')
+                            print(f"### Test skipped.")
+                            status_info.append({"status": "skipped",
+                                    "test_file": test_file,
+                                    "test_class": test_class,
+                                    "test_case": test_method,
+                                    "reproduce_command": command,
+                                    "error_message": error_message,
+                                    "traceback": "",
+                                    "workdir": workdir
+                                    })
                         else:
-                            print(f"### Passed: {command}")
+                            status_info.append({"status": "passed",
+                                    "test_file": test_file,
+                                    "test_class": test_class,
+                                    "test_case": test_method,
+                                    "reproduce_command": command,
+                                    "error_message": "passed",
+                                    "traceback": "",
+                                    "workdir": workdir
+                                    })
+                        if onlyone:
+                            break
+                    else:
+                        status_info.append({"status": "non-detected",
+                                    "test_file": test_file,
+                                    "test_class": test_class,
+                                    "test_case": test_method,
+                                    "reproduce_command": command,
+                                    "error_message": "non-detected",
+                                    "traceback": "",
+                                    "workdir": workdir
+                                    })
+                        print("### No testcase element found in XML output.")
             except ET.ParseError as e:
                 print(f"### Failed to parse XML output: {e}")
             except Exception as e:
                 print(f"### Error processing test results: {e}")
-        
-    return {"status": "passed", "message": "Could not reproduce any error or failure."}
+    
+    return status_info
+    
 
+def extract_torch_test_details(json_object: object, prompt: str):
+    graph = depsrag_graph()
 
-def extracte_information_from_log(test_category: str, json_object: object, prompt: str):
-    graph = classify_depsrag_graph()
-
-    def generate_prompt(test_category: str, test_file: str, test_case: str, test_class: str, command: str, logs: str, prompt: str) -> str:
+    def generate_prompt(json_object: dict, prompt: str) -> str:
         env = Environment(loader=FileSystemLoader('prompts'))
         template = env.get_template(prompt)
-        return template.render(test_category=test_category, test_file=test_file, test_case=test_case, test_class=test_class, command=command, logs=logs, prompt=prompt)
+        return template.render(test_category=json_object["test_category"],
+                               test_file=json_object["test_file"],
+                               test_case=json_object["test_case"],
+                               test_class=json_object["test_class"],
+                               error_message=json_object["error_message"],
+                               traceback=json_object.get("traceback", ""),
+                               reproduce_command=json_object['reproduce_command'],
+                               )
 
-    print(json_object)
-    prompt = generate_prompt(test_category=test_category,
-                             test_file=json_object["test_file"],
-                             test_case=json_object["test_case"],
-                             test_class=json_object["test_class"],
-                             command=json_object["command"],
-                             logs=json_object["error_message"] + '\n' + json_object.get("trace", ""),
+    prompt = generate_prompt(json_object=json_object,
                              prompt=prompt)
     user_input = prompt
+
     # collect the failure information
+    print(user_input)    
     json_string = stream_graph_updates(user_input, graph)
-    import json
-    try:
-        import pdb
-        pdb.set_trace()
-        json_object = json.loads(json_string.split("```")[-1])
-    except Exception as e:
-        print(f"Failed to parse JSON: {e}")
-        return None
-    return json_object
+    
+    return json.loads(json_string)

@@ -21,9 +21,5 @@ Pytorch sepcific information extraction:
    - Identify the specific PyTorch operation involved in the test failure (e.g., `add`, `matmul`, `conv2d`, `positive`, etc.) from the test case name, traceback or error message. If not applicable, return `None`.
    - The test case name is usually parameterized based on original test name, with torch operation, dtypes, devices and other features as parameters. For example:
      - `test_compare_cpu_positive_xpu_float32` -> torch_op is `positive`, dtype is `float32`
-     - `test_errors_add_int64` -> torch_op is `add`, dtype is `int64`
-4. **Extract the error type**:
-   - Identify the type of error that caused the test failure (e.g., 'crashed`, `AssertionError`, `RuntimeError`, `fatal error` etc.) from the log or from the traceback.
-5. **Extract the error message**:  
-    - Capture the complete error message associated with the test failure and complete traceback. 
-6. ""The dependency is empty"".
+     - `test_errors_add_int64` -> torch_op is `add`, dtype is `int64` 
+4. ""The dependency is empty"".

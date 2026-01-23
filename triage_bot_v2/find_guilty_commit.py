@@ -2,7 +2,7 @@ import argparse
 import json
 from jinja2 import Environment, FileSystemLoader
 from guilty_commit import get_git_show, get_git_log
-from common_nodes import stream_graph_updates, classify_graph
+from common_nodes import stream_graph_updates, document_analysis_graph
 import time
 
 
@@ -89,7 +89,7 @@ else:
 # Parse the git show of each candidate commit to confirm if it is the guilty commit
 # Git blame each callee function to get more candidate commits if needed
 #######################################
-graph = classify_graph()
+graph = document_analysis_graph()
 
 if container is not None and workdir is not None: 
     try:

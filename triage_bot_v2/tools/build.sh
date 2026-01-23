@@ -35,6 +35,7 @@ source /tools/env.sh
 if [ $build = "existing" ]; then
     echo "### Pytorch is already available in container session : $container"
 else
+    pip uninstall torch -y
     # If build is not source or nightly, use existing pytorch installation and code under tmux    
     if [ ${build} = "source" ]; then
         echo "### Start to build pytorch from source in container session : " + container
@@ -50,6 +51,9 @@ else
         
         cd ${workdir}/pytorch
         git pull
+        pushd ${workdir}/pytorch/third_party/torch-xpu-ops
+        git pull
+        popd
         pip3 install --pre torch --index-url https://download.pytorch.org/whl/nightly/xpu
     fi
 fi
@@ -60,8 +64,12 @@ fi
 pip download --no-deps --index-url https://download.pytorch.org/whl/nightly/xpu --pre pytorch-triton-xpu --dest tritone_whl
 pip install --root-user-action=ignore tritone_whl/pytorch_triton_xpu-*.whl
 
-cd ${workdir}/pytorch && git log -1 > ${workdir}/enviroments.txt
+echo "pytorch version:\n" > ${workdir}/enviroments.txt
+cd ${workdir}/pytorch && git log -1 >> ${workdir}/enviroments.txt
+echo "xpu-ops version:\n" >> ${workdir}/enviroments.txt
 cd ${workdir}/pytorch/third_party/torch-xpu-ops && git log -1 >> ${workdir}/enviroments.txt
+echo "package version:\n" >> ${workdir}/enviroments.txt
 pip list|grep torch >> ${workdir}/enviroments.txt
 dpkg -l |grep intel >> ${workdir}/enviroments.txt
+
 set +x

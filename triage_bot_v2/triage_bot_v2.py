@@ -23,11 +23,11 @@ from triage_bot_nodes import (
 def main():
     with open(args.issue_json, 'r') as f:
         issue_info = json.load(f)
-        issue_info["triage_plan"] = {}
-        issue_info["runtime_error_triaged"] = ""
-        issue_info["onednn_issue_triaged"] = ""
-        issue_info["inductor_issue_triaged"] = ""
-        issue_info["reproduce_test_drafted"] = ""
+        # issue_info["triage_plan"] = {}
+        # issue_info["runtime_error_triaged"] = ""
+        # issue_info["onednn_issue_triaged"] = ""
+        # issue_info["inductor_issue_triaged"] = ""
+        # issue_info["reproduce_test_drafted"] = ""
 
     try:
         user_input = json.dumps(issue_info)
