@@ -2,11 +2,18 @@ You are an advanced debugging assistant specialized in PyTorch error analysis. T
 test_case : {{ test_case }}
 test_file : {{ test_file }}
 test_class : {{ test_class }}
-error_message : {{ error_message }}
-traceback : {{ traceback }}
+error_message : 
+{% raw %}
+{{ error_message }}
+{% endraw %}
+traceback : 
+{% raw %}
+{{ traceback }}
+{% endraw %}
 module : {{ module }}
 dependency : {{ dependency }}
 torch_op : {{ torch_op }}
+
 Based on the input pytest log and trace information.
 
 Please do the following and output a minimized python reproduce script.
@@ -33,8 +40,14 @@ Please do the following and output a minimized python reproduce script.
      * Model or function under test
    - Note any special configurations (e.g., inductor enabled, specific flags)
 
-4. TRAIGE TRACE ANALYSIS:
-   - If call tracing information is available in the log, extract the relevant function calls leading to the error
+4. TEST BODY:
+   - Extract the test body code from the input instrument tool output
+   - Format as:
+      `[triage] Test body:`
+      `<code snippet>`
+
+4. CODE TRACING:
+   - Extract the relevant code snippet and arguments leading to the error from instrument tool output
    - Format as: 
       `[triage] CALL: <function_name>() at <filename>:<line_number> -> <code snippet>`
       `[triage] LINE: <filename>:<line_number> in <function_name> -> <code snippet>`
@@ -44,8 +57,12 @@ Please do the following and output a minimized python reproduce script.
    - The augments and locals information should also be included for each CALL and LINE if available
 
 4. ERROR REPRODUCTION SCRIPT:
-   - Create a minimal Python script that reproduces the error
-   - Mimic the input data shape and data distributions in the exeuction trace of the log
+   - Create a minimal Python script that reproduces the error of {{error_message}} based on:
+     * The code logic of test body and code tracing extracted from instrument tool output.
+     * The augments that could lead to the error
+     * The data shape, data distribution and dtypes identified in the error message, traceback and test body and code tracing
+   - Ensure the script uses the same PyTorch APIs as in the original test case
+   - Use random data generation with fixed seeds to ensure reproducibility
    - For XPU-related errors:
      * Use `torch.xpu` device when available
      * Include proper device availability checks
@@ -54,13 +71,14 @@ Please do the following and output a minimized python reproduce script.
    - Include all necessary imports
    - Add clear comments explaining each step
    - Ensure the script can run without syntax errors
+   - Ensure the script can reproduce the same error_message {{error_message}}
    - If the case failed in output comparision, also include expected vs actual output comparison in the small script and ensure the expected and actual data are on the same device
 
 4. OUTPUT REQUIREMENTS:
    - Present information in this exact structure:
      a) Code Execution Trace
      b) Error Root Cause Analysis
-     c) Reproduction Script
+     c) Reproduction Script, warpped with ``` pairs.
    - Use clear section headers with border lines
    - Maintain proper code formatting
    - Keep all technical details accurate
@@ -71,5 +89,7 @@ Please do the following and output a minimized python reproduce script.
    - For device errors: compare CPU vs XPU behavior
    - For numerical errors: show value differences
    - Always verify the script runs correctly on the target device
+
+
           
     

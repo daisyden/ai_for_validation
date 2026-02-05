@@ -56,9 +56,20 @@ def stream_graph_updates(user_input: str, graph: StateGraph):
                 except:
                     print(f"### Assistant output text: {json_string}")
                 final_result = json_string
-            elif value["messages"].tool_calls:
+            elif hasattr(value["messages"], 'tool_calls') and value["messages"].tool_calls:
                 print(f"### Assistant tool_calls: {value['messages'].tool_calls}")
-                final_result = str(value['messages'].tool_calls)
+                final_result = json.dumps(value["messages"].tool_calls, indent=4)
+            # elif hasattr(value["messages"], 'content') and "<tool_call>" in value["messages"].content:
+            #     print(f"### Assistant tool_calls: {value['messages'].content}")
+            #     tool_call_content = value['messages'].content
+            #     start_tag = "<tool_call>"
+            #     end_tag = "</tool_call>"
+            #     start_idx = tool_call_content.find(start_tag)
+            #     end_idx = tool_call_content.find(end_tag)
+            #     if start_idx != -1 and end_idx != -1:
+            #         final_result = tool_call_content[start_idx + len(start_tag):end_idx]
+            #     else:
+            #         final_result = tool_call_content
             else:               
                 print("### No output from the model.")
     return final_result

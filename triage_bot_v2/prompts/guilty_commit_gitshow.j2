@@ -23,6 +23,11 @@ and the failure information
   "device": "{{device}}"
 }
 
+and the git log history
+<git_log>
+{{ git_log }}
+</git_log>
+
 In git show output, a line starts with '+' means the line is added, starts with '-' means the line is removed, and other lines are context lines. 
 
 Please analyze the failure information and determine whether the failure is due to a test case update:
@@ -38,6 +43,8 @@ Please analyze the failure information and determine whether the failure is due 
    - have code about skips or unittest.SkipTest are updated, added or removed.
    - have code with a path generalized for more devices including xpu backend.
 4. The commit updates other relevant code that could be related to the failure
+5. Check whether the commit is reverted later in the git log history.
+6. If the commit is reverted later in the git log history, do not consider it as the guilty commit, set confidence to "no".
 
 Return the result with beutified json format:
 
@@ -52,7 +59,8 @@ Return the result with beutified json format:
   "other_relevant_update": true/false,
   "guilty_commit": true/false,
   "reason": "explanation text, with details of test case, torch_op, module and code analysis",
-  "confidence": "high/medium/low",
+  "confidence": "high/medium/low/no",
+  "reverted": true/false
 }
 ```
 

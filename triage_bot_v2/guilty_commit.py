@@ -40,7 +40,7 @@ def get_git_log(
             command = f"sh -c \"cd {workdir} && git --no-pager log {blame_range}\""
         else:
             command = f"sh -c \"cd {workdir} && git --no-pager log {blame_range} --name-only {match}\""
-        git_log_output = run_in_docker(command, container)
+        git_log_output = run_in_docker(command, container, workdir)
         return git_log_output
     except Exception as e:
         print(f"[get_blamed_commits_git_log] Error processing git log: {e}")
@@ -62,7 +62,7 @@ def get_git_show(commit_sha: str, workdir: str, container: str) -> str:
     """
     full_command = f"sh -c \"cd {workdir} && git --no-pager show {commit_sha} -U10\""
     # Get the git show information
-    git_show_output = run_in_docker(full_command, container)
+    git_show_output = run_in_docker(full_command, container, workdir)
     
     return git_show_output
 

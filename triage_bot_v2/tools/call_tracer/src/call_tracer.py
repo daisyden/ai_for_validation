@@ -27,10 +27,15 @@ def format_arguments(frame):
                 dtype = type(value).__name__
                 args_info.append(f"{key}={dtype}(len={len(value)})")
             else:
-                args_info.append(f"{key}={repr(value)}")
+                # Limit the length of repr to avoid printing huge values
+                value_repr = repr(value)
+                if len(value_repr) > 64:
+                    value_repr = value_repr[:61] + "..."
+                args_info.append(f"{key}={value_repr}")
         except:
             args_info.append(f"{key}=<error>")
     return ', '.join(args_info)
+
 
 
 # Redefine trace_calls to also print the actual source line executed
@@ -48,32 +53,38 @@ def trace_calls(frame, event, arg):
     indent = "  " * _call_depth
 
     if event == "call":
-        if _call_depth <= 5:
+        #if _call_depth <= 2:
+        if True:
             src = linecache.getline(filename, lineno).strip()
             filename = filename.split("site-packages/")[-1]
-            if any(word in filename for word in ["torch\/test\/", "torch\/aten\/", "torch\/torch\/"] ):
-                print(f"[triage]{indent}CALL: {func_name}() at {filename}:{lineno} -> {src}")
-                print(f"[triage]{indent}  Arguments: {format_arguments(frame)}")
-                print(f"[triage]{indent}  Locals: {list(frame.f_locals.keys())}")
+            if any(word in filename for word in ["/test/"] ):
+                    print(f"[triage]{indent}CALL: {func_name}() at {filename}:{lineno} -> {src}")
+                    print(f"[triage]{indent}  Arguments: {format_arguments(frame)}")
+                    print(f"[triage]{indent}  Locals: {list(frame.f_locals.keys())}")
         _call_depth += 1
     elif event == "line":
-        if _call_depth <= 5:
+        #if _call_depth <= 2:
+        if True:
             src = linecache.getline(filename, lineno).rstrip()
             filename = filename.split("site-packages/")[-1]
-            if any(word in filename for word in ["torch\/test\/", "torch\/aten\/", "torch\/torch\/"] ):
-                print(f"[triage]{indent}LINE: {filename}:{lineno} in {func_name} -> {src}")
-                print(f"[triage]{indent}  Arguments: {format_arguments(frame)}")
-                print(f"[triage]{indent}  Locals: {list(frame.f_locals.keys())}")
+            if any(word in filename for word in ["/test/"] ):
+                    print(f"[triage]{indent}LINE: {filename}:{lineno} in {func_name} -> {src}")
+                    print(f"[triage]{indent}  Arguments: {format_arguments(frame)}")
+                    print(f"[triage]{indent}  Locals: {list(frame.f_locals.keys())}")
     elif event == "return":
         _call_depth = max(0, _call_depth - 1)
-        if _call_depth <= 5:
+        #if _call_depth <= 2:
+        if True:
             indent = "  " * _call_depth
-            if any(word in filename for word in ["torch\/test\/", "torch\/aten\/", "torch\/torch\/"] ):
-                print(f"[triage]{indent}RETURN: {func_name}() -> {arg}")
-    elif event == "exception":
-        print(f"[triage]{indent}EXCEPTION in {func_name}: {arg[0].__name__}: {arg[1]}")
+            if any(word in filename for word in ["/test/"] ):
+                    #print(f"[triage]{indent}RETURN: {func_name}() -> {arg}")
+                    print(f"[triage]{indent}RETURN: {func_name}()")
+    #elif event == "exception":
+    #    print(f"[triage]{indent}EXCEPTION in {func_name}: {arg[0].__name__}: {arg[1]}")
     return trace_calls
 
+def pytest_runtest_setup(item):
+    sys.settrace(trace_calls)
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_call(item):
@@ -95,9 +106,9 @@ def pytest_runtest_call(item):
             pass
         if lines:
             print(f"[triage] Test body:\n" + "\n".join(lines))
-    
+
     print("\n[triage] Call trace:\n")
-    sys.settrace(trace_calls)
+    #sys.settrace(trace_calls)
     try:
         yield
     finally:

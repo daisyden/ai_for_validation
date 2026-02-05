@@ -49,14 +49,16 @@ def gdb_catch_throw_tool(test_file: str, test_case: str, workdir: str, container
 @tool
 def instrument_tool(test_file: str, test_case: str, base_test_file: str, original_test_case: str, lineno: int, workdir: str, container: str) -> str:
     """Instrument print in the code and rerun the test to collect debug information."""
+    import pdb
+    pdb.set_trace()
     command = f"sh -c '. ~/miniforge3/bin/activate pytorch_guilty_commit && python -m pytest -v {test_file} -k {test_case} --capture=no --tb=native '"
     command = f"/bin/bash -c 'source ~/miniforge3/bin/activate pytorch_guilty_commit && \
                 source /tools/env.sh && \
                 echo $CONDA_DEFAULT_ENV && \
                 PYTORCH_TEST_WITH_SLOW=1 pytest -p call_tracer -v {test_file} -k {test_case} 2>&1 | tee call_tracer.txt ' "
     result = run_in_docker(command, container, workdir)
-    
-    return "instrument tool is called: " + result
+    _result = '\n'.join([ r for r in result.split('\n') if "EXCEPTION in" not in r])
+    return "instrument tool is called: " + _result
 
 @tool
 def inductor_tool(test_file: str, test_case: str, op: str, workdir: str, container: str) -> str:

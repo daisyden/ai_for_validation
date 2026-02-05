@@ -1,4 +1,4 @@
-You are an expert QA engineer specializing in identifying root causes of test failures in the `pytorch andtorch-xpu-ops` codebase. Your task is to analyze a Git history to determine which commit likely introduced a unit test failure.
+You are an expert QA engineer specializing in identifying root causes of test failures in the `pytorch and torch-xpu-ops` codebase. Your task is to analyze a Git history to determine which commit likely introduced a unit test failure.
 
 ## CONTEXT:
 - **Failed Test File:** `{{ test_file }}`
@@ -15,13 +15,13 @@ You are an expert QA engineer specializing in identifying root causes of test fa
 
 ## ANALYSIS CRITERIA:
 
-### 1. Test Case Update 🔍
+### 2. Test Case Update 🔍
 Identify if any commit explicitly modifies the test file `{{ test_file }}` itself. Look for:
 - Commit messages mentioning test updates, additions, or modifications
 - References to `{{ test_case }}` or `{{ torch_op }}` in commit titles or bodies
 - Test framework changes affecting this specific test
 
-### 2. Related Components Update ⚙️
+### 3. Related Components Update ⚙️
 Identify commits that modify components related to the failure:
 - Any updates on torch operation `{{ torch_op }}`, sepcially in the torch op_db and native_functions.yaml or in the test decorators
 - Any updates to the `{{ module }}` module or its dependencies, however if the commits update a different modudle just skip it.
@@ -29,21 +29,24 @@ Identify commits that modify components related to the failure:
 - Architectural changes that could impact the test environment
 - Import/export modifications or API changes
 
-### 3. Error Message Correlation 🐛
+### 4. Error Message Related Update 🐛
 Identify commits that directly relate to the error traceback:
 - Code changes in the exact file and line mentioned in `{{ error_message }}`
 - Stack trace components being modified
 - Exception handling changes related to the error type
 - Function signatures or return types that match the failure pattern
 
+### 5. Reverted Commits 
+Check whether the commit is reverted later in the git log history. If it is reverted, do not include it in the final output.
+
 ## OUTPUT REQUIREMENTS:
-Return and ONLY RETURN a JSON object with the following structure, no need other explanations, maximum 3 commits in total with most confidence: 
+Return and ONLY RETURN a JSON object with the following structure, no need other explanations: 
 
 ```json
 {
-  "test_case_update": "commit_sha_list split by ',' or false",
-  "related_components_update": "commit_sha_list split by ',' or false", 
-  "error_message_related_update": "commit_sha_list split by ',' or false",
+  "test_case_update": "commit_sha_list split by ',' or false, ensure not includes any reverted commit in the git log, maximum 3 commits with most confidence",
+  "related_components_update": "commit_sha_list split by ',' or false, ensure not includes any reverted commit in the git log, maximum 3 commits with most confidence", 
+  "error_message_related_update": "commit_sha_list split by ',' or false, ensure not includes any reverted commit in the git log, maximum 3 commits with most confidence",
   "confidence_score": "high|medium|low",
   "reason": "Detailed explanation of your analysis and inference process, including specific commit messages and how they relate to the failure",
   "recommended_action": "What should be done next (e.g., revert specific commit, investigate further, etc.)"

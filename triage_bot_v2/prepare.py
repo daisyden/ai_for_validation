@@ -131,9 +131,10 @@ def extract_reproduce_commands(user_input: str):
     start = False
     matches = []
     
+    
     for line in body.splitlines():
         print(line)
-        if start == False and line.strip().startswith("Cases:"):
+        if start == False and line.strip().endswith("Cases:"):
             start = True
         elif start == True:
             test_case_pattern = r'(op_ut|op_extended),([^,\n]+),([^,\n]+)'
@@ -148,11 +149,31 @@ def extract_reproduce_commands(user_input: str):
                     _matches.append("")
             matches.extend(_matches)
 
-    if not matches:
-        print("No valid test cases found in the expected format")
-        return None
-
     commands = []
+    if not matches:
+        def generate_prompt() -> str:
+            env = Environment(loader=FileSystemLoader('prompts'))
+            template = env.get_template('extract_issue_list.j2')
+            return template.render()
+        generate_prompt_text = generate_prompt()
+        prompt = ChatPromptTemplate.from_messages([
+                                            ("system", generate_prompt_text),
+                                            ("human", "{text}")
+                                            ])
+        chain = {"text": RunnablePassthrough()} | prompt | llm
+    
+        message = chain.invoke(AIMessage(content=body))
+        print("### LLM output for test case extraction: " + message.content)
+
+        matches = [ [line.split(',')[0], line.split(',')[1], line.split(',')[2]] for line in message.content.split('\n') if line.strip()]
+        for i, match in enumerate(matches, 1):
+            commands.append([match[0], match[1], match[2], "pytest --junit-xml={test_method}.xml -v -s {module_path} -k {test_method}".format(module_path=match[0], test_method=match[2])])
+            print(f"LLM Extracted Test Case {i}: {match}")
+            print(f" Module: {match[0]}")
+            print(f" Class: {match[1]}")
+            print(f" Method: {match[2]}")
+        return commands
+    
     for i, match in enumerate(matches, 1):
         _, module_path, test_method = match
         
@@ -171,29 +192,11 @@ def extract_reproduce_commands(user_input: str):
         print(f"  Module: {module_path}")
         print(f"  Class: {test_class}")
         print(f"  Method: {test_method}")
-        print()
+    
+    import pdb
+    pdb.set_trace()
     return commands
 
-        # if repo == "pytorch/pytorch":
-        #     # Parse URL format: failureCaptures=["module/test_file.py::TestClass::test_method"]
-        #     url_pattern = r'failureCaptures=%5B%22([^%]+(?:%2F[^%]+)*?)%3A%3A([^%]+)%3A%3A([^%]+)%22%5D'
-        #     match = re.search(url_pattern, body)
-
-        #     if match:
-        #         module_path = match.group(1).replace('%2F', '/')
-        #         test_class = match.group(2)
-        #         test_method = match.group(3)
-                
-        #         print(f"Parsed from URL:")
-        #         print(f"  Module: {module_path}")
-        #         print(f"  Class: {test_class}")
-        #         print(f"  Method: {test_method}")
-                
-        #         command = f"pytest --junit-xml={test_method}.xml -v -s {module_path} -k {test_method}"
-        #         return [[module_path, test_class, test_method, command],]
-        #     else:
-        #         print("No valid test case found in URL format")
-        #         return None
 
 def group_failed_test_cases(issue_list: list):
     def generate_prompt():
@@ -365,7 +368,9 @@ def extract_torch_test_details(json_object: object, prompt: str):
     user_input = prompt
 
     # collect the failure information
-    print(user_input)    
+    print("input: " + user_input) 
+    import pdb
+    pdb.set_trace()   
     json_string = stream_graph_updates(user_input, graph)
     
     return json.loads(json_string)

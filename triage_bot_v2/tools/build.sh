@@ -58,11 +58,11 @@ else
     fi
 fi
 
-if [ -d "./triton_whl" ]; then 
-    rm -rf ./triton_whl
-fi
-pip download --no-deps --index-url https://download.pytorch.org/whl/nightly/xpu --pre pytorch-triton-xpu --dest tritone_whl
-pip install --root-user-action=ignore tritone_whl/pytorch_triton_xpu-*.whl
+# if [ -d "./triton_whl" ]; then 
+#     rm -rf ./triton_whl
+# fi
+# pip download --no-deps --index-url https://download.pytorch.org/whl/nightly/xpu --pre pytorch-triton-xpu --dest tritone_whl
+# pip install --root-user-action=ignore tritone_whl/pytorch_triton_xpu-*.whl
 
 echo "pytorch version:\n" > ${workdir}/enviroments.txt
 cd ${workdir}/pytorch && git log -1 >> ${workdir}/enviroments.txt

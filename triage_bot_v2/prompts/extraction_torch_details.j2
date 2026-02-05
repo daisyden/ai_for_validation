@@ -13,7 +13,7 @@ Please extract the following information from the log, especially from the trace
 1. **Determine the original test class**:
    - The original test class is the same as test_class.
 2. **Determine the orignal test file:
-    - The original test file of torch-xpu-ops test is test file '_xpu.py' replaced with '.py'. 
+    - The original test file of torch-xpu-ops test is test file '_xpu.py' replaced with '.py', for example test/test_ops.py instead of test/xpu/test_ops_xpu.py. 
     - For pytorch test, the original test file is the same as test file and with 'test/' as folder prefix.
     - Examples:
         a. if test file is quantization/core/test_quantized_op_xpu.py the original file is test/quantization/core/test_quantized_op.py. 
@@ -29,7 +29,8 @@ Please extract the following information from the log, especially from the trace
 
 Please return the result with json format according to the template below, ensure the json format is correct for decoding, especially avoid Invalid \escape issue.
 
-Wrap the output in ```json code blocks with format
+Wrap the output in ```json code blocks with format, and if the value of any field is unknown, please fill in "unknown". Do not return any additional information except the json content. 
+Ensure the json can be decoded successfully without any error. Pay special attention to the escaping of special characters in the json format, such as backslashes and quotes, to avoid decoding errors.
 {% raw %}
 ```json
 {{
@@ -38,7 +39,7 @@ Wrap the output in ```json code blocks with format
 "torch_op": "op_name_or_None, such as aten::conv2d, torch.matmul, etc.",
 "dependency": "The dependent libraries or tools of the torch operation",
 "error_type": "error_type such as AssertionError/RuntimeError/fatal error/etc",
-"error_message": "{{ error_message }}",
+"error_message": "error_message",
 "original_test_file": "original test file under pytorch repo",
 "original_test_class": "original test class under pytorch repo",
 "original_test_case": "original test case under pytorch repo",
