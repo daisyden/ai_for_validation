@@ -75,11 +75,10 @@ def main():
             graph_builder.add_edge("triage_inductor_issue_agent", "retest_agent")
             #graph_builder.add_edge("triage_general_agent", "retest_agent")
             graph_builder.add_edge("draft_reproduce_agent", "retest_agent")
-            graph_builder.add_edge("summary_agent", END)
-            
+            graph_builder.add_edge("summary_agent", END)           
 
 
-            graph = graph_builder.compile().with_config({"recursion_limit": 20})
+            graph = graph_builder.compile().with_config({"recursion_limit": 200})
             return graph
 
         graph = build_graph()

@@ -73,9 +73,6 @@ def collect_issue_info_and_retest(
 
     commands = extract_reproduce_commands(user_input)
 
-    import pdb
-    pdb.set_trace()
-
     since, until = "unknown", "unknown"
 
     if issue is not None:
@@ -109,8 +106,6 @@ def collect_issue_info_and_retest(
                 prompt = "extraction_torch_details.j2"
 
                 python_object = extract_torch_test_details(issue_information, prompt)
-                import pdb
-                pdb.set_trace()
                 issue_information["torch_op"] = python_object.get("torch_op", "unknown")
                 issue_information['dependency'] = python_object.get("dependency", "unknown")
                 issue_information['original_test_file'] = python_object.get("original_test_file", "unknown")
@@ -157,7 +152,7 @@ def collect_issue_info_and_retest(
         
         response = f"There are {len(groups)} groups of issues:\n{groups}\n\nVerification enviroment: \n\n {enviroments}\nDetails:\n" + response
         return response
-        
+    
 if __name__ == "__main__":
     collect_issue_info_and_retest(
             issue=args.issue,

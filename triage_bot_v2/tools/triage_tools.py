@@ -49,9 +49,7 @@ def gdb_catch_throw_tool(test_file: str, test_case: str, workdir: str, container
 @tool
 def instrument_tool(test_file: str, test_case: str, base_test_file: str, original_test_case: str, lineno: int, workdir: str, container: str) -> str:
     """Instrument print in the code and rerun the test to collect debug information."""
-    import pdb
-    pdb.set_trace()
-    command = f"sh -c '. ~/miniforge3/bin/activate pytorch_guilty_commit && python -m pytest -v {test_file} -k {test_case} --capture=no --tb=native '"
+   
     command = f"/bin/bash -c 'source ~/miniforge3/bin/activate pytorch_guilty_commit && \
                 source /tools/env.sh && \
                 echo $CONDA_DEFAULT_ENV && \
@@ -59,6 +57,37 @@ def instrument_tool(test_file: str, test_case: str, base_test_file: str, origina
     result = run_in_docker(command, container, workdir)
     _result = '\n'.join([ r for r in result.split('\n') if "EXCEPTION in" not in r])
     return "instrument tool is called: " + _result
+
+@tool
+def verify_tool(reproduce_test_script: str, workdir: str, container: str) -> str:
+    """Instrument print in the code and rerun the test to collect debug information."""
+
+    import pdb
+    pdb.set_trace()
+    import tempfile
+    import os
+    
+    # Write script to a temporary file on host
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+        f.write(reproduce_test_script)
+        temp_file = f.name
+    
+    try:
+        # Copy file into container
+        subprocess.run(['docker', 'cp', temp_file, f'{container}:{workdir}/reproduce_test_script.py'], check=True)
+        
+        # Run the script in container
+        command = f"/bin/bash -c 'source ~/miniforge3/bin/activate pytorch_guilty_commit && \
+                    source /tools/env.sh && \
+                    echo $CONDA_DEFAULT_ENV && \
+                    PYTORCH_TEST_WITH_SLOW=1 python reproduce_test_script.py 2>&1 | tee verify.txt ' "
+        
+        result = run_in_docker(command, container, workdir)
+        return "verify tool is called: " + result
+    finally:
+        # Clean up temporary file
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
 
 @tool
 def inductor_tool(test_file: str, test_case: str, op: str, workdir: str, container: str) -> str:

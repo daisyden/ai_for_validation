@@ -5,8 +5,14 @@ Here is a pytest information collected form pytest log with command {{ command }
 - test file {{test_file}}
 - test class {{test_class}}
 - test case {{test_case}}
-- error message {{error_message}}
-- traceback {{traceback}}
+- error message 
+<% raw %>
+{{error_message}}
+<% endraw %>
+- traceback
+<% raw %>
+{{traceback}}
+<% endraw %>
 
 
 Please extract the following information from the log, especially from the traceback.

@@ -17,7 +17,7 @@ llm = ChatOpenAI(
     model_name="glm-4.6-fp8",
     #model_kwargs={"stop": ["."]},
     api_key="sk-XZrfiPGmZaGLZFPNUpy6ww",
-    max_tokens=2000,
+    max_tokens=5000,
 
 )
 

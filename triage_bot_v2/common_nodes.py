@@ -1,3 +1,4 @@
+import os
 from typing import Annotated
 from typing_extensions import TypedDict
 from langgraph.graph import StateGraph, START, END
@@ -228,5 +229,3 @@ def document_analysis_graph():
     graph_builder.add_edge("doc_analysis", END)
     graph = graph_builder.compile()
     return graph
-
-                

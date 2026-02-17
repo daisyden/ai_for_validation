@@ -14,9 +14,18 @@ module : {{ module }}
 dependency : {{ dependency }}
 torch_op : {{ torch_op }}
 
-Based on the input pytest log and trace information.
+The original mini reproduce script is 
+{% raw %}
+{{ reproduce_script }}
+{% endraw %}
+The result of the mini reproduce script is 
+{% raw %}
+{{ reproduce_script_result }}
+{% endraw %}
 
-Please do the following and output a minimized python reproduce script.
+Based on the input pytest log and trace information and original mini reproduce script inforamtion.
+
+Please do the following and output a new minimized python reproduce script that can reproduce the error.
 
 1. CODE TRACE ANALYSIS:
    - Extract and list all relevant code execution paths from the log and the backtrace of the original error message, please avoid to use the new backtrace. 
@@ -57,7 +66,7 @@ Please do the following and output a minimized python reproduce script.
    - The augments and locals information should also be included for each CALL and LINE if available
 
 4. ERROR REPRODUCTION SCRIPT:
-   - Create a minimal Python script that reproduces the error of {{error_message}} based on:
+   - Create a minimal Python script that reproduces the error of {% raw %} {{error_message}} {% endraw %} based on:
      * The code logic of test body and code tracing extracted from instrument tool output.
      * The augments that could lead to the error
      * The data shape, data distribution and dtypes identified in the error message, traceback and test body and code tracing
@@ -71,7 +80,7 @@ Please do the following and output a minimized python reproduce script.
    - Include all necessary imports
    - Add clear comments explaining each step
    - Ensure the script can run without syntax errors
-   - Ensure the script can reproduce the same error_message {{error_message}}
+   - Ensure the script can reproduce the same error_message {% raw %} {{error_message}} {% endraw %}
    - If the case failed in output comparision, also include expected vs actual output comparison in the small script and ensure the expected and actual data are on the same device
 
 4. OUTPUT REQUIREMENTS:
