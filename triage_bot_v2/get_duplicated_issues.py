@@ -1,23 +1,28 @@
+import os
 from github_issue import Github_Issue
 from langchain_core.runnables import RunnablePassthrough 
 from vllm_service import llm
 from langchain_core.prompts import ChatPromptTemplate
 
 
-def add_issue_to_collection(issue_folder: str, collection: object):
+def add_issue_to_collection(issue_folder: str, collection: object, issue_id: str = None):
     documents = []
     ids = []
     metadatas = []
+    
     for filename in os.listdir(issue_folder):
         if filename.endswith(".txt"):
             filepath = os.path.join(issue_folder, filename)
             
             with open(filepath, "r", encoding="utf-8") as f:
                 content = f.read()
-                issue_id = filepath.split('/')[-1].split('.')[0]
+                _issue_id = filepath.split('/')[-1].split('.')[0]
+                
+                if issue_id is not None and _issue_id == issue_id:
+                    continue
                 documents.append(content)
-                ids.append(issue_id)
-                metadatas.append({"issue_id": issue_id})
+                ids.append(_issue_id)
+                metadatas.append({"issue_id": _issue_id})
                 
     collection.add(
         documents=documents,
@@ -211,7 +216,6 @@ def download_all_open_issues_and_get_skiplist(repo:str, token:str, issues_folder
     for issue in issues:
         if "skipped" in [label.name for label in issue.labels]:
             skip_list.append(f"{issue.number}.txt")
-        import os
         if os.path.exists(f"{issues_folder}/{issue.number}.txt") and issue.updated_at.timestamp() < os.path.getmtime(f"{issues_folder}/{issue.number}.txt"):
             #print(f"Issue #{issue.number} already downloaded.")
             continue
@@ -246,7 +250,7 @@ def get_similar_issues(issue_info: dict, issues_folder:str, repo:str, token:str)
     langchain_embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     
     client = chromadb.PersistentClient(
-        path=issues_folder,  # persist_directory parameter is now 'path'
+        path="./chroma_db",  # persist_directory parameter is now 'path'
         settings=Settings(anonymized_telemetry=False)
     )
     sentence_transformer_ef = embedding_functions.SentenceTransformerEmbeddingFunction(
@@ -259,16 +263,28 @@ def get_similar_issues(issue_info: dict, issues_folder:str, repo:str, token:str)
         embedding_function=sentence_transformer_ef,
     )
 
-    collection = add_issue_to_collection(issues_folder, collection)
+    issue_id = issue_info.get("link", None).split('/')[-1] if issue_info.get("link", None) is not None else None
+    collection = add_issue_to_collection(issues_folder, collection, issue_id)
 
-    from langchain.vectorstores import Chroma
+    #from langchain.vectorstores import Chroma
+    from langchain_chroma import Chroma
     db = Chroma(client=client, collection_name=collection_name, embedding_function=langchain_embeddings)
     retriever = db.as_retriever(search_kwargs={"k": 2})
 
     prompt = ChatPromptTemplate.from_template(
-        """Given the following question and context, find the most similar issue from the retrieved issues. 
+        """Given the following question and context, find the most similar issue from the retrieved issues if any. 
         Question: {question}
         Context: {context}
+
+        A similar issue:
+        1) It has a similar error message as well as the error type
+        2) It has a similar test case, for example, the test file and test case name are similar. 
+        
+        No similar issue:
+        1) neither the error message is similar nor the test case is similar.
+
+        Only inference the result based on the context, do not use any other information. 
+        
         Return the result in a beutified json without explanation, just the json with the following format:
         ```json
         {{
@@ -288,8 +304,7 @@ def get_similar_issues(issue_info: dict, issues_folder:str, repo:str, token:str)
         | llm
         | JsonOutputParser()
     )
-    import pdb
-    pdb.set_trace()
+    
     question = f"Find the most similar issue for the test failure with test file: {test_file}, test class: {test_class}, test case: {test_case}, error message: {error_message}, and trace: {trace}."
     answer = rag_chain.invoke(question)
     # results = collection.query(
@@ -298,13 +313,14 @@ def get_similar_issues(issue_info: dict, issues_folder:str, repo:str, token:str)
     # )
     
     issue_info["similar_issues"] = answer
-    pdb.set_trace()
     print(f"Most similar issue found: {issue_info['similar_issues']}")
+    return issue_info
+    
 
 
 if __name__ == "__main__":
     import json, os    
-    with open("results/0/issue#0_test_nn_xpu.py_TestNNDeviceTypeXPU_test_softmax_backward_64bit_indexing_xpu.json", "r") as f:
+    with open("results/2006/issue#2006_test_unary_ufuncs_xpu.py_TestUnaryUfuncsXPU_test_nonzero_large_xpu_int8.json", "r") as f:
         issue_info = json.load(f)
     issue_folder = "xpu_issues"
     repo = "intel/torch-xpu-ops"

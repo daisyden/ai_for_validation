@@ -137,6 +137,8 @@ def extract_reproduce_commands(user_input: str):
         if start == False and line.strip().endswith("Cases:"):
             start = True
         elif start == True:
+            if "~~" in line:
+                continue
             test_case_pattern = r'(op_ut|op_extended),([^,\n]+),([^,\n]+)'
             _matches = re.findall(test_case_pattern, line)
             if not _matches:
@@ -193,8 +195,7 @@ def extract_reproduce_commands(user_input: str):
         print(f"  Class: {test_class}")
         print(f"  Method: {test_method}")
     
-    import pdb
-    pdb.set_trace()
+    
     return commands
 
 
@@ -369,8 +370,7 @@ def extract_torch_test_details(json_object: object, prompt: str):
 
     # collect the failure information
     print("input: " + user_input) 
-    import pdb
-    pdb.set_trace()   
+    
     json_string = stream_graph_updates(user_input, graph)
     
     return json.loads(json_string)

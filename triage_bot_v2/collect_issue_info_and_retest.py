@@ -10,8 +10,10 @@ from prepare import (
     group_failed_test_cases,
     extract_commit_range,
     )
+from get_duplicated_issues import get_similar_issues
 
 issue_template = "./prompts/issue_template.j2"
+issue_folder = "xpu_issues"
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--issue", type=str, help="The issue number to process", default='0', required=False)
@@ -136,6 +138,8 @@ def collect_issue_info_and_retest(
             issue_information['link'] = f"https://github.com/{repo}/issues/{issue}" if issue is not None else "unknown"
             issue_information['container'] = container
             issue_information['repo'] = repo
+
+            issue_information = get_similar_issues(issue_information, issue_folder, repo, token)
 
             issue_list.append(issue_information)
             os.makedirs(os.path.dirname(issue_information['json_link']), exist_ok=True)
