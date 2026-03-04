@@ -207,7 +207,8 @@ def git_show_rag_analysis():
         return commits
 
     commits = parse_commits_from_git_log(git_log_output)
-    
+    import pdb
+    pdb.set_trace()
     # Initialize embeddings and vector store
     from langchain_huggingface import HuggingFaceEmbeddings
     #from langchain_chroma import Chroma
@@ -232,32 +233,43 @@ def git_show_rag_analysis():
         embedding_function=sentence_transformer_ef,
     )
 
-    def add_commit_to_collection(commit_sha: str, collection) -> str:
+    def add_commits_to_collection(commits: list, collection) -> str:
         try:
-            show_results = get_git_show(commit_sha, f"{workdir}", issue_information["container"])
-            collection.add(
-                documents=[show_results],
-                metadatas=[{"commit_sha": commit_sha}],
+            for commit_sha in commits:
+                show_results = get_git_show(commit_sha, f"{workdir}", issue_information["container"])
+                with open(f"{gitshow_folder}/{commit_sha}.txt", "w") as f:
+                    f.write(show_results)
+                collection.add(
+                    documents=[show_results],
+                    metadatas=[{"commit_sha": commit_sha}],
                 ids=[commit_sha]
             )
             print(f"Added commit {commit_sha} to collection.")
         except Exception as e:
-            print(f"Failed to add commit {commit_sha} to collection: {e}")
+            print(f"Failed to add commit {commits} to collection: {e}")
         return collection
     
-    collection = add_commit_to_collection(gitshow_folder, collection)
+    collection = add_commits_to_collection(commits, collection)
 
     from langchain_chroma import Chroma
+    from langchain_core.prompts import ChatPromptTemplate
     db = Chroma(client=client, collection_name=collection_name, embedding_function=langchain_embeddings)
     retriever = db.as_retriever(search_kwargs={"k": 5})
 
     prompt = ChatPromptTemplate.from_template(
-        """Given the following queston and context, find the guilty commit of the problem described in question. 
+        """Given the following queston and context of git show result, find the guilty commit of the problem described in question. 
         Question: {question}
         Context: {context}
 
-        Steps:
-        1) Identify the commits that related to the bug based on the question and context. The question contains the information about the test failure, such as the test file, test case, error message, and trace. The context contains the git show information of candidate commits.
+        The question contains the information about the test failure, such as the test file, test case, error message, and trace. 
+        The context contains the git show information of candidate commits. In the git show information
+        1) lines starting with commit are the commit sha;
+        2) lines starting with Author are the author of the commit;
+        3) lines starting with Date are the date of the commit;
+        4) the rest lines are the code changes in the commit, and the code added in the commit starts with +, the code removed in the commit starts with -.
+        
+        Steps to find the guilty commit:
+        1) Identify the commits that related to the bug based on the question and context. 
         2) If there are mulitple commits identified in step 1, summary the update history of the related code, for example, the code was added in commit A, then updated in commit B and C, and the bug is likely introduced in commit B or C.
         3) Identify the guilty commit based on the update history and the information in question and context.
 
@@ -274,7 +286,9 @@ def git_show_rag_analysis():
     )
 
     from langchain_core.output_parsers import JsonOutputParser
-    import llm
+    from vllm_service import llm
+    from langchain_core.runnables import RunnablePassthrough 
+
     # Define the chain
     rag_chain = (
         {"context": retriever, "question": RunnablePassthrough()}

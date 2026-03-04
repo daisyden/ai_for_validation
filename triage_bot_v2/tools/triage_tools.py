@@ -15,7 +15,12 @@ def do_nothing_tool(test_file: str, test_case: str, container: str) -> str:
 @tool
 def onednn_verbose_tool(test_file: str, test_case: str, workdir: str, container: str, env: str) -> str:
     """Executes gdb catch throw comamnd to capture the trace of a pytest failure."""
-    result = run_in_docker(f"sh -c 'cd {workdir} && {env} pytest -v {test_file} -k {test_case}'", container, workdir)
+
+    command = f"/bin/bash -c 'source ~/miniforge3/bin/activate pytorch_guilty_commit && \
+                source /tools/env.sh && \
+                echo $CONDA_DEFAULT_ENV && \
+                PYTORCH_TEST_WITH_SLOW=1 {env} pytest -p call_tracer -v {test_file} -k {test_case} 2>&1 | tee call_tracer.txt ' "
+    result = run_in_docker(command, container, workdir)
     return "onednn_verbose tool is called: " + result
 
 @tool
@@ -62,8 +67,6 @@ def instrument_tool(test_file: str, test_case: str, base_test_file: str, origina
 def verify_tool(reproduce_test_script: str, workdir: str, container: str) -> str:
     """Instrument print in the code and rerun the test to collect debug information."""
 
-    import pdb
-    pdb.set_trace()
     import tempfile
     import os
     

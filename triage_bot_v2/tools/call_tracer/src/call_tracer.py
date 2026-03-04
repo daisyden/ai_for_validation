@@ -53,27 +53,24 @@ def trace_calls(frame, event, arg):
     indent = "  " * _call_depth
 
     if event == "call":
-        #if _call_depth <= 2:
         if True:
             src = linecache.getline(filename, lineno).strip()
-            filename = filename.split("site-packages/")[-1]
+            #filename = filename.split("site-packages/")[-1]
             if any(word in filename for word in ["/test/"] ):
                     print(f"[triage]{indent}CALL: {func_name}() at {filename}:{lineno} -> {src}")
                     print(f"[triage]{indent}  Arguments: {format_arguments(frame)}")
                     print(f"[triage]{indent}  Locals: {list(frame.f_locals.keys())}")
         _call_depth += 1
     elif event == "line":
-        #if _call_depth <= 2:
-        if True:
-            src = linecache.getline(filename, lineno).rstrip()
-            filename = filename.split("site-packages/")[-1]
-            if any(word in filename for word in ["/test/"] ):
-                    print(f"[triage]{indent}LINE: {filename}:{lineno} in {func_name} -> {src}")
-                    print(f"[triage]{indent}  Arguments: {format_arguments(frame)}")
-                    print(f"[triage]{indent}  Locals: {list(frame.f_locals.keys())}")
+       if _call_depth == 1:
+           src = linecache.getline(filename, lineno).rstrip()
+           #filename = filename.split("site-packages/")[-1]
+           if any(word in filename for word in ["/test/"] ):
+                   print(f"[triage]{indent}LINE: {filename}:{lineno} in {func_name} -> {src}")
+                   print(f"[triage]{indent}  Arguments: {format_arguments(frame)}")
+                   print(f"[triage]{indent}  Locals: {list(frame.f_locals.keys())}")
     elif event == "return":
         _call_depth = max(0, _call_depth - 1)
-        #if _call_depth <= 2:
         if True:
             indent = "  " * _call_depth
             if any(word in filename for word in ["/test/"] ):
@@ -83,6 +80,7 @@ def trace_calls(frame, event, arg):
     #    print(f"[triage]{indent}EXCEPTION in {func_name}: {arg[0].__name__}: {arg[1]}")
     return trace_calls
 
+
 def pytest_runtest_setup(item):
     sys.settrace(trace_calls)
 
@@ -91,19 +89,49 @@ def pytest_runtest_call(item):
     print(f"[triage] START {item.nodeid}")
     # Get the test function body
     test_func = item.obj
+    module = inspect.getmodule(test_func)
+    module_file = inspect.getfile(module)
+    # Get the test file name
+    test_file = module_file
+    print(f"[triage] Test file: {test_file}")
+
+    import ast
+
+    def extract_imports_from_file(filepath):
+        with open(filepath, 'r') as file:
+            tree = ast.parse(file.read())
+
+        imports = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    imports.append(alias.name)
+            elif isinstance(node, ast.ImportFrom):
+                module = node.module or ''
+                for alias in node.names:
+                    if module:
+                        imports.append(f"{module}.{alias.name}")
+                    else:
+                        imports.append(alias.name)
+
+        return imports
+
+    # Usage
+    imports = extract_imports_from_file(test_file)
+    print(f"[triage] Imports: {imports}")
+
+    # Read the source lines for the function
     if hasattr(test_func, '__code__'):
-        code = test_func.__code__
-        filename = code.co_filename
-        start_line = code.co_firstlineno
-        # Read the source lines for the function
+
         lines = []
         try:
             source_lines = inspect.getsourcelines(test_func)[0]
-            # Skip the function definition line (def test_...():)
-            for line in source_lines[1:]:
+
+            for line in source_lines:
                 lines.append(line.rstrip())
         except:
             pass
+
         if lines:
             print(f"[triage] Test body:\n" + "\n".join(lines))
 

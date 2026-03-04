@@ -235,6 +235,11 @@ def get_similar_issues(issue_info: dict, issues_folder:str, repo:str, token:str)
     error_message = issue_info.get("error_message", "unknown")
     trace = issue_info.get("trace", "unknown")
 
+    if error_message == "non-detected" or error_message == "passed":
+        print(f"Error message is {error_message}, skip finding similar issues.")
+        issue_info["similar_issues"] = "unknown"
+        return issue_info
+
     _ = download_all_open_issues_and_get_skiplist(repo, token, issues_folder)
     # Use metadata filtering to find similar issues
     # Filter by test file, test class, test case, or error message similarity
@@ -290,7 +295,8 @@ def get_similar_issues(issue_info: dict, issues_folder:str, repo:str, token:str)
         {{
         "most_similar_issue": "the issue id of the most similar issue, if no similar issue is found, return 'No similar issues found'",
         "most_similar_issue_title": "the title of the most similar issue, if no similar issue is found, return 'No similar issues found'",    
-        "similar_issue_ids": "the list of similar issue ids, if no similar issue is found, return 'No similar issues found'"
+        "similar_issue_ids": "the list of similar issue ids, if no similar issue is found, return 'No similar issues found'",
+        "reason": "the reason why the most similar issue is similar to the current issue, or the reason why no similar issue is found. The reason should be based on the information in context, such as the similarity of error message, test case, and error type."
         }}
         ```
         """
@@ -320,10 +326,11 @@ def get_similar_issues(issue_info: dict, issues_folder:str, repo:str, token:str)
 
 if __name__ == "__main__":
     import json, os    
-    with open("results/2006/issue#2006_test_unary_ufuncs_xpu.py_TestUnaryUfuncsXPU_test_nonzero_large_xpu_int8.json", "r") as f:
+    with open("results/2891/issue#2891_inductor_test_cuda_repro.py_CudaReproTests_test_effn_attn_bias_padding.json", "r") as f:
         issue_info = json.load(f)
     issue_folder = "xpu_issues"
     repo = "intel/torch-xpu-ops"
     token = os.environ.get("GITHUB_TOKEN", "")
-    
+    import pdb
+    pdb.set_trace()
     get_similar_issues(issue_info, issue_folder, repo, token)

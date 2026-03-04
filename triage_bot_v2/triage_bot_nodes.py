@@ -60,15 +60,15 @@ def triage_plan_agent(
     prompt = ChatPromptTemplate.from_messages([
             ("system", """
              You create triage plans for failed pytest tests based on user proivided issue information.
-**Inductor issue**: The issue with module inductor.
-**Non-inductor issue**: The issue without module inductor.
-**Depends on oneDNN**: The dependency is oneDNN
+**Inductor issue**: The issue with module inductor, otherwise it is non-inductor issue.
+**Non-inductor issue**: The issue is not with module inductor.
+**Depends on oneDNN**: The dependency is exactly oneDNN
 **Non-oneDNN op issue**: The issue is not depend on oneDNN
 **RuntimeError**: The error type is RuntimeError
 **Non-RuntimeError**: The error type is not RuntimeError
 
 Rule to pick triage steps:
-1. **Inductor issue** → Use inductor_tool & triage_inductor_issue_agent agent
+1. **Inductor issue** → To be supported, so use do_nothing_tool & summary_agent agent
 2. **Depends on oneDNN ONLY** → Use verbose_tool & triage_verbose_agent agent  
 3. **Non-inductor + RuntimeError** → Use gdb_catch_throw_tool tool & triage_gdb_catch_throw_agent agent
 4. **Non-inductor ** → Use instrument_tool & draft_reproduce_agent agent
@@ -83,11 +83,11 @@ For example:
 Output ONLY this JSON format, and make sure to no duplicated triage_steps:
 ```json
 {{
-    "total_steps": "number_of_steps",
+    "total_steps": "number_of_steps, integer number starting from 0",
     "triage_steps": [
         {{
         "retest_tool": "tool_name",
-        "triage_agent": "agent_name"
+        "triage_agent": "agent_name",
         "reason": "reason_for_choosing_this_step"
         }},
     ],
@@ -115,8 +115,6 @@ Pick tools/agents based on the rules above.
         issue_info['triage_plan'] = json.loads(json_string)
     except json.JSONDecodeError:
         issue_info['triage_plan'] = None
-        import pdb
-        pdb.set_trace()
         exit("Failed to decode JSON from triage plan message content.")
     
     return {"messages": triage_plan,
@@ -139,8 +137,6 @@ def retest_agent(
         next_tool = issue_info['triage_plan']["triage_steps"][current_step]
     else:
         next_tool = None
-
-
     
     if next_tool is not None:
         next_tool_name = json.dumps(next_tool)
@@ -175,7 +171,6 @@ def check_retest_tool_calls(state: State) -> str:
     messages = state["messages"]
     last_message = messages[-1]
     
-    
     if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
         return "retest_tools"
     # elif hasattr(last_message, 'content') and "<tool_call>" in last_message.content:
@@ -199,12 +194,6 @@ def route_triage_agent(state: State):
     
     i = int(issue_info["triage_plan"]["current_step"])
     
-    #triage_target = next_triage_step.replace('triage_', '').replace('_agent', '')
-
-    # if "instrument tool" in message or "verify tool" in message:
-    #     return "draft_reproduce_agent"
-    # elif triage_target in message:
-    #     return "triage_" + triage_target + "_agent"
     if i < len(issue_info["triage_plan"]["triage_steps"]):
         next_triage_step = issue_info["triage_plan"]["triage_steps"][i]["triage_agent"]
         return next_triage_step
@@ -225,7 +214,7 @@ def triage_verbose_agent(state: State):
     chain = {"text": RunnablePassthrough()} | prompt | llm
     issue_info = get_issue_info_from_state(state)
     message = chain.invoke(state["messages"][-1])
-    issue_info['onednn_issue_triaged'] = message
+    issue_info['onednn_issue_triaged'] = message.content
     issue_info['triage_plan']['current_step'] += 1
     return {"messages": message,
             "execution_path": state.get("execution_path", []) + ["triage_verbose_agent"],
@@ -277,52 +266,43 @@ def triage_inductor_issue_agent(state: State):
     issue_info = get_issue_info_from_state(state)
     message = chain.invoke(state["messages"][-1])
     issue_info['inductor_issue_triaged'] = message
+    issue_info['triage_plan']['current_step'] += 1
     return {"messages": message,
             "execution_path": state.get("execution_path", []) + ["triage_inductor_issue_agent"],
             "issue_info": json.dumps(issue_info)
     }
 
-def triage_general_agent(state: State):
-    executed_nodes, last_node = get_history(state, "triage_general_agent")
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are a helpful assistant that triage pytest failures."),
-        ("human", "{text}")
-    ])
-    chain = {"text": RunnablePassthrough()} | prompt | llm
-    issue_info = get_issue_info_from_state(state)
-    message = chain.invoke(state["messages"][-1])
-    issue_info['general_issue_triaged'] = message.content
-    return {"messages": message,
-            "execution_path": state.get("execution_path", []) + ["triage_general_agent"],
-            "issue_info": json.dumps(issue_info)
-    }
 
 def draft_reproduce_agent(state: State):
     executed_nodes, last_node = get_history(state, "draft_reproduce_test")
-    
-    import pdb
-    pdb.set_trace()
     
     issue_info = get_issue_info_from_state(state)
     if "call_tracing" not in issue_info:
         issue_info["call_tracing"] = state["messages"][-1].content
         issue_info['triage_plan']['verify_step'] = 0
     else:
-        issue_info["reproduce_script_result"] = state["messages"][-1].content
-        message = get_message_from_state(state)[1]
-        issue_info['triage_plan']['verify_step'] += 1
-        prompt = ChatPromptTemplate.from_messages([
-                                            ("system", "Check the result of reproduce test script, if the script reproduce the issue <% raw %> {{issue_info['error_message']}} <% endraw %>, return True, otherwise return False. No any explanation needed, just return True or False."),
-                                            ("human", "{text}")
-                                            ])
-        chain = {"text": RunnablePassthrough()} | prompt | llm
-        reproduced = (chain.invoke(AIMessage(content=message))).content
-        if "True" in reproduced or "true" in reproduced or issue_info['triage_plan']['verify_step'] >= 3:
-            issue_info['triage_plan']['current_step'] += 1
-            return {"messages": AIMessage(content=message),
-                    "execution_path": state.get("execution_path", []) + ["draft_reproduce_agent"],
-                    "issue_info": json.dumps(issue_info)
-            }
+        step = issue_info['triage_plan']['current_step']
+        if issue_info['triage_plan']['triage_steps'][step]['retest_tool'] == "verify_tool":
+            issue_info["reproduce_script_output"] = state["messages"][-1].content
+            message = get_message_from_state(state)[1]
+
+            issue_info['triage_plan']['verify_step'] += 1
+            prompt = ChatPromptTemplate.from_messages([
+                                                ("system", "Check the result of reproduce test script, if the script reproduce the issue <% raw %> {{issue_info['error_message']}} <% endraw %>, return True, otherwise return False. No any explanation needed, just return True or False."),
+                                                ("human", "{text}")
+                                                ])
+            chain = {"text": RunnablePassthrough()} | prompt | llm
+            reproduced = (chain.invoke(AIMessage(content=message))).content
+            if "True" in reproduced or "true" in reproduced or issue_info['triage_plan']['verify_step'] >= 3:
+                issue_info['triage_plan']['current_step'] += 1
+                issue_info["reproduce_script_result"] = reproduced
+                return {"messages": AIMessage(content=message),
+                        "execution_path": state.get("execution_path", []) + ["draft_reproduce_agent"],
+                        "issue_info": json.dumps(issue_info)
+                }
+        else:
+            assert "unexpected tool call" in state["messages"][-1].content, "The only allowed tool call before drafting reproduce script is retest_tool, but got: " + state["messages"][-1].content
+
 
     def generate_prompt(issue_info: dict) -> str:
         env = Environment(loader=FileSystemLoader('prompts'))            
@@ -336,7 +316,7 @@ def draft_reproduce_agent(state: State):
                                dependency=issue_info.get("dependency", ""),
                                torch_op=issue_info.get("torch_op", ""),
                                reproduce_script=issue_info.get("reproduce_script", "not provided"),
-                               reproduce_script_result=issue_info.get("reproduce_script_result", "not provided")
+                               reproduce_script_output=issue_info.get("reproduce_script_output", "not provided")
                                )
     
     prompt_text = generate_prompt(issue_info)    
@@ -354,8 +334,10 @@ def draft_reproduce_agent(state: State):
 
     # Extract code from "Reproduce test script\n```<code>```" format
     reproduce_script = message.content
-    if "```python" in reproduce_script:
-        start_idx = reproduce_script.find("```python") + len("```python\n")
+    import pdb
+    pdb.set_trace()
+    if "Reproduction Script\n\n```python\n" in reproduce_script:
+        start_idx = reproduce_script.find("Reproduction Script\n\n```python\n") + len("Reproduction Script\n\n```python\n")
         end_idx = reproduce_script.rfind("```")
         reproduce_script = reproduce_script[start_idx:end_idx].strip()
     elif "```" in reproduce_script:
@@ -381,7 +363,7 @@ def draft_reproduce_agent(state: State):
 
 def summary_agent(state: State):
 
-    executed_nodes, last_node = get_history(state, "triage_general_agent")
+    executed_nodes, last_node = get_history(state, "summary_agent")
     prompt = ChatPromptTemplate.from_messages([
         ("system", """
          You are a helpful assistant that can create beautiful summaries for pytest failures based on the issue information provided. When generating the summary try the best to exact answer from user input.
@@ -410,16 +392,16 @@ def summary_agent(state: State):
         f.write("* Reproduce command: " + issue_info.get("reproduce_command", "N/A") + "\n")
         if issue_info.get("onednn_issue_triaged", "N/A") != "N/A":
             f.write("<details><summary> onednn verbose </summary>" + issue_info.get("onednn_issue_triaged", "N/A") + "\n" + "</details>\n")
-        if issue_info.get("general_issue_triaged", "N/A") != "N/A":
-            f.write("<details><summary> general triage result </summary>" + issue_info.get("general_issue_triaged", "N/A") + "\n" + "</details>\n")
-        if issue_info.get("inductor_issue_triaged", "N/A") != "N/A":
-            f.write("<details><summary> inductor issue triage result </summary>" + issue_info.get("inductor_issue_triaged", "N/A") + "\n" + "</details>\n")
         if issue_info.get("gdb_catch_throw_triaged", "N/A") != "N/A":
             f.write("<details><summary> gdb catch throw triage result </summary>" + issue_info.get("gdb_catch_throw_triaged", "N/A") + "\n" + "</details>\n")
         if issue_info.get("call_tracing", "N/A") != "N/A":
             f.write("<details><summary> Tracing </summary>" + f"\n```\n" + issue_info.get("call_tracing", "N/A") + "\n" + f"\n```\n" + "\n" + "</details>\n")
-        if issue_info.get("reproduce_test_details", "N/A") != "N/A":
-            f.write(f"<details><summary> reproduce test after draf {issue_info['triage_plan']['verify_step']} times: </summary>" + f"\n```\n" + issue_info.get("reproduce_test_details", "N/A") + "\n```\n" + "\n" + "</details>\n")
+        if issue_info.get("reproduce_test_script", "N/A") != "N/A":
+            f.write(f"<details><summary> reproduce test after drafting minimum script {issue_info['triage_plan']['verify_step']} times: </summary>" + f"\n```\n" + issue_info.get("reproduce_test_script", "N/A") + "\n```\n" + "\n" + "</details>\n")
+        if issue_info.get("reproduce_script_output", "N/A") != "N/A":
+            f.write(f"<details><summary> reproduce test script result </summary>" + f"\n```\n" + issue_info.get("reproduce_script_output", "N/A") + "\n```\n" + "\n" + "</details>\n")
+        if issue_info.get("reproduce_script_result", "N/A") != "N/A":
+            f.write(f"<details><summary> reproduce test result after verification </summary>" + f"\n```\n" + issue_info.get("reproduce_script_result", "N/A") + "\n```\n" + "\n" + "</details>\n")
     return {"messages": message,
             "execution_path": state.get("execution_path", []) + ["summary_agent"],
             "issue_info": json.dumps(issue_info)

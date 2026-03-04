@@ -25,7 +25,7 @@ The result of the mini reproduce script is
 
 Based on the input pytest log and trace information and original mini reproduce script inforamtion.
 
-Please do the following and output a new minimized python reproduce script that can reproduce the error.
+Please do the following and output a new minimized python reproduce script that can reproduce the error, but avoid the result of original mini reproduce script, and ensure the new script is as minimal as possible while still reproducing the error.
 
 1. CODE TRACE ANALYSIS:
    - Extract and list all relevant code execution paths from the log and the backtrace of the original error message, please avoid to use the new backtrace. 
@@ -80,7 +80,7 @@ Please do the following and output a new minimized python reproduce script that 
    - Include all necessary imports
    - Add clear comments explaining each step
    - Ensure the script can run without syntax errors
-   - Ensure the script can reproduce the same error_message {% raw %} {{error_message}} {% endraw %}
+   - Ensure the script can reproduce and report the same error_message {% raw %} {{error_message}} {% endraw %}
    - If the case failed in output comparision, also include expected vs actual output comparison in the small script and ensure the expected and actual data are on the same device
 
 4. OUTPUT REQUIREMENTS:

@@ -6,7 +6,6 @@ import json
 from common_nodes import stream_graph_updates, State
 
 from triage_bot_nodes import (
-    triage_general_agent,
     triage_gdb_catch_throw_agent,
     triage_plan_agent,
     triage_verbose_agent,
@@ -23,11 +22,6 @@ from triage_bot_nodes import (
 def main():
     with open(args.issue_json, 'r') as f:
         issue_info = json.load(f)
-        # issue_info["triage_plan"] = {}
-        # issue_info["runtime_error_triaged"] = ""
-        # issue_info["onednn_issue_triaged"] = ""
-        # issue_info["inductor_issue_triaged"] = ""
-        # issue_info["reproduce_test_drafted"] = ""
 
     try:
         user_input = json.dumps(issue_info)
@@ -41,7 +35,7 @@ def main():
             
             graph_builder.add_node("triage_gdb_catch_throw_agent", triage_gdb_catch_throw_agent)
             graph_builder.add_node("triage_verbose_agent", triage_verbose_agent)
-            graph_builder.add_node("triage_inductor_issue_agent", triage_inductor_issue_agent)
+            #graph_builder.add_node("triage_inductor_issue_agent", triage_inductor_issue_agent)
             #graph_builder.add_node("triage_general_agent", triage_general_agent)
             graph_builder.add_node("draft_reproduce_agent", draft_reproduce_agent)
             graph_builder.add_node("summary_agent", summary_agent)
@@ -66,13 +60,13 @@ def main():
                 "triage_gdb_catch_throw_agent": "triage_gdb_catch_throw_agent",
                 "summary_agent": "summary_agent",
                 "draft_reproduce_agent": "draft_reproduce_agent",
-                "triage_inductor_issue_agent": "triage_inductor_issue_agent",
+                #"triage_inductor_issue_agent": "triage_inductor_issue_agent",
                 END: END
                 }
             )
             graph_builder.add_edge("triage_verbose_agent", "retest_agent")
             graph_builder.add_edge("triage_gdb_catch_throw_agent", "retest_agent")
-            graph_builder.add_edge("triage_inductor_issue_agent", "retest_agent")
+            #graph_builder.add_edge("triage_inductor_issue_agent", "retest_agent")
             #graph_builder.add_edge("triage_general_agent", "retest_agent")
             graph_builder.add_edge("draft_reproduce_agent", "retest_agent")
             graph_builder.add_edge("summary_agent", END)           

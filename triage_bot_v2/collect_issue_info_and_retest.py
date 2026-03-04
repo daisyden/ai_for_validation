@@ -24,6 +24,8 @@ parser.add_argument("--container", type=str, help="The docker container to use, 
 parser.add_argument("--since", type=str, help="The last good commit for this issue or the date when the issue does not exists", default=None, required=False)
 parser.add_argument("--until", type=str, help="The commit when the issue is detected or the date when the issue is detected", default=None, required=False)
 
+parser.add_argument("--similar_issues", action='store_true', help="Whether to get similar issues from the repo")
+
 args = parser.parse_args()
 
 def collect_issue_info_and_retest(
@@ -33,6 +35,7 @@ def collect_issue_info_and_retest(
         container: str = 'guilty_commit',
         since: str = None,
         until: str = None,
+        similar_issues: bool = False,
 ):
     ######## extract issue information ##########
     token = os.environ.get("GITHUB_TOKEN", "")
@@ -139,7 +142,8 @@ def collect_issue_info_and_retest(
             issue_information['container'] = container
             issue_information['repo'] = repo
 
-            issue_information = get_similar_issues(issue_information, issue_folder, repo, token)
+            if similar_issues and issue is not None:
+                issue_information = get_similar_issues(issue_information, issue_folder, repo, token)
 
             issue_list.append(issue_information)
             os.makedirs(os.path.dirname(issue_information['json_link']), exist_ok=True)
@@ -165,4 +169,5 @@ if __name__ == "__main__":
             container=args.container,
             since=args.since,
             until=args.until,
+            similar_issues=args.similar_issues,
     )       
