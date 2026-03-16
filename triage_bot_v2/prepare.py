@@ -13,58 +13,58 @@ from vllm_service import llm
 import subprocess
 
 ###### Process the issue ##########
-def extract_issue_information(issue_number: int, token: str, repo: str):
-    if issue_number is None or repo is None or token is None:
-        print("Please provide input, repo and token.")
-        return None
+# def extract_issue_information(issue_number: int, token: str, repo: str):
+#     if issue_number is None or repo is None or token is None:
+#         print("Please provide input, repo and token.")
+#         return None
 
-    github_issue = Github_Issue(repo, token)
-    issue = github_issue.get_issue(issue_number)
-    link = issue.html_url
+#     github_issue = Github_Issue(repo, token)
+#     issue = github_issue.get_issue(issue_number)
+#     link = issue.html_url
 
-    if issue.pull_request != None:
-        print("\n### Drop the issue becuase it is pull request : " + str(issue.number))
-        exit(0)
-    else: 
-        title = issue.title if issue.title != None else ""
-        labels = [ label.name for label in issue.labels ]
-        date_created = issue.created_at 
-        date_created = date_created.strftime("%Y-%m-%d")
+#     if issue.pull_request != None:
+#         print("\n### Drop the issue becuase it is pull request : " + str(issue.number))
+#         exit(0)
+#     else: 
+#         title = issue.title if issue.title != None else ""
+#         labels = [ label.name for label in issue.labels ]
+#         date_created = issue.created_at 
+#         date_created = date_created.strftime("%Y-%m-%d")
 
-        if repo == "pytorch/pytorch" and ( "skipped" not in labels or "triaged" not in labels ):
-            exit(0)
+#         if repo == "pytorch/pytorch" and ( "skipped" not in labels or "triaged" not in labels ):
+#             exit(0)
         
-        state = issue.state
+#         state = issue.state
 
-        # Disable temperarily
-        if state != "open":
-            print("\n### Drop the issue becuase it is not open : " + str(issue.number))
-            exit(0) 
+#         # Disable temperarily
+#         if state != "open":
+#             print("\n### Drop the issue becuase it is not open : " + str(issue.number))
+#             exit(0) 
 
-        # request issue contents
-        issue_contents = issue.body if issue.body != None else ""
-        issue_contents = github_issue.parse_github_issue_attachment(issue_contents, "./attachment")
-        issue_contents = issue_contents.split("### Versions")[0]
-        issue_contents = "Content of #" + str(issue.number) + " is : " + issue_contents
-        body = issue_contents
+#         # request issue contents
+#         issue_contents = issue.body if issue.body != None else ""
+#         issue_contents = github_issue.parse_github_issue_attachment(issue_contents, "./attachment")
+#         issue_contents = issue_contents.split("### Versions")[0]
+#         issue_contents = "Content of #" + str(issue.number) + " is : " + issue_contents
+#         body = issue_contents
 
 
-        ###### Define the graph ##########
-        graph = depsrag_graph()
+#         ###### Define the graph ##########
+#         graph = depsrag_graph()
 
-        def generate_prompt(link: str, title: str, body: str, date_created: str, repo: str) -> str:
-            env = Environment(loader=FileSystemLoader('prompts'))
-            template = env.get_template('extraction__DISABLED_issue.j2') if repo == "pytorch/pytorch" else env.get_template('extraction_skipped_issue.j2')
-            return template.render(link=link, title=title, body=body, date_created=date_created)
+#         def generate_prompt(link: str, title: str, body: str, date_created: str, repo: str) -> str:
+#             env = Environment(loader=FileSystemLoader('prompts'))
+#             template = env.get_template('extraction__DISABLED_issue.j2') if repo == "pytorch/pytorch" else env.get_template('extraction_skipped_issue.j2')
+#             return template.render(link=link, title=title, body=body, date_created=date_created)
 
-        prompt = generate_prompt(link, title, body, date_created, repo)
-        user_input = prompt
-        # collect the failure information
+#         prompt = generate_prompt(link, title, body, date_created, repo)
+#         user_input = prompt
+#         # collect the failure information
         
-        json_string = stream_graph_updates(user_input, graph)
+#         json_string = stream_graph_updates(user_input, graph)
 
-        python_object = json.loads(json_string)
-        return python_object
+#         python_object = json.loads(json_string)
+#         return python_object
 
 def get_issue_body(issue_number: int, token: str, repo: str):
     if issue_number is None or repo is None or token is None:
@@ -89,11 +89,12 @@ def get_issue_body(issue_number: int, token: str, repo: str):
             print("\n### Drop the issue becuase it is not open : " + str(issue.number))
             exit(0) 
 
+        updated_time = issue.updated_at.strftime("'%Y-%m-%d %H:%M:%S'")
         # request issue contents
         issue_contents = issue.body if issue.body != None else ""
         issue_contents = github_issue.parse_github_issue_attachment(issue_contents, "./attachment")
         issue_contents = issue_contents.split("### Versions")[0]
-        issue_contents = "Content of #" + str(issue.number) + " at " + link + " is : " + issue_contents
+        issue_contents = f"Updated at: {updated_time}. Content of #{issue.number} at {link} is : {issue_contents}"
         body = issue_contents
 
         return body
@@ -123,14 +124,13 @@ def extract_commit_range(user_input: str):
     
     
     
-def extract_reproduce_commands(user_input: str):    
+def extract_reproduce_commands(user_input: str, max_cases: int=5):    
     body = user_input
 
     import re        
     # Parse multiple lines of format: op_ut,<test_class>,<test_name>
     start = False
-    matches = []
-    
+    matches = []    
     
     for line in body.splitlines():
         print(line)
@@ -152,29 +152,30 @@ def extract_reproduce_commands(user_input: str):
             matches.extend(_matches)
 
     commands = []
-    if not matches:
-        def generate_prompt() -> str:
-            env = Environment(loader=FileSystemLoader('prompts'))
-            template = env.get_template('extract_issue_list.j2')
-            return template.render()
-        generate_prompt_text = generate_prompt()
-        prompt = ChatPromptTemplate.from_messages([
-                                            ("system", generate_prompt_text),
-                                            ("human", "{text}")
-                                            ])
-        chain = {"text": RunnablePassthrough()} | prompt | llm
+    # if not matches:
+    #     def generate_prompt() -> str:
+    #         env = Environment(loader=FileSystemLoader('prompts'))
+    #         template = env.get_template('extract_issue_list.j2')
+    #         return template.render()
+    #     generate_prompt_text = generate_prompt()
+    #     prompt = ChatPromptTemplate.from_messages([
+    #                                         ("system", generate_prompt_text),
+    #                                         ("human", "{text}")
+    #                                         ])
+    #     chain = {"text": RunnablePassthrough()} | prompt | llm
     
-        message = chain.invoke(AIMessage(content=body))
-        print("### LLM output for test case extraction: " + message.content)
+    #     message = chain.invoke(AIMessage(content=body))
+    #     print("### LLM output for test case extraction: " + message.content)
 
-        matches = [ [line.split(',')[0], line.split(',')[1], line.split(',')[2]] for line in message.content.split('\n') if line.strip()]
-        for i, match in enumerate(matches, 1):
-            commands.append([match[0], match[1], match[2], "pytest --junit-xml={test_method}.xml -v -s {module_path} -k {test_method}".format(module_path=match[0], test_method=match[2])])
-            print(f"LLM Extracted Test Case {i}: {match}")
-            print(f" Module: {match[0]}")
-            print(f" Class: {match[1]}")
-            print(f" Method: {match[2]}")
-        return commands
+    #     matches = [ [line.split(',')[0], line.split(',')[1], line.split(',')[2]] for line in message.content.split('\n') if line.strip()]
+    #     for i, match in enumerate(matches, 1):
+    #         commands.append([match[0], match[1], match[2], "pytest --junit-xml={test_method}.xml -v -s {module_path} -k {test_method}".format(module_path=match[0], test_method=match[2])])
+            
+    #         print(f"LLM Extracted Test Case {i}: {match}")
+    #         print(f" Module: {match[0]}")
+    #         print(f" Class: {match[1]}")
+    #         print(f" Method: {match[2]}")
+    #     return commands
     
     for i, match in enumerate(matches, 1):
         _, module_path, test_method = match
@@ -193,8 +194,7 @@ def extract_reproduce_commands(user_input: str):
         print(f"Test Case {i}:")
         print(f"  Module: {module_path}")
         print(f"  Class: {test_class}")
-        print(f"  Method: {test_method}")
-    
+        print(f"  Method: {test_method}")    
     
     return commands
 
@@ -233,7 +233,6 @@ def build_pytorch_docker_enviroment(download: bool=False, build: str="nightly", 
     enviroments = run_in_docker(f"cat {workdir}/enviroments.txt", container, workdir)  
 
     return enviroments
-
 
 def reproduce_issues_with_docker_commands(commands: list, container: str, onlyone=False):    
     status_info = []
@@ -366,6 +365,68 @@ def extract_torch_test_details(json_object: object, prompt: str):
 
     prompt = generate_prompt(json_object=json_object,
                              prompt=prompt)
+    user_input = prompt
+
+    # collect the failure information
+    print("input: " + user_input) 
+    
+    json_string = stream_graph_updates(user_input, graph)
+    
+    return json.loads(json_string)
+
+
+# def extract_issue_information(body: str, prompt: str):
+#     graph = depsrag_graph()
+
+#     def generate_prompt(body: str, prompt: str) -> str:
+#         env = Environment(loader=FileSystemLoader('prompts'))
+#         template = env.get_template(prompt)
+#         return template.render(body=body)
+
+#     prompt = generate_prompt(body=body,
+#                              prompt=prompt)
+#     user_input = prompt
+
+#     # collect the failure information
+#     print("input: " + user_input) 
+    
+#     json_string = stream_graph_updates(user_input, graph)
+    
+#     return json.loads(json_string)
+
+
+def extract_case_list(body: str, max_cases: int, prompt: str):
+    graph = document_analysis_graph()
+
+    def generate_prompt(body: str, max_cases: int, prompt: str) -> str:
+        env = Environment(loader=FileSystemLoader('prompts'))
+        template = env.get_template(prompt)
+        return template.render(body=body, max_cases=max_cases)
+
+    prompt = generate_prompt(body=body, max_cases=max_cases, prompt=prompt)
+    
+    user_input = prompt
+
+    # collect the failure information
+    print("input: " + user_input) 
+    
+    json_string = stream_graph_updates(user_input, graph)
+    
+    return json.loads(json_string)
+
+def check_memory(user_input: str, enviroment: str, user_input_last: str, enviroment_last: str, prompt: str):
+    graph = document_analysis_graph()
+        
+    def generate_prompt(user_input: str, enviroment: str, last_issue_info: str, last_enviroment: str, prompt: str) -> str:
+        env = Environment(loader=FileSystemLoader('prompts'))
+        template = env.get_template(prompt)
+        return template.render(new_issue_info=user_input, new_enviroment=enviroment,
+                       last_issue_info=last_issue_info, last_enviroment=last_enviroment)
+    prompt = generate_prompt(user_input=user_input, enviroment=enviroment,
+                             last_issue_info=user_input_last, last_enviroment=enviroment_last, prompt=prompt)
+
+    import pdb
+    pdb.set_trace()
     user_input = prompt
 
     # collect the failure information

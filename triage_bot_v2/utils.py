@@ -11,6 +11,15 @@ def run_in_docker(command: str, container: str, workdir: str) -> str:
         # Get the container by ID
         container = client.containers.get(container_id)
 
+        # Start the container if it is not running
+        if container.status != "running":
+            print(f"Container {container_id} is not running. Starting it...")
+            container.start()
+            # Wait until the container is running
+            container.reload()
+            if container.status != "running":
+                raise RuntimeError(f"Failed to start container {container_id}.")
+        
         # Execute command in the container
         exec_result = container.exec_run(
             command,
@@ -27,7 +36,7 @@ def run_in_docker(command: str, container: str, workdir: str) -> str:
             for line in exec_result.output:
                 if line:
                     decoded_line = line.decode('utf-8') if isinstance(line, bytes) else line
-                    print(f"Output: {decoded_line.strip()}")
+                    #print(f"Output: {decoded_line.strip()}")
                     output_lines.append(decoded_line)
         
         return "\n".join(output_lines)

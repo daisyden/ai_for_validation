@@ -35,7 +35,6 @@ def get_history(state: State, node: str):
 def stream_graph_updates(user_input: str, graph: StateGraph):
     final_result = ""
     for event in graph.stream({"messages": [{"role": "user", "content": user_input}], "execution_path": [], "issue_info": {}}):
-        
         for value in event.values():
             if isinstance(value["messages"], list):
                 json_string = value["messages"][-1].content
@@ -47,8 +46,8 @@ def stream_graph_updates(user_input: str, graph: StateGraph):
                     if "```json" in json_string:
                         index0 = json_string.find("```json\n")
                         json_string = json_string[index0 + len("```json\n"):]
-                        index1 = json_string.rfind("}\n```")
-                        json_string = json_string[:index1+1]                    
+                        index1 = json_string.rfind("\n```")
+                        json_string = json_string[:index1]                    
 
                     python_object = json.loads(json_string)
 
@@ -137,7 +136,12 @@ def depsRAG(
         index1 = json_string.rfind("}\n```")
         json_string = json_string[:index1+1]
     
-    python_object = json.loads(json_string)
+    try:
+        python_object = json.loads(json_string)
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON: {e}")
+        print(f"Original string: {json_string}")
+        python_object = {}
 
 
     from langchain_community.document_loaders import CSVLoader
@@ -180,7 +184,7 @@ def depsRAG(
     - If the context is empty and the torch operation is GEMM-like and  dtype is complex32, complex64, or complex128 dtypes -> answer is 'MKL'.
     - Otherwise -> return 'sycl'.    
 
-    Return only the final answer with no additional explanation.
+    Return only the final answer without reasoning and additional explanation.
     """
     
     prompt = ChatPromptTemplate.from_template(template)

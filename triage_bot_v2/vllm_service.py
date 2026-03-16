@@ -15,9 +15,9 @@ llm = ChatOpenAI(
     #model_name="meta-llama/Llama-3.3-70B-Instruct",
     openai_api_base="http://10.112.110.111/v1",
     model_name="glm-4.6-fp8",
-    #model_kwargs={"stop": ["."]},
     api_key="sk-XZrfiPGmZaGLZFPNUpy6ww",
     max_tokens=5000,
+    temperature=0.0
 
 )
 
