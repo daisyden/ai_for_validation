@@ -24,7 +24,219 @@ with open("/home/daisydeng/issue_traige/doc/ops_dependency.csv") as f:
 # Known test types
 KNOWN_TEST_TYPES = ['op_ut', 'op_extend', 'e2e', 'benchmark', 'ut']
 
-# Map test case to torch ops (common patterns)
+# Model lists from benchmarks
+HUGGINGFACE_MODELS = [
+    'AlbertForMaskedLM', 'AlbertForQuestionAnswering', 'AllenaiLongformerBase',
+    'BartForCausalLM', 'BartForConditionalGeneration', 'BertForMaskedLM',
+    'BertForQuestionAnswering', 'BlenderbotForCausalLM', 'BlenderbotForConditionalGeneration',
+    'BlenderbotSmallForCausalLM', 'BlenderbotSmallForConditionalGeneration', 'CamemBert',
+    'DebertaV2ForMaskedLM', 'DebertaV2ForQuestionAnswering', 'DistilBertForMaskedLM',
+    'DistilBertForQuestionAnswering', 'DistillGPT2', 'ElectraForCausalLM',
+    'ElectraForQuestionAnswering', 'GoogleFnet', 'google/gemma', 'GPT2ForSequenceClassification',
+    'GPTJForCausalLM', 'GPTJForQuestionAnswering', 'GPTNeoForCausalLM',
+    'GPTNeoForSequenceClassification', 'LayoutLMForMaskedLM', 'LayoutLMForSequenceClassification',
+    'M2M100ForConditionalGeneration', 'MBartForCausalLM', 'MBartForConditionalGeneration',
+    'MegatronBertForCausalLM', 'MegatronBertForQuestionAnswering', 'meta-llama', 'mistralai',
+    'MobileBertForMaskedLM', 'MobileBertForQuestionAnswering', 'MT5ForConditionalGeneration',
+    'openai/gpt', 'openai/whisper', 'OPTForCausalLM', 'PegasusForCausalLM',
+    'PegasusForConditionalGeneration', 'PLBartForCausalLM', 'PLBartForConditionalGeneration',
+    'Qwen', 'RobertaForCausalLM', 'RobertaForQuestionAnswering', 'T5ForConditionalGeneration',
+    'T5Small', 'TrOCRForCausalLM', 'XGLMForCausalLM', 'XLNetLMHeadModel', 'YituTechConvBert',
+    'hf_Albert', 'hf_Bert', 'hf_Bert_large', 'hf_DistilBert', 'hf_Roberta_base'
+]
+
+TIMM_MODELS = [
+    'adv_inception_v3', 'beit_base_patch16_224', 'botnet26t_256', 'cait_m36_384',
+    'coat_lite_mini', 'convit_base', 'convmixer_768_32', 'convnext_base',
+    'convnextv2_nano', 'crossvit_9_240', 'cspdarknet53', 'deit_base_distilled_patch16_224',
+    'deit_tiny_patch16_224', 'dla102', 'dm_nfnet_f0', 'dpn107', 'eca_botnext26ts_256',
+    'eca_halonext26ts', 'ese_vovnet19b_dw', 'fbnetc_100', 'fbnetv3_b', 'gernet_l',
+    'ghostnet_100', 'gluon_inception_v3', 'gmixer_24_224', 'gmlp_s16_224', 'hrnet_w18',
+    'inception_v3', 'jx_nest_base', 'lcnet_050', 'levit_128', 'mixer_b16_224',
+    'mixnet_l', 'mnasnet_100', 'mobilenetv2_100', 'mobilenetv3_large_100', 'mobilevit_s',
+    'nfnet_l0', 'pit_b_224', 'pnasnet5large', 'poolformer_m36', 'regnety_002',
+    'repvgg_a2', 'res2net101_26w_4s', 'res2net50_14w_8s', 'res2next50', 'resmlp_12_224',
+    'resnest101e', 'rexnet_100', 'sebotnet33ts_256', 'selecsls42b', 'spnasnet_100',
+    'swin_base_patch4_window7_224', 'swsl_resnext101_32x16d', 'tf_efficientnet_b0',
+    'tf_mixnet_l', 'tinynet_a', 'tnt_s_patch16_224', 'twins_pcpvt_base', 'visformer_small',
+    'vit_base_patch14_dinov2', 'vit_base_patch16_224', 'vit_base_patch16_siglip_256',
+    'volo_d1_224', 'xcit_large_24_p8_224', 'timm_vision_transformer', 'timm_vision_transformer_large'
+]
+
+TORCHBENCH_MODELS = [
+    'BERT_pytorch', 'Background_Matting', 'LearningToPaint', 'alexnet', 'dcgan',
+    'densenet121', 'mnasnet1_0', 'mobilenet_v2', 'mobilenet_v3_large',
+    'nvidia_deeprecommender', 'pytorch_unet', 'resnet18', 'resnet50',
+    'resnext50_32x4d', 'shufflenet_v2_x1_0', 'squeezenet1_1', 'vgg16'
+]
+
+def identify_benchmark(model_name):
+    """Identify benchmark from model name"""
+    model_lower = model_name.lower()
+    
+    for m in HUGGINGFACE_MODELS:
+        if m.lower() in model_lower or model_lower in m.lower():
+            return 'huggingface'
+    
+    for m in TIMM_MODELS:
+        if m.lower() in model_lower or model_lower in m.lower():
+            return 'timm'
+    
+    for m in TORCHBENCH_MODELS:
+        if m.lower() in model_lower or model_lower in m.lower():
+            return 'torchbench'
+    
+    return 'unknown'
+
+def extract_e2e_reproducer(body, title):
+    """Extract reproducer command from issue body"""
+    text = f"{title} {body}"
+    
+    reproducer_lines = []
+    
+    # Look for code blocks with commands (between ``` and ```)
+    if '```' in text:
+        parts = text.split('```')
+        for i, part in enumerate(parts):
+            # Code blocks are odd-indexed (1, 3, 5, ...)
+            if i % 2 == 1:  # This is a code block content
+                part_stripped = part.strip()
+                if part_stripped:
+                    lines = part_stripped.split('\n')
+                    for line in lines:
+                        line_stripped = line.strip()
+                        # Look for actual commands (python, pytest, etc.)
+                        if line_stripped and (line_stripped.startswith(('python', 'pytest', 'XPU_', './')) or 'python' in line_stripped.lower()):
+                            if not line_stripped.startswith('#'):
+                                reproducer_lines.append(line_stripped)
+                    # If we found a command, use it
+                    if reproducer_lines:
+                        break
+    
+    # Also look for command patterns without code blocks
+    if not reproducer_lines:
+        # Look for python or pytest command patterns
+        cmd_patterns = [
+            r'(pytest\s+[^\n]+)',
+            r'(python\s+test/[^\n]+)',
+            r'(python\s+-m\s+pytest[^\n]+)',
+            r'(XPU_QUANT_CONFIG=[^\n]+python[^\n]+)',
+            r'(python\s+benchmarks/dynamo/[^\n]+)',
+            r'(python\s+[^\n]+run_benchmark[^\n]+)',
+        ]
+        
+        for pattern in cmd_patterns:
+            matches = re.findall(pattern, text)
+            for match in matches:
+                reproducer_lines.append(match.strip())
+    
+    if not reproducer_lines:
+        # Generic reproducer from title
+        return title[:200]
+    
+    # Join and limit to 3 lines
+    return '\n'.join(reproducer_lines[:3])
+
+
+def parse_e2e_info(body, title):
+    """Parse e2e benchmark information from issue body"""
+    e2e_info = []
+    
+    text = f"{title} {body}"
+    
+    # Get reproducer
+    reproducer = extract_e2e_reproducer(body, title)
+    
+    # Check for model names in title or body
+    all_model_names = HUGGINGFACE_MODELS + TIMM_MODELS + TORCHBENCH_MODELS
+    
+    # Extract phase (training/inference)
+    phase = 'inference'
+    if 'training' in text.lower():
+        phase = 'training'
+    elif 'train' in text.lower():
+        phase = 'training'
+    
+    # Extract dtype
+    dtype = 'float32'
+    dtype_patterns = [
+        (r'bfloat16|bf16', 'bfloat16'),
+        (r'float16|fp16', 'float16'),
+        (r'float32|fp32', 'float32'),
+        (r'int8|int\s*8', 'int8'),
+    ]
+    for pattern, dt in dtype_patterns:
+        if re.search(pattern, text, re.IGNORECASE):
+            dtype = dt
+            break
+    
+    # Extract test type
+    test_type = 'accuracy'
+    if 'throughputs' in text.lower() or 'performance' in text.lower() or 'latency' in text.lower():
+        test_type = 'performance'
+    
+    # Extract backend
+    backend = 'inductor'
+    if '--backend=(\w+)' in text:
+        match = re.search(r'--backend=(\w+)', text)
+        if match:
+            backend = match.group(1)
+    elif 'eager' in text.lower():
+        backend = 'eager'
+    elif 'inductor' in text.lower():
+        backend = 'inductor'
+    
+    # Extract disable-cudagraphs
+    disable_cudagraphs = 'no'
+    if 'disable-cudagraphs' in text.lower() or 'disable_cudagraphs' in text.lower():
+        disable_cudagraphs = 'yes'
+    
+    # Find model in body - need exact model name, not partial match
+    found_models = set()
+    for model in all_model_names:
+        # Use word boundary to avoid partial matches
+        if re.search(r'\b' + re.escape(model.lower()) + r'\b', text.lower()):
+            benchmark = identify_benchmark(model)
+            if benchmark != 'unknown' and model not in found_models:
+                found_models.add(model)
+                e2e_info.append({
+                    'reproducer': reproducer,
+                    'benchmark': benchmark,
+                    'model': model,
+                    'phase': phase,
+                    'dtype': dtype,
+                    'test_type': test_type,
+                    'backend': backend,
+                    'disable_cudagraphs': disable_cudagraphs,
+                })
+    
+    # If no specific model found but looks like e2e issue
+    if not e2e_info:
+        if 'benchmark' in text.lower() or 'huggingface' in text.lower() or 'timm' in text.lower() or 'torchbench' in text.lower():
+            # Try to identify benchmark from context
+            if 'hf_' in text.lower() or 'huggingface' in text.lower():
+                benchmark = 'huggingface'
+            elif 'timm_' in text.lower() or 'timm.' in text.lower():
+                benchmark = 'timm'
+            elif 'torchbench' in text.lower():
+                benchmark = 'torchbench'
+            else:
+                benchmark = 'unknown'
+            
+            e2e_info.append({
+                'reproducer': reproducer,
+                'benchmark': benchmark,
+                'model': 'unknown',
+                'phase': phase,
+                'dtype': dtype,
+                'test_type': test_type,
+                'backend': backend,
+                'disable_cudagraphs': disable_cudagraphs,
+            })
+    
+    return e2e_info
+
+# Test case patterns and torch_ops (from previous version)
 TEST_CASE_OPS = {
     'test_alias': 'aten.alias',
     'test_retain_autograd': 'aten.retain_autograd',
@@ -53,8 +265,6 @@ TEST_CASE_OPS = {
     'test_scaled_dot_product': 'aten.scaled_dot_product_attention',
     'test_sdpa': 'aten.scaled_dot_product_attention',
     'test_flash_attention': 'aten._flash_attention_forward',
-    'test_cudnn_attention': 'scaled_dot_product_attention',
-    'test_cudnn': 'scaled_dot_product_attention',
     'test_index_add': 'aten.index_add',
     'test_index_copy': 'aten.index_copy',
     'test_gather': 'aten.gather',
@@ -91,12 +301,8 @@ TEST_CASE_OPS = {
     'test_tensor': 'aten.tensor',
     'test_as_tensor': 'aten.as_tensor',
     'test_from_numpy': 'aten.from_numpy',
-    'test_sparse': 'aten.sparse',
+    'test_sparse': 'sparse',
     'test_coalesce': 'aten.coalesce',
-    'test_indices': 'aten.indices',
-    'test_values': 'aten.values',
-    'test_to_dense': 'aten.to_dense',
-    'test_to_sparse': 'aten.to_sparse',
     'test_pdist': 'aten.pdist',
     'test_cdist': 'aten.cdist',
     'test_triangular_solve': 'aten.triangular_solve',
@@ -110,10 +316,8 @@ TEST_CASE_OPS = {
     'test_eigh': 'aten.linalg_eigh',
     'test_svd': 'aten.linalg_svd',
     'test_lu': 'aten.linalg_lu',
-    
-    # Additional ops from traceback/errors - MORE SPECIFIC patterns first!
-    'test_block_addmv': 'torch.addmv',  # More specific before test_block
-    'test_block_addmm': 'torch.addmm',  # More specific before test_block
+    'test_block_addmv': 'torch.addmv',
+    'test_block_addmm': 'torch.addmm',
     'test_block_triangular_solve': 'aten.triangular_solve.X',
     'test_scaled_dot_product': 'scaled_dot_product_attention',
     'test_sdpa': 'scaled_dot_product_attention',
@@ -121,7 +325,7 @@ TEST_CASE_OPS = {
     'test_triton_bsr': 'triton_bsr',
     'test_triton_scaled': 'triton_scaled_dot_product_attention',
     'test_triton': 'triton',
-    'test_block': 'torch.addmm',  # Generic block tests (fallback)
+    'test_block': 'torch.addmm',
     'test_baddbmm': 'aten.baddbmm',
     'test_bmm': 'aten.bmm',
     'test_mm': 'aten.mm',
@@ -135,9 +339,7 @@ TEST_CASE_OPS = {
     'test_conv': 'aten.conv',
     'test_conv2d': 'aten.conv2d',
     'test_conv_transpose': 'aten.conv_transpose',
-    'test_norm': 'aten.layer_norm',  # generic norm tests
-    
-    # Direct aten/torch op mentions in traceback
+    'test_norm': 'aten.layer_norm',
     'index_add': 'aten.index_add',
     'index_copy': 'aten.index_copy',
     'layer_norm': 'aten.layer_norm',
@@ -169,7 +371,6 @@ TEST_CASE_OPS = {
     'det': 'aten.linalg_det',
 }
 
-# Direct op name patterns (for traceback without aten. prefix)
 DIRECT_OPS = [
     'scaled_dot_product_attention',
     '_flash_attention_forward',
@@ -202,89 +403,69 @@ DIRECT_OPS = [
     'solve',
 ]
 
-# Infer torch ops from test case name, error message, and traceback
 def infer_torch_ops_from_test_case(test_case, body, error_msg="", traceback=""):
     ops = []
     all_text = f"{test_case} {body} {error_msg} {traceback}".lower()
     full_text = f"{test_case} {body} {error_msg} {traceback}"
     
     if not test_case:
-        # Try to infer from error/traceback only
         for direct_op in DIRECT_OPS:
             if direct_op.lower() in all_text:
                 ops.append(direct_op)
                 break
         return ops
     
-    # Check test case name patterns first
     test_case_lower = test_case.lower()
     for pattern, op in TEST_CASE_OPS.items():
         if pattern in test_case_lower:
             ops.append(op)
             break
     
-    # If no match from test case, check error message and traceback
     if not ops:
         for pattern, op in TEST_CASE_OPS.items():
             if pattern in all_text:
                 ops.append(op)
                 break
     
-    # Also check for direct aten/torch op mentions in error/traceback
     if not ops:
         for direct_op in DIRECT_OPS:
             if direct_op.lower() in all_text:
                 ops.append(direct_op)
                 break
     
-    # Check for aten.xxx pattern (including aten:: and aten.X patterns)
-    # Matches: aten.index_add, aten::triangular_solve.X, aten::_scaled_dot_product_efficient_attention_backward
-    aten_pattern = re.findall(r'aten::([^\s\'"]+)', full_text)
-    for a_op in aten_pattern:
-        # Clean up - remove leading underscores or trailing .X
-        clean_op = a_op.strip()
-        if clean_op.startswith('_'):
-            full_op = f'aten::{clean_op}'
-        elif '.' in clean_op:
-            # Handle aten.triangular_solve.X or aten::triangular_solve.X
-            full_op = f'aten.{clean_op}'
-        else:
-            full_op = f'aten.{clean_op}'
-        if full_op not in ops:
-            ops.append(full_op)
+    if not ops:
+        aten_pattern = re.findall(r'aten::([^\s\'"]+)', full_text)
+        for a_op in aten_pattern:
+            clean_op = a_op.strip()
+            if clean_op.startswith('_'):
+                full_op = f'aten::{clean_op}'
+            elif '.' in clean_op:
+                full_op = f'aten.{clean_op}'
+            else:
+                full_op = f'aten.{clean_op}'
+            if full_op not in ops:
+                ops.append(full_op)
     
-    # Also check standard aten.xxx pattern
-    aten_pattern2 = re.findall(r'aten\.(\w+)', full_text)
-    for a_op in aten_pattern2:
-        full_op = f'aten.{a_op}'
-        if full_op not in ops:
-            ops.append(full_op)
-    
-    # Check for torch.xxx pattern  
-    torch_pattern = re.findall(r'torch\.(\w+)\(', full_text)
-    for t_op in torch_pattern:
-        full_op = f'torch.{t_op}'
-        if full_op not in ops:
-            ops.append(full_op)
+    if not ops:
+        aten_pattern2 = re.findall(r'aten\.(\w+)', full_text)
+        for a_op in aten_pattern2:
+            full_op = f'aten.{a_op}'
+            if full_op not in ops:
+                ops.append(full_op)
     
     return ops
 
 def map_origin_test_file(test_file):
-    """Map torch-xpu-ops test file to pytorch test file"""
     if not test_file:
         return ""
-    
     match = re.search(r'test/xpu/(.+?)(?:_xpu)?\.py$', test_file)
     if match:
         return f"test/{match.group(1)}.py"
-    
     if 'benchmarks/' in test_file:
         return test_file
-    
     return test_file
 
 def parse_test_cases_from_body(body):
-    """Parse test cases from body, skip wrapped with ~~"""
     cases = []
     
     if 'Cases:' in body:
@@ -368,7 +549,6 @@ def parse_test_cases_from_body(body):
                 'test_case': test_case
             })
     
-    # Format 2: e2e benchmark
     if 'benchmarks/dynamo/' in body:
         matches = re.findall(r'(python\s+benchmarks/dynamo/[^\s]+)', body)
         for match in matches:
@@ -381,7 +561,6 @@ def parse_test_cases_from_body(body):
                 'test_case': match.strip()
             })
     
-    # Format 3: pytest command
     if 'pytest' in body:
         k_match = re.search(r'pytest[^-]*(-k\s+[^\s]+)?', body)
         if k_match and k_match.group(1):
@@ -396,7 +575,6 @@ def parse_test_cases_from_body(body):
     return cases
 
 def extract_error_and_traceback(body):
-    """Extract error message and full traceback"""
     error_msg = ""
     traceback = ""
     
@@ -452,7 +630,6 @@ def extract_error_and_traceback(body):
     return error_msg, traceback
 
 def generate_summary(body, title, error_msg):
-    """Generate a 1-2 sentence summary"""
     if 'Error' in title or 'Exception' in title:
         match = re.search(r'(Error|Exception):\s*(.+)', title)
         if match:
@@ -463,16 +640,13 @@ def generate_summary(body, title, error_msg):
         return title[:150]
 
 def classify_issue_type(body, title, labels):
-    """Classify issue type with more precise rules"""
     text = f"{title} {body}".lower()
     
-    # Check labels first
     for label in labels:
         ln = label.get('name', '').lower()
         if 'task' == ln or 'internal task' in ln:
             return 'internal task'
     
-    # Check for explicit performance keywords
     performance_keywords = [
         'performance regression', 'performance dropped', 'performance issue',
         'latency', 'throughput', 'slow performance', 'performance slow',
@@ -481,7 +655,6 @@ def classify_issue_type(body, title, labels):
     
     has_performance_keyword = any(k in text for k in performance_keywords)
     
-    # Check for bug/error keywords
     bug_keywords = [
         'assertionerror', 'runtimeerror', 'valueerror', 'typeerror', 'indexerror',
         'keyerror', 'importerror', 'notimplementederror', 'attributeerror',
@@ -491,11 +664,9 @@ def classify_issue_type(body, title, labels):
     
     has_bug_keyword = any(k in text for k in bug_keywords)
     
-    # Check for feature request
     feature_keywords = ['feature request', 'support for', 'implement', 'add support', 'need feature']
     has_feature_keyword = any(k in text for k in feature_keywords)
     
-    # Determine type with priority
     if has_feature_keyword:
         return 'feature request'
     
@@ -507,18 +678,67 @@ def classify_issue_type(body, title, labels):
     
     return 'unknown'
 
-def classify_test_module(body, title, labels):
-    """Classify test module with more precise rules"""
+def is_e2e_issue(body, title, labels):
+    """Check if issue is related to E2E benchmark"""
     text = f"{title} {body}".lower()
     
-    # Check for pytest or python test command on pytorch/test or test/xpu/test
-    # or benchmark tests (e2e)
+    # Check labels first - only exact 'e2e' label
+    for label in labels:
+        ln = label.get('name', '').lower()
+        if ln == 'e2e':
+            return True
+    
+    # Check for specific E2E benchmark paths (not just the word 'benchmark')
+    e2e_patterns = [
+        r'benchmarks/dynamo/',           # torch-xpu-ops benchmark scripts
+        r'benchmarks/timm/',             # timm benchmark
+        r'benchmarks/huggingface/',     # huggingface benchmark
+        r'benchmarks/torchbench/',      # torchbench benchmark
+        r'run_benchmark\.py',            # torchbenchmark runner
+    ]
+    
+    for pattern in e2e_patterns:
+        if re.search(pattern, text):
+            return True
+    
+    # Check for model names from benchmark model lists with explicit benchmark framework mention
+    # Only for specific benchmark prefixes
+    benchmark_model_prefixes = ['hf_', 'timm_']  # e.g., hf_Albert, timm_resnet50
+    
+    has_model = False
+    has_benchmark_context = False
+    
+    for prefix in benchmark_model_prefixes:
+        if prefix in text:
+            has_model = True
+            break
+    
+    # Must have explicit benchmark framework mention (as test framework)
+    if has_model:
+        benchmark_paths = ['benchmarks/dynamo', 'run_benchmark', 'torchbenchmark', 'benchmark.py']
+        for kw in benchmark_paths:
+            if kw in text:
+                has_benchmark_context = True
+                break
+    
+    if has_model and has_benchmark_context:
+        return True
+    
+    return False
+
+
+def classify_test_module(body, title, labels):
+    text = f"{title} {body}".lower()
+    
+    # Check if it's an E2E issue first
+    if is_e2e_issue(body, title, labels):
+        return 'e2e'
+    
     pytest_patterns = [
-        r'pytest\s+.*test[/._]',  # pytest on test file
-        r'python\s+.*test[/._]',   # python test file
-        r'test/test_',            # pytorch test folder
-        r'test/xpu/test_',         # xpu test folder
-        r'benchmarks/dynamo/',    # e2e benchmark
+        r'pytest\s+.*test[/._]',
+        r'python\s+.*test[/._]',
+        r'test/test_',
+        r'test/xpu/test_',
     ]
     
     has_test_pattern = False
@@ -527,8 +747,6 @@ def classify_test_module(body, title, labels):
             has_test_pattern = True
             break
     
-    # Check for build related keywords - ONLY for source code/build process issues
-    # These are specific build-related patterns, not general test failures
     build_patterns = [
         r'\[win\]\[build\]',
         r'build from source',
@@ -547,21 +765,18 @@ def classify_test_module(body, title, labels):
     
     has_build = any(re.search(p, text, re.IGNORECASE) for p in build_patterns)
     
-    # Check for infrastructure - ONLY for CI/workflow infrastructure issues
-    # Must be about the infrastructure itself, not just mentioning it in test failures
     infra_patterns = [
-        r'workflow\s+(error|fail|issue|problem)',  # workflow error
-        r'github\s+action\s+(error|fail|issue)',  # github action issue
-        r'azure\s+pipeline\s+(error|fail)',      # azure pipeline issue
-        r'ci\s+(runner|config|setup)\s+(error|fail)',  # CI runner/config issue
-        r'runner\s+(error|fail|timeout)\s+in\s+ci',      # runner issue in CI
-        r'checkout\s+(error|fail)\s+in\s+(workflow|ci)', # checkout action issue
-        r'githubaction',                            # github action issue
+        r'workflow\s+(error|fail|issue|problem)',
+        r'github\s+action\s+(error|fail|issue)',
+        r'azure\s+pipeline\s+(error|fail)',
+        r'ci\s+(runner|config|setup)\s+(error|fail)',
+        r'runner\s+(error|fail|timeout)\s+in\s+ci',
+        r'checkout\s+(error|fail)\s+in\s+(workflow|ci)',
+        r'githubaction',
     ]
     
     has_infra = any(re.search(p, text) for p in infra_patterns)
     
-    # Also check labels for infrastructure
     for label in labels:
         ln = label.get('name', '').lower()
         if 'infrastructure' in ln and ('ci' in ln or 'workflow' in ln or 'action' in ln):
@@ -579,11 +794,9 @@ def classify_test_module(body, title, labels):
             return 'e2e'
         return 'ut'
     
-    # Default to ut for most test failures
     return 'ut'
 
 def classify_module(body, title, labels):
-    """Classify module based on content"""
     text = f"{title} {body}".lower()
     
     module_keywords = [
@@ -603,7 +816,6 @@ def classify_module(body, title, labels):
         if any(k in text for k in kw):
             return m
     
-    # Check labels
     for label in labels:
         ln = label.get('name', '').lower()
         if 'module: distributed' in ln:
@@ -618,7 +830,6 @@ def classify_module(body, title, labels):
     return 'unknown'
 
 def get_dependency_from_body(body):
-    """Get dependency from body content"""
     text = body.lower()
     
     dep_keywords = [
@@ -641,6 +852,7 @@ def get_dependency_from_body(body):
 # Create Excel
 wb = openpyxl.Workbook()
 
+# Sheet 1: Issues
 ws_issues = wb.active
 ws_issues.title = "Issues"
 
@@ -653,6 +865,7 @@ for col, header in enumerate(headers, 1):
     cell.font = Font(bold=True, color="FFFFFF")
     cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
 
+# Sheet 2: Test Cases (ut)
 ws_cases = wb.create_sheet("Test Cases")
 
 case_headers = ["Issue ID", "Test Reproducer", "Test Type", "Test File", 
@@ -664,8 +877,20 @@ for col, header in enumerate(case_headers, 1):
     cell.font = Font(bold=True, color="FFFFFF")
     cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
 
+# Sheet 3: E2E Test Cases
+ws_e2e = wb.create_sheet("E2E Test Cases")
+
+e2e_headers = ["Issue ID", "Test Reproducer", "Benchmark", "Model", "Phase", "Dtype", 
+               "Backend", "Test Type", "Cudagraph", "Error Message", "Traceback"]
+
+for col, header in enumerate(e2e_headers, 1):
+    cell = ws_e2e.cell(row=1, column=col, value=header)
+    cell.font = Font(bold=True, color="FFFFFF")
+    cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+
 issue_row = 2
 case_row = 2
+e2e_row = 2
 
 for issue in issues:
     num = issue['number']
@@ -682,7 +907,6 @@ for issue in issues:
     milestone = issue.get('milestone', {})
     milestone_name = milestone.get('title', 'None') if milestone else 'None'
     
-    # Classify
     issue_type = classify_issue_type(body, title, labels)
     module = classify_module(body, title, labels)
     test_module = classify_test_module(body, title, labels)
@@ -706,11 +930,21 @@ for issue in issues:
     ws_issues.cell(row=issue_row, column=13, value=test_module)
     ws_issues.cell(row=issue_row, column=14, value=dependency)
     
+    # Parse test cases and e2e info
     test_cases = parse_test_cases_from_body(body)
     
+    # Only parse e2e info if it's actually an e2e issue
+    e2e_info = []
+    if test_module == 'e2e':
+        e2e_info = parse_e2e_info(body, title)
+    
+    # Add to test cases sheet (non-e2e)
     if test_cases:
         for tc in test_cases:
-            # Infer torch ops from test case, error message, and traceback
+            # Skip e2e cases - they go to e2e sheet
+            if tc.get('test_type') == 'e2e':
+                continue
+                
             test_case = tc.get('test_case', '')
             torch_ops = infer_torch_ops_from_test_case(test_case, body, error_msg, traceback)
             
@@ -737,15 +971,31 @@ for issue in issues:
             ws_cases.cell(row=case_row, column=10, value=", ".join(torch_ops))
             ws_cases.cell(row=case_row, column=11, value=case_dep)
             case_row += 1
-    else:
-        if error_msg:
-            ws_cases.cell(row=case_row, column=1, value=num)
-            ws_cases.cell(row=case_row, column=2, value=title[:150])
-            ws_cases.cell(row=case_row, column=8, value=error_msg)
-            ws_cases.cell(row=case_row, column=9, value=traceback)
-            ws_cases.cell(row=case_row, column=10, value="unknown")
-            ws_cases.cell(row=case_row, column=11, value="sycl")
-            case_row += 1
+    
+    # Add to e2e sheet
+    if e2e_info:
+        for info in e2e_info:
+            reproducer = info.get('reproducer', title[:150])
+            ws_e2e.cell(row=e2e_row, column=1, value=num)
+            ws_e2e.cell(row=e2e_row, column=2, value=reproducer[:200] if reproducer else title[:150])
+            ws_e2e.cell(row=e2e_row, column=3, value=info.get('benchmark', ''))
+            ws_e2e.cell(row=e2e_row, column=4, value=info.get('model', ''))
+            ws_e2e.cell(row=e2e_row, column=5, value=info.get('phase', ''))
+            ws_e2e.cell(row=e2e_row, column=6, value=info.get('dtype', ''))
+            ws_e2e.cell(row=e2e_row, column=7, value=info.get('backend', ''))
+            ws_e2e.cell(row=e2e_row, column=8, value=info.get('test_type', ''))
+            ws_e2e.cell(row=e2e_row, column=9, value=info.get('disable_cudagraphs', ''))
+            ws_e2e.cell(row=e2e_row, column=10, value=error_msg)
+            ws_e2e.cell(row=e2e_row, column=11, value=traceback)
+            e2e_row += 1
+    elif test_module == 'e2e':
+        # Add e2e issues without specific model info
+        ws_e2e.cell(row=e2e_row, column=1, value=num)
+        ws_e2e.cell(row=e2e_row, column=2, value=title[:150])
+        ws_e2e.cell(row=e2e_row, column=3, value='unknown')
+        ws_e2e.cell(row=e2e_row, column=10, value=error_msg)
+        ws_e2e.cell(row=e2e_row, column=11, value=traceback)
+        e2e_row += 1
     
     issue_row += 1
     
@@ -754,8 +1004,9 @@ for issue in issues:
 
 print(f"\nTotal issues: {issue_row-2}")
 print(f"Total test case rows: {case_row-2}")
+print(f"Total e2e case rows: {e2e_row-2}")
 
-for ws in [ws_issues, ws_cases]:
+for ws in [ws_issues, ws_cases, ws_e2e]:
     for col in ws.columns:
         max_length = 0
         col_letter = col[0].column_letter

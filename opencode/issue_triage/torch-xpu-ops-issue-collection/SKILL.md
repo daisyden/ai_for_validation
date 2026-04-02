@@ -86,14 +86,36 @@ Follow these rules in order:
 - **Error Message**: Match patterns like `AssertionError`, `RuntimeError`, `ValueError`, `TypeError`, `IndexError`, `KeyError`, `ImportError`, `NotImplementedError`, `AttributeError`, `InductorError`
 - **Traceback**: Extract full trace starting from "Traceback (most recent call last):" or pytest format `____ TestXXX.XXX`
 
-### Step 7: Create Excel Files
-Create Excel with two sheets:
+### Step 7: Parse E2E Test Cases
+E2E test cases are benchmark tests from huggingface, timm, or torchbench. Model lists can be found at:
+- https://github.com/intel/torch-xpu-ops/tree/main/.ci/benchmarks
+
+**Model Lists:**
+- **Huggingface**: AlbertForMaskedLM, BertForMaskedLM, GPT2ForSequenceClassification, XLNetLMHeadModel, hf_Albert, hf_Bert, etc.
+- **TIMM**: adv_inception_v3, convnext_base, resnet50, vit_base_patch16_224, timm_vision_transformer, etc.
+- **Torchbench**: BERT_pytorch, resnet18, resnet50, vgg16, etc.
+
+**Parse E2E Info from Issue Body:**
+Extract the following fields:
+1. **Benchmark**: huggingface, timm, or torchbench (identified from model name)
+2. **Phase**: training or inference
+3. **Dtype**: bfloat16, float16, float32, int8 (from keywords in body)
+4. **Test Type**: accuracy or performance (from throughputs/performance/latency keywords)
+5. **Backend**: inductor or eager (from --backend flag or context)
+6. **Cudagraph**: yes or no (from disable-cudagraphs flag)
+7. **Reproducer**: command to reproduce
+
+### Step 8: Create Excel Files
+Create Excel with three sheets:
 
 **Sheet 1: Issues**
 Columns: Issue ID, Title, Status, Assignee, Reporter, Labels, Created Time, Updated Time, Milestone, Summary, Type, Module, Test Module, Dependency
 
-**Sheet 2: Test Cases**
+**Sheet 2: Test Cases (UT)**
 Columns: Issue ID, Test Reproducer, Test Type, Test File, Origin Test File, Test Class, Test Case, Error Message, Traceback, torch-ops, dependency
+
+**Sheet 3: E2E Test Cases**
+Columns: Issue ID, Test Reproducer, Benchmark, Phase, Dtype, Backend, Test Type, Cudagraph, Error Message, Traceback
 
 ## File Outputs
 - `/home/daisydeng/issue_traige/data/torch_xpu_ops_issues.json` - Raw issue data
