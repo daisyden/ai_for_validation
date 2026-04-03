@@ -109,7 +109,7 @@ Extract the following fields:
 Create Excel with three sheets:
 
 **Sheet 1: Issues**
-Columns: Issue ID, Title, Status, Assignee, Reporter, Labels, Created Time, Updated Time, Milestone, Summary, Type, Module, Test Module, Dependency
+Columns: Issue ID, Title, Status, Assignee, Reporter, Labels, Created Time, Updated Time, Milestone, Summary, Type, Module, Test Module, Dependency, **PR, PR Owner, PR Status**
 
 **Sheet 2: Test Cases (UT)**
 Columns: Issue ID, Test Reproducer, Test Type, Test File, Origin Test File, Test Class, Test Case, Error Message, Traceback, torch-ops, dependency
@@ -117,19 +117,49 @@ Columns: Issue ID, Test Reproducer, Test Type, Test File, Origin Test File, Test
 **Sheet 3: E2E Test Cases**
 Columns: Issue ID, Test Reproducer, Benchmark, Phase, Dtype, Backend, Test Type, Cudagraph, Error Message, Traceback
 
+### Step 9: Extract PR Information (New)
+For each issue, extract PR information from the issue body and comments:
+
+1. **Extract PR references**: Parse PR URLs and PR numbers from issue body using patterns:
+   - `https://github.com/pytorch/pytorch/pull/172314`
+   - `https://github.com/intel/torch-xpu-ops/pull/1047`
+   - `PR #1234` or `PR1234`
+   - `pull request #1234`
+
+2. **Get PR details from GitHub API**: For each PR number found:
+   - Fetch PR info from `https://api.github.com/repos/pytorch/pytorch/pulls/{pr_number}`
+   - Get PR state (open, closed, merged)
+   - Get PR owner (user login)
+   - Get PR URL
+
+3. **Add PR columns to Issues sheet**:
+   - **PR**: Comma-separated list of PR URLs
+   - **PR Owner**: Comma-separated list of PR owners
+   - **PR Status**: Comma-separated list of PR states
+
+**Example**:
+- Issue https://github.com/intel/torch-xpu-ops/issues/2331 mentions PR https://github.com/pytorch/pytorch/pull/172314
+- The script will extract PR #172314, fetch its status (closed), and owner
+- Columns will show:
+  - PR: https://github.com/pytorch/pytorch/pull/172314
+  - PR Owner: username
+  - PR Status: closed
+
 ## File Outputs
 - `/home/daisydeng/issue_traige/data/torch_xpu_ops_issues.json` - Raw issue data
 - `/home/daisydeng/issue_traige/data/torch_xpu_ops_comments.json` - Comments data
-- `/home/daisydeng/issue_traige/data/torch_xpu_ops_issues.xlsx` - Final Excel file
+- `/home/daisydeng/issue_traige/data/torch_xpu_ops_issues.xlsx` - Final Excel file with PR columns
 
 ## Key Implementation Notes
-1. Use GitHub token for API authentication
+1. Use GitHub token for API authentication (set GITHUB_TOKEN environment variable)
 2. Filter out pull requests (check for 'pull_request' key)
 3. Skip test cases wrapped with `~~` (fixed)
 4. Only classify as 'build' for actual build process issues
 5. Only classify as 'infrastructure' for CI/workflow issues
 6. Use specific patterns before generic ones for torch_ops
 7. Extract both aten:: and torch. patterns from error messages
+8. Extract PR URLs from issue body and comments using regex patterns
+9. Fetch PR status and owner from GitHub API for each extracted PR
 
 ## Related Files
 - `~/issue_traige/doc/ops_dependency.csv` - Mapping of torch ops to dependency libraries

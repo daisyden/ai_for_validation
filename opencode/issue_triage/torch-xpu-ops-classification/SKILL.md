@@ -113,13 +113,33 @@ Extract the following fields:
 Create Excel with three sheets:
 
 **Sheet 1: Issues**
-Columns: Issue ID, Title, Status, Assignee, Reporter, Labels, Created Time, Updated Time, Milestone, Summary, Type, Module, Test Module, Dependency
+Columns: Issue ID, Title, Status, Assignee, Reporter, Labels, Created Time, Updated Time, Milestone, Summary, Type, Module, Test Module, Dependency, **PR, PR Owner, PR Status**
 
 **Sheet 2: Test Cases (UT)**
 Columns: Issue ID, Test Reproducer, Test Type, Test File, Origin Test File, Test Class, Test Case, Error Message, Traceback, torch-ops, dependency
 
 **Sheet 3: E2E Test Cases**
 Columns: Issue ID, Test Reproducer, Benchmark, Phase, Dtype, Backend, Test Type, Cudagraph, Error Message, Traceback
+
+#### Step 9: Extract PR Information (New)
+For each issue, extract PR information from the issue body and comments:
+
+1. **Extract PR references**: Parse PR URLs and PR numbers from issue body using patterns:
+   - `https://github.com/pytorch/pytorch/pull/172314`
+   - `https://github.com/intel/torch-xpu-ops/pull/1047`
+   - `PR #1234` or `PR1234`
+   - `pull request #1234`
+
+2. **Get PR details from GitHub API**: For each PR number found:
+   - Fetch PR info from `https://api.github.com/repos/pytorch/pytorch/pulls/{pr_number}`
+   - Get PR state (open, closed, merged)
+   - Get PR owner (user login)
+   - Get PR URL
+
+3. **Add PR columns to Issues sheet**:
+   - **PR**: Comma-separated list of PR URLs
+   - **PR Owner**: Comma-separated list of PR owners
+   - **PR Status**: Comma-separated list of PR states
 
 ### Phase 2: Improve torch-ops Classification
 
