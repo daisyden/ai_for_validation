@@ -247,6 +247,29 @@ def extract_from_error_or_traceback(text):
 - Keep other columns unchanged
 - Save the updated Excel file
 
+### Phase 3: Convert Test File Paths
+
+#### Step 11: Convert Dot-Separated Test Files to Path Format
+Convert test file references from dot-separated format to path format based on file existence in pytorch/test/ and torch-xpu-ops/test/xpu/ directories:
+
+**Pattern 1**: `test.test_xxx.py.TestClass` → `test_xxx.py` + `TestClass`
+- Example: `test.test_binary_ufuncs.py.TestBinaryUfuncsXPU` → `test_binary_ufuncs.py` + `TestBinaryUfuncsXPU`
+
+**Pattern 2**: `test.dynamo.test_xxx.TestClass` → `dynamo/test_xxx.py` + `TestClass`
+- Example: `test.dynamo.test_ctx_manager.CtxManagerTests` → `dynamo/test_ctx_manager.py` + `CtxManagerTests`
+
+**Pattern 3**: `test.inductor.test_xxx.TestClass` → `inductor/test_xxx.py` + `TestClass`
+- Example: `test.inductor.test_unbacked_symints.TestUnbackedSymintsXPU` → `inductor/test_unbacked_symints.py` + `TestUnbackedSymintsXPU`
+
+**Pattern 4**: `inductor.test_xxx.TestClass` → `inductor/test_xxx.py` + `TestClass`
+- Example: `inductor.test_torchinductor_opinfo.TestInductorOpInfoXPU` → `inductor/test_torchinductor_opinfo.py` + `TestInductorOpInfoXPU`
+
+**Pattern 5**: `test_torch_xpu.TestClass` → `torch-xpu-ops/test/xpu/test_torch_xpu.py` + `TestClass`
+- Example: `test_torch_xpu.TestTorchDeviceTypeXPU` → `torch-xpu-ops/test/xpu/test_torch_xpu.py` + `TestTorchDeviceTypeXPU`
+
+**Pattern 6**: `test.test_xxx.TestClass` (no .py in module) → `test/test_xxx.py` + `TestClass`
+- Example: `test.test_fake_tensor.FakeTensorTest` → `test/test_fake_tensor.py` + `FakeTensorTest`
+
 ## File Outputs
 - `/home/daisydeng/issue_traige/data/torch_xpu_ops_issues.json` - Raw issue data
 - `/home/daisydeng/issue_traige/data/torch_xpu_ops_comments.json` - Comments data
@@ -262,6 +285,7 @@ def extract_from_error_or_traceback(text):
 7. Extract both aten:: and torch. patterns from error messages
 8. Error message patterns with `.default` take highest priority in Phase 2
 9. Generic categories like "ops", "tensor", "decomp" should be avoided - use specific torch op names
+10. For test file conversion, check file existence in both pytorch/test/ and torch-xpu-ops/test/xpu/ directories
 
 ## Implementation Scripts
 
