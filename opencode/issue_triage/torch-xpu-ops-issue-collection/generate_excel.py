@@ -3,17 +3,23 @@ import json
 import openpyxl
 from openpyxl.styles import Font, PatternFill
 import re
+import os
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(SCRIPT_DIR))))
+DATA_DIR = os.path.join(ROOT_DIR, "issue_traige", "data")
+DOC_DIR = os.path.join(ROOT_DIR, "issue_traige", "doc")
 
 # Load data
-with open("/home/daisydeng/issue_traige/data/torch_xpu_ops_issues.json") as f:
+with open(os.path.join(DATA_DIR, "torch_xpu_ops_issues.json")) as f:
     issues = json.load(f)
 
-with open("/home/daisydeng/issue_traige/data/torch_xpu_ops_comments.json") as f:
+with open(os.path.join(DATA_DIR, "torch_xpu_ops_comments.json")) as f:
     comments = json.load(f)
 
 # Load ops dependency
 ops_dep = {}
-with open("/home/daisydeng/issue_traige/doc/ops_dependency.csv") as f:
+with open(os.path.join(DOC_DIR, "ops_dependency.csv")) as f:
     next(f)
     for line in f:
         parts = line.strip().split(',')
@@ -1018,6 +1024,6 @@ for ws in [ws_issues, ws_cases, ws_e2e]:
                 pass
         ws.column_dimensions[col_letter].width = min(max_length + 2, 60)
 
-output_path = "/home/daisydeng/issue_traige/data/torch_xpu_ops_issues.xlsx"
+output_path = os.path.join(DATA_DIR, "torch_xpu_ops_issues.xlsx")
 wb.save(output_path)
 print(f"\nSaved to {output_path}")
