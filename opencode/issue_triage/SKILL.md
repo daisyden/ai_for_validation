@@ -1,69 +1,177 @@
-# Issue Triage Skill ## Description This skill helps with triaging PyTorch XPU issues by: 1. Getting test results from torch-xpu-ops nightly CI
-2. Getting test results from stock PyTorch XPU CI
-3. Analyzing case existence (checking if tests exist in pytorch/test and torch-xpu-ops/test/xpu)
-4. Extracting PR information from GitHub issue comments
+# Issue Triage Pipeline
 
-## When to Use
-- When asked to analyze test case results from torch-xpu-ops nightly CI
-- When asked to cross-reference with stock PyTorch XPU CI results
-- When asked to explain why test cases are not found (removed, renamed, parametrized, etc.)
-- When asked to extract PR information from GitHub issue comments
+## Overview
 
-## Sub-skills
+This pipeline processes PyTorch XPU issues through 4 steps to collect, extract, and analyze issue data and test results.
 
-### 1. Update Test Results (`update_test_results.py`)
-See separate documentation in that folder for details.
+## Pipeline Steps
 
-### 2. PR Extraction (`pr-extraction/`)
-See separate documentation in pr-extraction/SKILL.md for details.
+### Step 1: Issue Collection
+**Location**: `torch-xpu-ops-issue-collection/`
 
-## Files and Locations
+Collects GitHub issues from intel/torch-xpu-ops repository and extracts:
+- Issue basic info (ID, Title, Status, Assignee, Labels, etc.)
+- Test cases from issue body
+- PR references that fix the issue
 
-### Input Files
-- `~/issue_traige/data/torch_xpu_ops_issues.xlsx` - Excel file with test cases
-- `~/issue_traige/ci_results/torch-xpu-ops/` - torch-xpu-ops nightly CI artifacts
-- `~/issue_traige/ci_results/stock/` - stock PyTorch XPU CI artifacts
-- `~/pytorch/test/` - PyTorch test files
-- `~/pytorch/third_party/torch-xpu-ops/test/xpu/` - torch-xpu-ops test files
+**PR Extraction Logic**:
+- Only extracts PRs from fix context (e.g., "PR: https://...", "PR #1234", "fixed in PR")
+- For intel/torch-xpu-ops PRs: Skips if "Closed with unmerged commits"
+- For pytorch/pytorch PRs: Only includes if has "Merged" label
 
-### Output
-- Updated `~/issue_traige/data/torch_xpu_ops_issues.xlsx` with columns:
-  - K: status in torch-xpu-ops nightly
-  - L: comments in torch-xpu-ops nightly
-  - M: Commit
-  - N: Run_id
-  - O: XML file name
-  - P: status in stock CI
-  - Q: comments in stock CI
-  - R: cuda_case_exist (Yes/No)
-  - S: xpu_case_exist (Yes/No)
-  - T: case_existence_comments
+**Scripts**:
+- `generate_excel.py` - Main script to collect issues, test cases, and PRs
 
-## Usage
+**When to use**: 
+- When starting fresh to collect issues from GitHub
+- When need to update issue list from GitHub API
 
-### Run the script
+**Usage**:
 ```bash
-python3 ~/ai_for_validation/opencode/issue_triage/update_test_results.py
+cd ~/ai_for_validation/opencode/issue_triage/torch-xpu-ops-issue-collection
+python3 generate_excel.py
 ```
 
-### Key Concepts
+**Output**: `~/issue_traige/data/torch_xpu_ops_issues.xlsx`
 
-1. **torch-xpu-ops Nightly CI**: Tests run from torch-xpu-ops with XPUPatchForImport pattern
-   - XML files in: `Inductor-XPU-UT-Data-<commit>-op_ut-<run_id>-1/`
-   - File pattern: `op_ut_with_all.*.xml` or `op_ut_with_skip.*.xml`
+---
 
+### Step 2: Torch Ops Extraction
+**Location**: `torch-ops-extraction/`
+
+Extracts torch operation information from issue test cases to classify issues by operation type.
+
+**Scripts**:
+- `extract_torch_ops.py` - Analyzes test cases and extracts torch operations
+
+**When to use**:
+- After Step 1 to classify issues by operation
+- When need to add operation classification to issues
+
+**Usage**:
+```bash
+cd ~/ai_for_validation/opencode/issue_triage/torch-ops-extraction
+python3 extract_torch_ops.py ~/issue_traige/data/torch_xpu_ops_issues.xlsx
+```
+
+**Input**: Excel file from Step 1
+
+---
+
+### Step 3: PR Extraction
+**Location**: `pr-extraction/`
+
+Extracts PR references from GitHub issue comments with fix-related keywords and fetches PR status.
+
+**Scripts**:
+- `pr_extraction.py` - Main script to extract PRs from comments
+
+**When to use**:
+- After Step 1 or Step 2 to link issues to fixing PRs
+- When need to know if issues are fixed by merged PRs
+
+**Usage**:
+```bash
+cd ~/ai_for_validation/opencode/issue_triage/pr-extraction
+python3 pr_extraction.py ~/issue_traige/data/torch_xpu_ops_issues.xlsx
+```
+
+**Output**: Updates PR, PR Owner, PR Status columns in Issues sheet
+
+---
+
+### Step 4: Test Results Update
+**Location**: `update_test_results/`
+
+Gets test results from CI artifacts (torch-xpu-ops nightly and stock PyTorch XPU CI) and analyzes case existence.
+
+**Scripts**:
+- `update_test_results.py` - Main script to update test results
+
+**When to use**:
+- When need to know test pass/fail status for issue test cases
+- When need to explain why tests are not found
+
+**Usage**:
+```bash
+cd ~/ai_for_validation/opencode/issue_triage/update_test_results
+python3 update_test_results.py
+```
+
+**Output**: Updates status columns (torch-xpu-ops nightly, stock CI, case existence)
+
+---
+
+## Excel File Structure
+
+Input/Output: `~/issue_traige/data/torch_xpu_ops_issues.xlsx`
+
+### Sheets:
+1. **Issues** - Main issue data with PR information
+2. **Test Cases** - Test case details with CI results
+
+### Test Cases Sheet Columns:
+- A: Issue ID
+- B: Test Reproducer
+- C: Test Type
+- D: Test File
+- E: Origin Test File
+- F: Test Class
+- G: Test Case
+- H: Error Message
+- I: Traceback
+- J: torch-ops
+- K: status in torch-xpu-ops nightly
+- L: comments in torch-xpu-ops nightly
+- M: Commit
+- N: Run_id
+- O: XML
+- P: status in stock CI
+- Q: comments in stock CI
+- R: cuda_case_exist
+- S: xpu_case_exist
+- T: case_existence_comments
+
+---
+
+## Key Concepts
+
+### CI Sources:
+1. **torch-xpu-ops Nightly**: Tests run from torch-xpu-ops with XPUPatchForImport
 2. **Stock PyTorch XPU CI**: Tests run directly from pytorch/test
-   - XML files in: `test-reports-*.zip/test-reports/python-pytest/`
 
-3. **Case Existence Analysis**:
-   - CUDA file: `~/pytorch/test/<module>.py`
-   - XPU file: `~/pytorch/third_party/torch-xpu-ops/test/xpu/<module>_xpu.py`
-   - XPUPatchForImport: Some tests use this pattern to import from pytorch/test with XPU patches
-   - Parametrized tests: Some tests are parameterized with device type (cuda, xpu, cpu)
+### Test File Patterns:
+- **Path format**: `torch-xpu-ops/test/xpu/nn/test_convolution_xpu.py`
+- **Dot notation**: `test.dynamo.test_ctx_manager.CtxManagerTests`
 
-4. **Common "Not Found" Reasons**:
-   - Test possibly removed/renamed in CUDA
-   - Uses XPUPatchForImport (runs via patch)
-   - XPU file missing (not yet created in torch-xpu-ops)
-   - Inductor tests not in torch-xpu-ops (use stock CI)
-   - Needs _xpu suffix (parameterization)
+### XPUPatchForImport:
+Some tests use this pattern to import from pytorch/test with XPU patches instead of having separate XPU files.
+
+### Common "Not Found" Reasons:
+- Test possibly removed/renamed in CUDA
+- Uses XPUPatchForImport (runs via patch)
+- XPU file missing (not yet created)
+- Inductor tests not in torch-xpu-ops (use stock CI)
+- Needs _xpu suffix (parameterization)
+
+---
+
+## Run Full Pipeline
+
+```bash
+# Step 1: Collect issues
+cd ~/ai_for_validation/opencode/issue_triage/torch-xpu-ops-issue-collection
+python3 generate_excel.py
+
+# Step 2: Extract torch ops
+cd ~/ai_for_validation/opencode/issue_triage/torch-ops-extraction
+python3 extract_torch_ops.py ~/issue_traige/data/torch_xpu_ops_issues.xlsx
+
+# Step 3: Extract PRs
+cd ~/ai_for_validation/opencode/issue_triage/pr-extraction
+python3 pr_extraction.py ~/issue_traige/data/torch_xpu_ops_issues.xlsx
+
+# Step 4: Update test results
+cd ~/ai_for_validation/opencode/issue_triage/update_test_results
+python3 update_test_results.py
+```

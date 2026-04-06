@@ -17,12 +17,46 @@ GITHUB_HEADERS = {
     "Authorization": f"token {GITHUB_TOKEN}"
 } if GITHUB_TOKEN else {}
 
-# Load data
-with open(os.path.join(DATA_DIR, "torch_xpu_ops_issues.json")) as f:
-    issues = json.load(f)
+# Load data - try to load from JSON, or fetch from GitHub if not exists
+issues_json_path = os.path.join(DATA_DIR, "torch_xpu_ops_issues.json")
+comments_json_path = os.path.join(DATA_DIR, "torch_xpu_ops_comments.json")
 
-with open(os.path.join(DATA_DIR, "torch_xpu_ops_comments.json")) as f:
-    comments = json.load(f)
+if os.path.exists(issues_json_path):
+    with open(issues_json_path) as f:
+        issues = json.load(f)
+else:
+    print("Fetching issues from GitHub...")
+    issues = []
+    page = 1
+    while len(issues) < 500:
+        url = f"https://api.github.com/repos/intel/torch-xpu-ops/issues?state=open&per_page=100&page={page}"
+        response = requests.get(url, headers=GITHUB_HEADERS, timeout=30)
+        if response.status_code != 200:
+            break
+        batch = response.json()
+        if not batch:
+            break
+        # Filter out pull requests
+        issues.extend([i for i in batch if 'pull_request' not in i])
+        print(f"Fetched {len(issues)} issues...")
+        page += 1
+    with open(issues_json_path, 'w') as f:
+        json.dump(issues, f)
+
+if os.path.exists(comments_json_path):
+    with open(comments_json_path) as f:
+        comments = json.load(f)
+else:
+    print("Fetching comments from GitHub...")
+    comments = {}
+    for issue in issues:
+        issue_num = issue.get('number')
+        url = f"https://api.github.com/repos/intel/torch-xpu-ops/issues/{issue_num}/comments"
+        response = requests.get(url, headers=GITHUB_HEADERS, timeout=30)
+        if response.status_code == 200:
+            comments[str(issue_num)] = response.json()
+    with open(comments_json_path, 'w') as f:
+        json.dump(comments, f)
 
 # Load ops dependency
 ops_dep = {}
@@ -183,6 +217,11 @@ def parse_e2e_info(body, title):
             dtype = dt
             break
     
+    # Extract AMP (automatic mixed precision)
+    amp = False
+    if '--amp' in text.lower() or 'amp' in text.lower():
+        amp = True
+    
     # Extract test type
     test_type = 'accuracy'
     if 'throughputs' in text.lower() or 'performance' in text.lower() or 'latency' in text.lower():
@@ -218,6 +257,7 @@ def parse_e2e_info(body, title):
                     'model': model,
                     'phase': phase,
                     'dtype': dtype,
+                    'amp': amp,
                     'test_type': test_type,
                     'backend': backend,
                     'disable_cudagraphs': disable_cudagraphs,
@@ -891,22 +931,15 @@ def extract_pr_from_text(text, exclude_version_section=True):
         r'resolved\s+(?:in|by)?\s*PR',
         r'resolution:.*PR',
         r'merged\s+in\s+PR',
+        r'PR\s*:\s*https?://',  # PR: https://...
+        r'PR\s*#\d+',  # PR #1234
+        r'pull\s+request\s*#\d+',
         r'landed\s+(?:in|via)?\s*PR',
-        r'cherry-?picked.*PR',
-        r'submitted.*PR',
-        r'PR\s+is\s+(?:ready|merged|closed)',
-        r'fix(?:ed)?\s+(?:in|by)?\s*(?:the\s+)?(?:following\s+)?(?:PR|#)',
-        r'addressed\s+in\s+PR',
-        r'pr\s+#?\d+\s+(?:to|fix|resolve|address)',
-        r'will\s+(?:be\s+)?fixed\s+(?:in|by)',
-        r'expected\s+to\s+be\s+fixed',
-        r'pending\s+(?:on|with)',
-        r'resolution',
     ]
     
     fix_context = any(re.search(p, text, re.IGNORECASE) for p in fix_context_patterns)
-    version_context = any(re.search(p, text, re.IGNORECASE) for p in version_context_patterns)
     
+    # Always extract PR URLs from the text (not just fix context)
     pr_url_patterns = [
         (r'https://github\.com/([\w-]+)/([\w-]+)/pull/(\d+)', None),
         (r'https://github\.com/([\w-]+)/([\w-]+)/issues/(\d+)', 'issue'),
@@ -961,24 +994,24 @@ def validate_pr_and_get_info(pr_list, issue_title="", issue_body=""):
     issue_text = f"{issue_title} {issue_body}".lower()
     
     keywords_for_fixing = [
-        'fix', 'resolve', 'address', 'close', 'resolve',
-        'solved', 'resolved', 'bug', 'error', 'issue',
-        'patch', 'implement', 'support', 'add', 'enable',
+        'fix', 'resolve', 'address', 'close', 'solved', 'resolved', 
+        'bug', 'error', 'patch', 'implement', 'support', 'add', 'enable',
     ]
     
-    for pr_item in pr_list[:3]:
+    for pr_item in pr_list[:5]:
         pr_num = pr_item['number']
         
         source_repo = pr_item.get('source_repo')
         if source_repo:
             repos_to_check = [source_repo]
         else:
-            repos_to_try = ["pytorch/pytorch", "intel/torch-xpu-ops"]
+            repos_to_check = repos_to_try.copy()
         
         pr_found = False
         pr_data = None
+        repo = None
         
-        for repo in repos_to_try:
+        for repo in repos_to_check:
             try:
                 url = f"https://api.github.com/repos/{repo}/pulls/{pr_num}"
                 response = requests.get(url, headers=GITHUB_HEADERS, timeout=10)
@@ -999,6 +1032,7 @@ def validate_pr_and_get_info(pr_list, issue_title="", issue_body=""):
         
         pr_text = f"{pr_title} {pr_body}"
         
+        # Check if PR is relevant to the issue
         is_fix_pr = any(kw in pr_text for kw in keywords_for_fixing)
         
         title_match = False
@@ -1013,6 +1047,36 @@ def validate_pr_and_get_info(pr_list, issue_title="", issue_body=""):
         if not is_fix_pr and not title_match:
             continue
         
+        # Check for intel/torch-xpu-ops repo: Skip if "Closed with unmerged commits"
+        if repo == "intel/torch-xpu-ops":
+            if pr_data.get('state') == 'closed':
+                # Check if merged (not unmerged)
+                if not pr_data.get('merged'):
+                    # Check for unmerged commits
+                    commits_url = pr_data.get('commits_url')
+                    if commits_url:
+                        try:
+                            commits_response = requests.get(commits_url, headers=GITHUB_HEADERS, timeout=10)
+                            if commits_response.status_code == 200:
+                                commits_data = commits_response.json()
+                                if commits_data.get('total_count', 0) > 0:
+                                    # Has commits, likely unmerged - skip
+                                    continue
+                        except:
+                            pass
+        
+        # Check for pytorch/pytorch repo: Only include if has "Merged" label
+        if repo == "pytorch/pytorch":
+            if pr_data.get('state') == 'closed':
+                # Check if merged
+                if not pr_data.get('merged'):
+                    # Check labels
+                    labels = pr_data.get('labels', [])
+                    label_names = [l.get('name', '') for l in labels]
+                    if 'merged' not in [l.lower() for l in label_names]:
+                        # Not merged with "Merged" label - skip
+                        continue
+        
         pr_info_list.append({
             'number': pr_num,
             'state': pr_data.get('state', 'unknown'),
@@ -1025,7 +1089,7 @@ def validate_pr_and_get_info(pr_list, issue_title="", issue_body=""):
     return pr_info_list
 
 def get_issue_comments_with_pr(issue_num, repo="intel/torch-xpu-ops"):
-    """Get PR references from issue comments only (not body) - PRs that could fix the issue usually appear in comments"""
+    """Get PR references from issue comments - only PRs that could fix the issue"""
     all_prs = []
     
     issue_num_str = str(issue_num)
@@ -1040,17 +1104,10 @@ def get_issue_comments_with_pr(issue_num, repo="intel/torch-xpu-ops"):
         r'resolved\s+(?:in|by)?\s*PR',
         r'resolution:.*PR',
         r'merged\s+in\s+PR',
+        r'PR\s*:\s*https?://',  # PR: https://...
+        r'PR\s*#\d+',  # PR #1234
+        r'pull\s+request\s*#\d+',
         r'landed\s+(?:in|via)?\s*PR',
-        r'cherry-?picked.*PR',
-        r'submitted.*PR',
-        r'PR\s+is\s+(?:ready|merged|closed)',
-        r'fix(?:ed)?\s+(?:in|by)?\s*(?:the\s+)?(?:following\s+)?(?:PR|#)',
-        r'addressed\s+in\s+PR',
-        r'pr\s+#?\d+\s+(?:to|fix|resolve|address)',
-        r'will\s+(?:be\s+)?fixed\s+(?:in|by)',
-        r'expected\s+to\s+be\s+fixed',
-        r'pending\s+(?:on|with)',
-        r'resolution',
     ]
     
     for comment in issue_comments:
@@ -1059,6 +1116,9 @@ def get_issue_comments_with_pr(issue_num, repo="intel/torch-xpu-ops"):
             continue
         
         fix_context = any(re.search(p, body, re.IGNORECASE) for p in fix_context_patterns)
+        
+        if not fix_context:
+            continue
         
         seen = set()
         pr_url_patterns = [
@@ -1078,24 +1138,23 @@ def get_issue_comments_with_pr(issue_num, repo="intel/torch-xpu-ops"):
                         'source_repo': f"{org}/{repo}"
                     })
         
-        if fix_context:
-            bare_pr_patterns = [
-                r'PR\s*#(\d+)',
-                r'pull\s+request\s*#(\d+)',
-                r'#(\d+)\s+(?:to|fix|resolve|address|close)',
-            ]
-            
-            for pattern in bare_pr_patterns:
-                matches = re.findall(pattern, body, re.IGNORECASE)
-                for match in matches:
-                    pr_num = str(match).strip()
-                    if pr_num.isdigit() and pr_num not in seen:
-                        seen.add(pr_num)
-                        all_prs.append({
-                            'number': pr_num,
-                            'html_url': None,
-                            'source_repo': None
-                        })
+        bare_pr_patterns = [
+            r'PR\s*#(\d+)',
+            r'pull\s+request\s*#(\d+)',
+            r'#(\d+)\s+(?:to|fix|resolve|address|close)',
+        ]
+        
+        for pattern in bare_pr_patterns:
+            matches = re.findall(pattern, body, re.IGNORECASE)
+            for match in matches:
+                pr_num = str(match).strip()
+                if pr_num.isdigit() and pr_num not in seen:
+                    seen.add(pr_num)
+                    all_prs.append({
+                        'number': pr_num,
+                        'html_url': None,
+                        'source_repo': None
+                    })
     
     return all_prs
 
@@ -1119,8 +1178,8 @@ for col, header in enumerate(headers, 1):
 ws_cases = wb.create_sheet("Test Cases")
 
 case_headers = ["Issue ID", "Test Reproducer", "Test Type", "Test File", 
-                 "Origin Test File", "Test Class", "Test Case", 
-                 "Error Message", "Traceback", "torch-ops", "dependency"]
+                  "Origin Test File", "Test Class", "Test Case", 
+                  "Error Message", "Traceback", "torch-ops", "dependency"]
 
 for col, header in enumerate(case_headers, 1):
     cell = ws_cases.cell(row=1, column=col, value=header)
@@ -1130,7 +1189,7 @@ for col, header in enumerate(case_headers, 1):
 # Sheet 3: E2E Test Cases
 ws_e2e = wb.create_sheet("E2E Test Cases")
 
-e2e_headers = ["Issue ID", "Test Reproducer", "Benchmark", "Model", "Phase", "Dtype", 
+e2e_headers = ["Issue ID", "Test Reproducer", "Benchmark", "Model", "Phase", "Dtype", "AMP",
                "Backend", "Test Type", "Cudagraph", "Error Message", "Traceback"]
 
 for col, header in enumerate(e2e_headers, 1):
@@ -1234,6 +1293,10 @@ for issue in issues:
             ws_cases.cell(row=case_row, column=9, value=traceback)
             ws_cases.cell(row=case_row, column=10, value=", ".join(torch_ops))
             ws_cases.cell(row=case_row, column=11, value=case_dep)
+            # Leave columns 12-17 empty for CI status (to be filled by update_test_results.py)
+            # Column 18: cuda_case_exist
+            # Column 19: xpu_case_exist  
+            # Column 20: case_existence_comments
             case_row += 1
     
     # Add to e2e sheet
@@ -1246,19 +1309,20 @@ for issue in issues:
             ws_e2e.cell(row=e2e_row, column=4, value=info.get('model', ''))
             ws_e2e.cell(row=e2e_row, column=5, value=info.get('phase', ''))
             ws_e2e.cell(row=e2e_row, column=6, value=info.get('dtype', ''))
-            ws_e2e.cell(row=e2e_row, column=7, value=info.get('backend', ''))
-            ws_e2e.cell(row=e2e_row, column=8, value=info.get('test_type', ''))
-            ws_e2e.cell(row=e2e_row, column=9, value=info.get('disable_cudagraphs', ''))
-            ws_e2e.cell(row=e2e_row, column=10, value=error_msg)
-            ws_e2e.cell(row=e2e_row, column=11, value=traceback)
+            ws_e2e.cell(row=e2e_row, column=7, value=info.get('amp', False))
+            ws_e2e.cell(row=e2e_row, column=8, value=info.get('backend', ''))
+            ws_e2e.cell(row=e2e_row, column=9, value=info.get('test_type', ''))
+            ws_e2e.cell(row=e2e_row, column=10, value=info.get('disable_cudagraphs', ''))
+            ws_e2e.cell(row=e2e_row, column=11, value=error_msg)
+            ws_e2e.cell(row=e2e_row, column=12, value=traceback)
             e2e_row += 1
     elif test_module == 'e2e':
         # Add e2e issues without specific model info
         ws_e2e.cell(row=e2e_row, column=1, value=num)
         ws_e2e.cell(row=e2e_row, column=2, value=title[:150])
         ws_e2e.cell(row=e2e_row, column=3, value='unknown')
-        ws_e2e.cell(row=e2e_row, column=10, value=error_msg)
-        ws_e2e.cell(row=e2e_row, column=11, value=traceback)
+        ws_e2e.cell(row=e2e_row, column=11, value=error_msg)
+        ws_e2e.cell(row=e2e_row, column=12, value=traceback)
         e2e_row += 1
     
     issue_row += 1
@@ -1282,8 +1346,6 @@ for ws in [ws_issues, ws_cases, ws_e2e]:
                 pass
         ws.column_dimensions[col_letter].width = min(max_length + 2, 60)
 
-import pdb
-pdb.set_trace()
 output_path = os.path.join(DATA_DIR, "torch_xpu_ops_issues.xlsx")
 wb.save(output_path)
 print(f"\nSaved to {output_path}")
