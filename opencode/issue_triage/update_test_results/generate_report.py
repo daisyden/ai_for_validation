@@ -65,6 +65,42 @@ def generate_report():
     # Sort with_dependency by ID
     with_dependency.sort(key=lambda x: x['id'])
     
+    # Group action_required by action_TBD
+    action_groups = {}
+    for issue in action_required:
+        action = issue['action_TBD'] or 'Unknown'
+        if action not in action_groups:
+            action_groups[action] = []
+        action_groups[action].append(issue)
+    
+    # Build statistics
+    test_module_stats = {}
+    module_stats = {}
+    dep_stats = {}
+    action_tbd_stats = {}
+    no_assignee_count = len(no_assignee)
+    duplicated_count = len(duplicated)
+    others_count = len(others)
+    
+    for issue in issues:
+        # Test Module stats
+        tm = issue['test_module'] or 'unknown'
+        test_module_stats[tm] = test_module_stats.get(tm, 0) + 1
+        
+        # Module stats
+        m = issue['module'] or 'unknown'
+        module_stats[m] = module_stats.get(m, 0) + 1
+        
+        # With Dependency stats
+        dep = issue['dependency']
+        if dep and dep != 'None':
+            dep_stats[dep] = dep_stats.get(dep, 0) + 1
+        
+        # Action_TBD stats
+        action = issue['action_TBD']
+        if action:
+            action_tbd_stats[action] = action_tbd_stats.get(action, 0) + 1
+    
     # Build markdown
     md = f"""# Torch XPU Ops Issue Report
 
@@ -75,11 +111,63 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 | Category | Count |
 |----------|-------|
 | Action Required | {len(action_required)} |
-| No Assignee | {len(no_assignee)} |
-| Duplicated Issues | {len(duplicated)} |
+| No Assignee | {no_assignee_count} |
+| Duplicated Issues | {duplicated_count} |
 | With Dependency | {len(with_dependency)} |
-| Others | {len(others)} |
+| Others | {others_count} |
 | **Total** | {len(issues)} |
+
+---
+
+## Statistics
+
+### By Test Module
+
+| Test Module | Count |
+|-------------|-------|
+"""
+    
+    for tm, count in sorted(test_module_stats.items(), key=lambda x: -x[1]):
+        md += f"| {tm} | {count} |\n"
+    
+    md += """
+### By Module
+
+| Module | Count |
+|--------|-------|
+"""
+    
+    for m, count in sorted(module_stats.items(), key=lambda x: -x[1]):
+        md += f"| {m} | {count} |\n"
+    
+    md += """
+### By Dependency
+
+| Dependency | Count |
+|------------|-------|
+"""
+    
+    for dep, count in sorted(dep_stats.items(), key=lambda x: -x[1]):
+        md += f"| {dep} | {count} |\n"
+    
+    md += """
+### By Action TBD
+
+| Action TBD | Count |
+|------------|-------|
+"""
+    
+    for action, count in sorted(action_tbd_stats.items(), key=lambda x: -x[1]):
+        md += f"| {action} | {count} |\n"
+    
+    md += f"""
+### Other Stats
+
+| Category | Count |
+|----------|-------|
+| Not Assigned | {no_assignee_count} |
+| Duplicated Issues | {duplicated_count} |
+| Others | {others_count} |
 
 ---
 
@@ -87,30 +175,33 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 Issues that need action based on test results analysis.
 
-### 1.1 Issues with action_TBD
+"""
+    
+    # Split action_required by action_TBD type
+    for action, issues_list in sorted(action_groups.items()):
+        md += f"""
+### 1.{list(action_groups.keys()).index(action)+1} {action}
 
 | ID | Title | Owner | Owner Transferred | TBD | Module | Test Module |
 |---|-------|-------|-------------------|-----|--------|-------------|
 """
-    
-    for issue in action_required:
-        title = (issue['title'] or '')[:50]
-        owner = issue['assignee'] or ''
-        owner_transfer = issue['owner_transfer'] or ''
-        action = issue['action_TBD'] or ''
-        module = issue['module'] or ''
-        test_module = issue['test_module'] or ''
-        md += f"| {issue['id']} | {title} | {owner} | {owner_transfer} | {action} | {module} | {test_module} |\n"
+        for issue in issues_list:
+            title = (issue['title'] or '')[:45]
+            owner = issue['assignee'] or ''
+            owner_transfer = issue['owner_transfer'] or ''
+            module = issue['module'] or ''
+            test_module = issue['test_module'] or ''
+            md += f"| {issue['id']} | {title} | {owner} | {owner_transfer} | {action} | {module} | {test_module} |\n"
     
     md += """
-### 1.2 Issues without Assignee
+### Issues without Assignee
 
 | ID | Title | Owner | Owner Transferred | TBD | Module | Test Module |
 |---|-------|-------|-------------------|-----|--------|-------------|
 """
     
     for issue in no_assignee[:50]:  # Limit to 50
-        title = (issue['title'] or '')[:50]
+        title = (issue['title'] or '')[:45]
         owner = issue['assignee'] or ''
         owner_transfer = 'chuanqi'
         action = 'assign owner'
@@ -120,7 +211,7 @@ Issues that need action based on test results analysis.
     
     if len(no_assignee) > 50:
         md += f"\n*... and {len(no_assignee) - 50} more issues*\n"
-    
+
     md += """
 ---
 

@@ -688,36 +688,42 @@ def process_issues_sheet(wb):
                     tc = str(ws_test.cell(tr, 7).value).lower() if ws_test.cell(tr, 7).value else ''
                     test_cases_str += ' ' + tc
             
-            # Check for various categories
-            is_upstream = 'ut_upstream' in labels_str or 'inductor' in labels_str
-            is_flash_attention = 'flash' in title or 'flash' in summary or 'flash' in test_cases_str or 'sdpa' in title or 'sdpa' in summary or 'sdpa' in test_cases_str or 'transformer' in title or 'transformer' in summary or 'transformer' in test_cases_str or 'scaled_dot_product' in title or 'scaled_dot_product' in summary or 'scaled_dot_product' in test_cases_str or 'mem_eff' in title or 'mem_eff' in summary or 'mem_eff' in test_cases_str
-            is_sparse = 'sparse' in title or 'sparse' in summary or 'sparse' in test_module or 'sparse' in test_cases_str or 'csr' in title or 'csr' in summary or 'csr' in test_cases_str or 'sampled_addmm' in title or 'sampled_addmm' in summary or 'sampled_addmm' in test_cases_str
-            is_inductor = 'inductor' in title or 'inductor' in summary or 'inductor' in test_cases_str or 'compile' in title or 'compile' in summary or 'compile' in test_cases_str or 'aot' in title or 'aot' in summary or 'aot' in test_cases_str
-            is_dtype = 'dtype' in title or 'dtype' in summary or 'dtype' in test_cases_str or 'precision' in title or 'precision' in summary or 'precision' in test_cases_str or 'accuracy' in title or 'accuracy' in summary or 'accuracy' in test_cases_str or 'type promotion' in title or 'type promotion' in summary
-            is_wontfix = 'wont' in labels_str or 'not target' in labels_str
-            is_not_target_upstream = is_not_target and is_upstream
+            # Check for "Torch not compiled with CUDA enabled" - needs enabling test
+            if 'torch not compiled with cuda enabled' in summary or 'torch not compiled with cuda enabled' in title:
+                owner_transfer = 'daisyden'
+                action_tbd = 'Enable test'
             
-            if is_not_target_upstream:
-                action_tbd = 'Needs Upstream Skip PR (not_target + ut_upstream)'
-                owner_transfer = assignee
-            elif is_wontfix:
-                action_tbd = 'Needs Skip PR (wontfix / not_target)'
-                owner_transfer = assignee
-            elif is_upstream:
-                action_tbd = 'Needs PyTorch Repo Changes (upstream)'
-                owner_transfer = assignee
-            elif is_flash_attention:
-                action_tbd = 'Flash Attention / Transformer Related'
-                owner_transfer = assignee
-            elif is_sparse:
-                action_tbd = 'Sparse Operations Related'
-                owner_transfer = assignee
-            elif is_inductor:
-                action_tbd = 'Inductor / Compilation Related'
-                owner_transfer = assignee
-            elif is_dtype:
-                action_tbd = 'Dtype / Precision Related'
-                owner_transfer = assignee
+            else:
+                # Check for various categories
+                is_upstream = 'ut_upstream' in labels_str or 'inductor' in labels_str
+                is_flash_attention = 'flash' in title or 'flash' in summary or 'flash' in test_cases_str or 'sdpa' in title or 'sdpa' in summary or 'sdpa' in test_cases_str or 'transformer' in title or 'transformer' in summary or 'transformer' in test_cases_str or 'scaled_dot_product' in title or 'scaled_dot_product' in summary or 'scaled_dot_product' in test_cases_str or 'mem_eff' in title or 'mem_eff' in summary or 'mem_eff' in test_cases_str
+                is_sparse = 'sparse' in title or 'sparse' in summary or 'sparse' in test_module or 'sparse' in test_cases_str or 'csr' in title or 'csr' in summary or 'csr' in test_cases_str or 'sampled_addmm' in title or 'sampled_addmm' in summary or 'sampled_addmm' in test_cases_str
+                is_inductor = 'inductor' in title or 'inductor' in summary or 'inductor' in test_cases_str or 'compile' in title or 'compile' in summary or 'compile' in test_cases_str or 'aot' in title or 'aot' in summary or 'aot' in test_cases_str
+                is_dtype = 'dtype' in title or 'dtype' in summary or 'dtype' in test_cases_str or 'precision' in title or 'precision' in summary or 'precision' in test_cases_str or 'accuracy' in title or 'accuracy' in summary or 'accuracy' in test_cases_str or 'type promotion' in title or 'type promotion' in summary
+                is_wontfix = 'wont' in labels_str or 'not target' in labels_str
+                is_not_target_upstream = is_not_target and is_upstream
+                
+                if is_not_target_upstream:
+                    action_tbd = 'Needs Upstream Skip PR (not_target + ut_upstream)'
+                    owner_transfer = assignee
+                elif is_wontfix:
+                    action_tbd = 'Needs Skip PR (wontfix / not_target)'
+                    owner_transfer = assignee
+                elif is_upstream:
+                    action_tbd = 'Needs PyTorch Repo Changes (upstream)'
+                    owner_transfer = assignee
+                elif is_flash_attention:
+                    action_tbd = 'Flash Attention / Transformer Related'
+                    owner_transfer = assignee
+                elif is_sparse:
+                    action_tbd = 'Sparse Operations Related'
+                    owner_transfer = assignee
+                elif is_inductor:
+                    action_tbd = 'Inductor / Compilation Related'
+                    owner_transfer = assignee
+                elif is_dtype:
+                    action_tbd = 'Dtype / Precision Related'
+                    owner_transfer = assignee
         
         # Note: Rule 4 (cuda_case_not_exist) is intentionally not setting owner_transfer
         # as it requires long time LLM analysis

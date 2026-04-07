@@ -851,24 +851,9 @@ def classify_test_module(body, title, labels):
 
 def classify_module(body, title, labels):
     text = f"{title} {body}".lower()
+    labels_str = ', '.join([l.get('name', '') for l in labels]).lower()
     
-    module_keywords = [
-        ('distributed', ['distributed', 'device_mesh', 'ProcessGroup', 'FSDP', 'DDP', 'c10d', 'tensor parallel']),
-        ('inductor', ['inductor', 'compile', 'triton', 'codegen', 'lowering', 'inductor error']),
-        ('dynamo', ['dynamo', 'torch.compile', '_dynamo', 'dynamo error']),
-        ('autograd', ['autograd', 'backward', 'grad', 'gradient']),
-        ('aten_ops', ['aten::', 'torch.ops.aten']),
-        ('low_precision', ['quantization', 'int8', 'fp8', 'int4', 'amp', 'bf16', 'fp16']),
-        ('optimizer', ['optimizer', 'lr_scheduler', 'adam', 'sgd']),
-        ('profiling', ['profiling', 'profile', 'benchmark']),
-        ('fx', ['torch.fx', 'fx.', 'symbolic']),
-        ('export', ['torch.export', 'exported']),
-    ]
-    
-    for m, kw in module_keywords:
-        if any(k in text for k in kw):
-            return m
-    
+    # Check labels first
     for label in labels:
         ln = label.get('name', '').lower()
         if 'module: distributed' in ln:
@@ -879,21 +864,165 @@ def classify_module(body, title, labels):
             return 'AO'
         if 'module: ut' in ln:
             return 'aten_ops'
+        if 'module: quant' in ln:
+            return 'low_precision'
+        if 'module: profiler' in ln:
+            return 'profiling'
+        if 'module: dynamo' in ln:
+            return 'dynamo'
+        if 'module: op impl' in ln:
+            return 'aten_ops'
+    
+    # Special case - "Torch not compiled with CUDA enabled" means test configuration issue, not inductor
+    if 'torch not compiled with cuda enabled' in text:
+        return 'unknown'
+    
+    # Random failures are not module-specific
+    if 'random failure' in text or 'random failures' in text:
+        return 'unknown'
+    
+    # Torch operations (from PyTorch docs)
+    torch_ops = [
+        'add', 'sub', 'mul', 'div', 'matmul', 'mm', 'dot', 'vdot', 'bmm',
+        'addmm', 'addmv', 'addbmm', 'smm', 'spmm', 'mm', 'mv', 'vecdot',
+        'conv', 'conv1d', 'conv2d', 'conv3d', 'conv_transpose',
+        'batch_norm', 'layer_norm', 'group_norm', 'instance_norm',
+        'dropout', 'embedding', 'linear', 'lstm', 'gru', 'rnn',
+        'softmax', 'log_softmax', 'sigmoid', 'tanh', 'relu', 'leaky_relu',
+        'pool', 'avg_pool', 'max_pool', 'adaptive_pool',
+        'fft', 'ifft', 'fft2', 'ifft2',
+        'chunk', 'split', 'view', 'reshape', 'transpose', 'permute',
+        'cat', 'stack', 'gather', 'scatter', 'index', 'where',
+        'sum', 'mean', 'std', 'var', 'min', 'max', 'argmin', 'argmax',
+        'norm', 'linalg.norm', 'linalg.matrix_norm', 'linalg.vector_norm',
+        'eig', 'svd', 'qr', 'cholesky', 'solve', 'inverse',
+        'det', 'logdet', 'slogdet', 'trace',
+        'clone', 'copy_', 'to', 'cuda', 'cpu', 'xpu', 'device',
+        'zeros', 'ones', 'empty', 'full', 'arange', 'linspace', 'logspace',
+        'tensor', 'scalar_tensor', 'tensor.tensor',
+        'getitem', 'setitem', 'call', 'forward', 'backward',
+        'relu', 'gelu', 'silu', 'mish', 'softplus', 'elu', 'selu', 'celu',
+        'flash_attention', 'scaled_dot_product_attention', 'sdpa',
+        'interpolate', 'grid_sample', 'affine_grid',
+        'grid_sampler', 'grid_sampler_2d',
+        'bernoulli', 'normal', 'uniform', 'randn', 'rand', 'randint',
+        'multinomial', ' poisson', 'exponential', 'geometric',
+        'lerp', 'lerp_', 'fmod', 'remainder', 'nextafter',
+        'linspace', 'logspace', 'geomspace',
+        'complex', 'real', 'imag', 'angle',
+        'conj', 'view_as_real', 'view_as_complex',
+    ]
+    
+    module_keywords = [
+        ('distributed', ['distributed', 'device_mesh', 'ProcessGroup', 'FSDP', 'DDP', 'c10d', 'tensor parallel']),
+        ('inductor', ['inductor', 'inductor error', 'compile error', 'lower', 'kernel code']),
+        ('dynamo', ['dynamo', 'torch.compile', '_dynamo', 'dynamo']),
+        ('autograd', ['autograd', 'backward', 'grad', 'gradient']),
+        ('aten_ops', ['aten::', 'torch.ops.aten', 'test_ops']),
+        ('low_precision', ['quantization', 'int8', 'fp8', 'int4', 'amp', 'bf16', 'fp16', 'float8']),
+        ('optimizer', ['optimizer', 'lr_scheduler', 'adam', 'sgd']),
+        ('profiling', ['profiling', 'profile', 'benchmark']),
+        ('fx', ['torch.fx', 'fx.', 'symbolic']),
+        ('export', ['torch.export', 'exported']),
+    ]
+    
+    # Check torch ops first
+    for op in torch_ops:
+        if re.search(rf'\b{re.escape(op)}\b', text):
+            return 'aten_ops'
+    
+    for m, kw in module_keywords:
+        if any(k in text for k in kw):
+            return m
     
     return 'unknown'
 
-def get_dependency_from_body(body):
+def get_dependency_from_body(body, labels=None):
+    if labels is None:
+        labels = []
+    
+    labels_str = ', '.join([l.get('name', '') for l in labels]).lower()
+    
+    # Check labels first for 'dependency component:'
+    if 'dependency component: onednn' in labels_str or 'dependency component: mkl-dnn' in labels_str or 'dependency component: dnnl' in labels_str:
+        return 'oneDNN'
+    if 'dependency component: onemkl' in labels_str or 'dependency component: mkl' in labels_str:
+        return 'oneMKL'
+    if 'dependency component: triton' in labels_str:
+        return 'Triton'
+    if 'dependency component: torchao' in labels_str:
+        return 'AO'
+    if 'dependency component: transformers' in labels_str or 'dependency component: huggingface' in labels_str:
+        return 'transformers'
+    if 'dependency component: oneapi' in labels_str or 'dependency component: sycl' in labels_str:
+        return 'oneAPI'
+    if 'dependency component: driver' in labels_str:
+        return 'driver'
+    if 'dependency component: oneccl' in labels_str or 'dependency component: ccl' in labels_str or 'dependency component: xccl' in labels_str:
+        return 'oneCCL'
+    
+    # Filter out version/environment sections
+    if not body:
+        return 'None'
+    
     text = body.lower()
     
+    # Remove version/environment sections
+    version_headers = [
+        r'###\s*version',
+        r'###\s*versions',
+        r'###\s*environment',
+        r'###\s*reproduction',
+        r'###\s*steps?\s+to\s+reproduce',
+        r'###\s*additional\s*context',
+    ]
+    
+    for header in version_headers:
+        match = re.search(header, text, re.IGNORECASE)
+        if match:
+            text = text[:match.start()]
+            break
+    
+    # Check for actual dependency in body (require context like "caused by", "issue", "depend on")
     dep_keywords = [
-        ('transformers', ['transformers', 'huggingface']),
-        ('AO', ['torchao', 'torchao']),
-        ('oneDNN', ['onednn', 'mkl-dnn']),
-        ('oneCCL', ['oneccl', 'ccl']),
-        ('oneMKL', ['onemkl', 'mkl']),
-        ('driver', ['level-zero', 'libze', 'intel-opencl', 'driver']),
-        ('Triton', ['triton', 'triton-xpu']),
-        ('oneAPI', ['oneapi', 'dpcpp', 'icx']),
+        ('transformers', [
+            'caused by transformers', 'transformers issue', 'transformers bug',
+            'depends on transformers', 'need transformers fix', 'waiting for transformers',
+            'huggingface issue', 'huggingface bug', 'depends on huggingface'
+        ]),
+        ('AO', [
+            'caused by torchao', 'torchao issue', 'torchao bug',
+            'depends on torchao', 'need torchao fix', 'waiting for torchao'
+        ]),
+        ('oneDNN', [
+            'caused by onednn', 'onednn issue', 'onednn bug', 'oneDNN issue',
+            'depends on onednn', 'need onednn fix', 'waiting for onednn',
+            'mkl-dnn issue', 'dnnl issue'
+        ]),
+        ('oneCCL', [
+            'caused by oneccl', 'oneccl issue', 'oneccl bug',
+            'depends on oneccl', 'need oneccl fix', 'waiting for oneccl',
+            'xccl issue', 'ccl issue', 'depends on ccl'
+        ]),
+        ('oneMKL', [
+            'caused by onemkl', 'onemkl issue', 'onemkl bug',
+            'depends on onemkl', 'need onemkl fix', 'waiting for onemkl',
+            'caused by mkl', 'mkl issue'
+        ]),
+        ('driver', [
+            'caused by driver', 'driver issue', 'driver bug',
+            'depends on driver', 'need driver fix', 'waiting for driver'
+        ]),
+        ('Triton', [
+            'caused by triton', 'triton issue', 'triton bug',
+            'depends on triton', 'need triton fix', 'waiting for triton',
+            'triton-xpu issue', 'tl\\. issue'
+        ]),
+        ('oneAPI', [
+            'caused by oneapi', 'oneapi issue', 'oneapi bug', 'sycl issue',
+            'depends on oneapi', 'need oneapi fix', 'waiting for oneapi',
+            'icpx issue', 'dpcpp issue', 'sycl compiler issue'
+        ]),
     ]
     
     for d, kw in dep_keywords:
@@ -1219,7 +1348,7 @@ for issue in issues:
     issue_type = classify_issue_type(body, title, labels)
     module = classify_module(body, title, labels)
     test_module = classify_test_module(body, title, labels)
-    dependency = get_dependency_from_body(body)
+    dependency = get_dependency_from_body(body, labels)
     
     error_msg, traceback = extract_error_and_traceback(body)
     summary = generate_summary(body, title, error_msg)
