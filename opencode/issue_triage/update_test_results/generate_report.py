@@ -4,11 +4,15 @@ Generate markdown report from torch_xpu_ops_issues.xlsx
 """
 
 import openpyxl
-from datetime import datetime
+from datetime import datetime, timedelta
+import os
+
+ROOT_DIR = "/home/daisydeng"
+RESULT_DIR = "/home/daisydeng/ai_for_validation/opencode/issue_triage/result"
 
 
 def generate_report():
-    wb = openpyxl.load_workbook('/home/daisydeng/issue_traige/data/torch_xpu_ops_issues.xlsx')
+    wb = openpyxl.load_workbook(os.path.join(RESULT_DIR, 'torch_xpu_ops_issues.xlsx'))
     ws_issues = wb['Issues']
     
     # Collect issue data
@@ -21,10 +25,12 @@ def generate_report():
             'assignee': ws_issues.cell(row, 4).value,
             'reporter': ws_issues.cell(row, 5).value,
             'labels': ws_issues.cell(row, 6).value,
+            'created_time': ws_issues.cell(row, 7).value,
             'type': ws_issues.cell(row, 11).value,
             'module': ws_issues.cell(row, 12).value,
             'test_module': ws_issues.cell(row, 13).value,
             'dependency': ws_issues.cell(row, 14).value,
+            'pr': ws_issues.cell(row, 15).value,
             'owner_transfer': ws_issues.cell(row, 19).value,
             'action_TBD': ws_issues.cell(row, 20).value,
             'duplicated_issue': ws_issues.cell(row, 21).value,
@@ -104,6 +110,14 @@ def generate_report():
     # Build markdown
     md = f"""# Torch XPU Ops Issue Report
 
+**Repository:** [intel/torch-xpu-ops](https://github.com/intel/torch-xpu-ops)
+
+**Issues Extracted:** April 5, 2026 (from GitHub issue data: `torch_xpu_ops_issues.json`)
+
+**CI Data Sources:**
+- Torch-XPU-OPS Nightly CI: XML files from `Inductor-XPU-UT-Data-*` + `Inductor-wheel-nightly-LTS2-XPU-E2E-Data-*` (commit: `a2d516a58c64f18b76880f3a77efbc02885d65af`)
+- Stock PyTorch XPU CI: XML files from `test-default-*-linux.idc.xpu_*.zip` (run IDs: 69741866812, 69741866834, 69741866862, 69741866911, etc.)
+
 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 ## Summary
@@ -182,8 +196,8 @@ Issues that need action based on test results analysis.
         md += f"""
 ### 1.{list(action_groups.keys()).index(action)+1} {action}
 
-| ID | Title | Owner | Owner Transferred | TBD | Module | Test Module |
-|---|-------|-------|-------------------|-----|--------|-------------|
+| ID | Title | Owner | Owner Transferred | TBD | PR | Module | Test Module |
+|---|-------|-------|-------------------|-----|-----|--------|-------------|
 """
         for issue in issues_list:
             title = (issue['title'] or '')[:45]
@@ -191,13 +205,15 @@ Issues that need action based on test results analysis.
             owner_transfer = issue['owner_transfer'] or ''
             module = issue['module'] or ''
             test_module = issue['test_module'] or ''
-            md += f"| {issue['id']} | {title} | {owner} | {owner_transfer} | {action} | {module} | {test_module} |\n"
+            pr = issue['pr'] or ''
+            pr_link = f"[PR]({pr})" if pr else ''
+            md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {action} | {pr_link} | {module} | {test_module} |\n"
     
     md += """
 ### Issues without Assignee
 
-| ID | Title | Owner | Owner Transferred | TBD | Module | Test Module |
-|---|-------|-------|-------------------|-----|--------|-------------|
+| ID | Title | Owner | Owner Transferred | TBD | PR | Module | Test Module |
+|---|-------|-------|-------------------|-----|-----|--------|-------------|
 """
     
     for issue in no_assignee[:50]:  # Limit to 50
@@ -207,7 +223,9 @@ Issues that need action based on test results analysis.
         action = 'assign owner'
         module = issue['module'] or ''
         test_module = issue['test_module'] or ''
-        md += f"| {issue['id']} | {title} | {owner} | {owner_transfer} | {action} | {module} | {test_module} |\n"
+        pr = issue['pr'] or ''
+        pr_link = f"[PR]({pr})" if pr else ''
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {action} | {pr_link} | {module} | {test_module} |\n"
     
     if len(no_assignee) > 50:
         md += f"\n*... and {len(no_assignee) - 50} more issues*\n"
@@ -219,8 +237,8 @@ Issues that need action based on test results analysis.
 
 Issues that share test cases with other issues.
 
-| ID | Title | Owner | Reporter | Duplicated With | Module | Test Module |
-|---|-------|-------|----------|-----------------|--------|-------------|
+| ID | Title | Owner | Reporter | Duplicated With | PR | Module | Test Module |
+|---|-------|-------|----------|----------------|-----|--------|-------------|
 """
     
     for issue in duplicated:
@@ -230,7 +248,9 @@ Issues that share test cases with other issues.
         dup = issue['duplicated_issue'] or ''
         module = issue['module'] or ''
         test_module = issue['test_module'] or ''
-        md += f"| {issue['id']} | {title} | {owner} | {reporter} | {dup} | {module} | {test_module} |\n"
+        pr = issue['pr'] or ''
+        pr_link = f"[PR]({pr})" if pr else ''
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {reporter} | {dup} | {pr_link} | {module} | {test_module} |\n"
     
     md += """
 ---
@@ -239,8 +259,8 @@ Issues that share test cases with other issues.
 
 Issues that have dependencies on other components (non-empty).
 
-| ID | Title | Owner | Type | Module | Test Module | Dependency | Labels |
-|---|-------|------|------|--------|-------------|------------|--------|
+| ID | Title | Owner | Type | Module | Test Module | Dependency | PR | Labels |
+|---|-------|------|------|--------|-------------|------------|-----|--------|
 """
     
     # Filter and sort
@@ -253,8 +273,10 @@ Issues that have dependencies on other components (non-empty).
         module = issue['module'] or ''
         test_module = issue['test_module'] or ''
         dep = issue['dependency'] or ''
-        labels = (issue['labels'] or '')[:25]
-        md += f"| {issue['id']} | {title} | {owner} | {issue_type} | {module} | {test_module} | {dep} | {labels} |\n"
+        labels = issue['labels'] or ''
+        pr = issue['pr'] or ''
+        pr_link = f"[PR]({pr})" if pr else ''
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {issue_type} | {module} | {test_module} | {dep} | {pr_link} | {labels} |\n"
     
     md += """
 ---
@@ -263,24 +285,60 @@ Issues that have dependencies on other components (non-empty).
 
 Issues that don't fall into the categories above.
 
-| ID | Title | Owner | Reporter | Labels | Module | Test Module |
-|---|-------|-------|----------|--------|--------|-------------|
+| ID | Title | Owner | Reporter | Labels | PR | Module | Test Module |
+|---|-------|-------|----------|--------|-----|--------|-------------|
 """
     
-    for issue in others[:50]:  # Limit to 50
+    for issue in others:
         title = (issue['title'] or '')[:40]
         owner = issue['assignee'] or ''
         reporter = issue['reporter'] or ''
-        labels = (issue['labels'] or '')[:25]
+        labels = issue['labels'] or ''
         module = issue['module'] or ''
         test_module = issue['test_module'] or ''
-        md += f"| {issue['id']} | {title} | {owner} | {reporter} | {labels} | {module} | {test_module} |\n"
+        pr = issue['pr'] or ''
+        pr_link = f"[PR]({pr})" if pr else ''
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {reporter} | {labels} | {pr_link} | {module} | {test_module} |\n"
     
-    if len(others) > 50:
-        md += f"\n*... and {len(others) - 50} more issues*\n"
+    # New issues in last 10 days
+    ten_days_ago = datetime.now() - timedelta(days=10)
+    recent_issues = []
+    for issue in issues:
+        created_str = issue.get('created_time')
+        if created_str:
+            try:
+                created_date = datetime.strptime(created_str.replace('Z', '+00:00'), '%Y-%m-%dT%H:%M:%S%z')
+                # Convert to naive datetime for comparison
+                created_date = created_date.replace(tzinfo=None)
+                if created_date >= ten_days_ago:
+                    recent_issues.append(issue)
+            except:
+                pass
+    
+    recent_issues.sort(key=lambda x: x['id'], reverse=True)
+    
+    md += f"""
+---
+
+## 5. Recent Issues (Last 10 Days)
+
+Issues created in the last 10 days (as of {datetime.now().strftime('%Y-%m-%d')}).
+
+| ID | Title | Status | Owner | Labels | Module | Test Module |
+|---|-------|--------|-------|--------|--------|-------------|
+"""
+    
+    for issue in recent_issues:
+        title = (issue['title'] or '')[:50]
+        status = issue['status'] or ''
+        owner = issue['assignee'] or ''
+        labels = issue['labels'] or ''
+        module = issue['module'] or ''
+        test_module = issue['test_module'] or ''
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {status} | {owner} | {labels} | {module} | {test_module} |\n"
     
     # Save to file
-    output_path = '/home/daisydeng/ai_for_validation/opencode/issue_triage/torch-xpu-ops-issue-collection/issue_report.md'
+    output_path = os.path.join(RESULT_DIR, 'issue_report.md')
     with open(output_path, 'w') as f:
         f.write(md)
     

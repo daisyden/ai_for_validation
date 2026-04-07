@@ -7,7 +7,8 @@ import os
 import requests
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(SCRIPT_DIR))))
+ROOT_DIR = "/home/daisydeng"
+RESULT_DIR = "/home/daisydeng/ai_for_validation/opencode/issue_triage/result"
 DATA_DIR = os.path.join(ROOT_DIR, "issue_traige", "data")
 DOC_DIR = os.path.join(ROOT_DIR, "issue_traige", "doc")
 
@@ -1475,6 +1476,9 @@ for ws in [ws_issues, ws_cases, ws_e2e]:
                 pass
         ws.column_dimensions[col_letter].width = min(max_length + 2, 60)
 
-output_path = os.path.join(DATA_DIR, "torch_xpu_ops_issues.xlsx")
+# Ensure result directory exists
+os.makedirs(RESULT_DIR, exist_ok=True)
+
+output_path = os.path.join(RESULT_DIR, "torch_xpu_ops_issues.xlsx")
 wb.save(output_path)
 print(f"\nSaved to {output_path}")

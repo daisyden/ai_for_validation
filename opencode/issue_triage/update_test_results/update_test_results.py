@@ -12,15 +12,15 @@ Usage:
     python update_test_results.py
 
 Input:
-    - /home/daisydeng/issue_traige/data/torch_xpu_ops_issues.xlsx
+    - /home/daisydeng/ai_for_validation/opencode/issue_triage/result/torch_xpu_ops_issues.xlsx
     - /home/daisydeng/issue_traige/ci_results/torch-xpu-ops/
     - /home/daisydeng/issue_traige/ci_results/stock/
     - ~/pytorch/test/
     - ~/pytorch/third_party/torch-xpu-ops/test/xpu/
 
 Output:
-    - Updated /home/daisydeng/issue_traige/data/torch_xpu_ops_issues.xlsx
-    - /home/daisydeng/ai_for_validation/opencode/issue_triage/torch-xpu-ops-issue-collection/issue_report.md
+    - Updated /home/daisydeng/ai_for_validation/opencode/issue_triage/result/torch_xpu_ops_issues.xlsx
+    - /home/daisydeng/ai_for_validation/opencode/issue_triage/result/issue_report.md
 """
 
 import openpyxl
@@ -29,6 +29,9 @@ import xml.etree.ElementTree as ET
 import os
 import re
 import glob
+
+ROOT_DIR = "/home/daisydeng"
+RESULT_DIR = "/home/daisydeng/ai_for_validation/opencode/issue_triage/result"
 
 
 def get_torch_xpu_ops_xml_files():
@@ -846,7 +849,7 @@ def process_e2e_cases(wb):
 
 def main():
     # Load workbook
-    wb = openpyxl.load_workbook('/home/daisydeng/issue_traige/data/torch_xpu_ops_issues.xlsx')
+    wb = openpyxl.load_workbook(os.path.join(RESULT_DIR, 'torch_xpu_ops_issues.xlsx'))
     ws = wb['Test Cases']
     
     # Add new columns
@@ -1033,7 +1036,7 @@ def main():
     process_issues_sheet(wb)
     
     # Save workbook
-    wb.save('/home/daisydeng/issue_traige/data/torch_xpu_ops_issues.xlsx')
+    wb.save(os.path.join(RESULT_DIR, 'torch_xpu_ops_issues.xlsx'))
     print("Saved!")
     
     # Generate markdown report
