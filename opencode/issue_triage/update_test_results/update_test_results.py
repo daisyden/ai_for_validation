@@ -173,30 +173,129 @@ def find_best_xml_match(xml_prefix, xml_files):
     return None
 
 
+def parse_failure_content(content):
+    """Parse failure message to extract error_msg and traceback until error type."""
+    error_msg = ""
+    traceback = ""
+
+    if not content:
+        return error_msg, traceback
+
+    lines = content.split('\n')
+
+    # Find error types - look for exception raising patterns
+    # Pattern 1: Error type at start of line (RuntimeError: message)
+    # Pattern 2: raise ErrorType("message") within traceback
+    error_patterns = [
+        (r'^RuntimeError', 'RuntimeError'),
+        (r'^AssertionError', 'AssertionError'),
+        (r'^ValueError', 'ValueError'),
+        (r'^TypeError', 'TypeError'),
+        (r'^IndexError', 'IndexError'),
+        (r'^KeyError', 'KeyError'),
+        (r'^ImportError', 'ImportError'),
+        (r'^NotImplementedError', 'NotImplementedError'),
+        (r'^AttributeError', 'AttributeError'),
+        (r'^InductorError', 'InductorError'),
+    ]
+
+    exception_raise_patterns = [
+        r'\braise\s+(RuntimeError|AssertionError|ValueError|TypeError|IndexError|KeyError|ImportError|NotImplementedError|AttributeError|InductorError)\s*[\(\'"]',
+    ]
+
+    error_line_idx = -1
+    error_type = None
+    last_error_msg = ""
+
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        # Pattern 1: Error type at start of line
+        for pattern, etype in error_patterns:
+            if re.match(pattern, stripped):
+                error_line_idx = idx
+                error_type = etype
+                # Clean up the line - remove quotes and extra info
+                clean_line = re.sub(r'^' + etype + r'[:\s]*', '', stripped)
+                error_msg = clean_line[:200]
+                break
+        if error_line_idx >= 0:
+            break
+        # Pattern 2: raise ErrorType("message") - look for the last exception raise
+        for ep in exception_raise_patterns:
+            if re.search(ep, stripped):
+                error_line_idx = idx
+                # Extract the message part after the error type
+                match = re.search(r'raise\s+\w+\s*[\(\'"](.+?)[\'\"]?', stripped)
+                if match:
+                    last_error_msg = match.group(1).strip()[:200]
+
+    # Check if we have Traceback header
+    traceback = ""
+    if 'Traceback (most recent call last):' in content:
+        # Build traceback: from Traceback line until error line (inclusive)
+        tb_lines = []
+        end_idx = error_line_idx if error_line_idx >= 0 else len(lines)
+        for idx, line in enumerate(lines):
+            if 'Traceback (most recent call last):' in line:
+                # Include all lines from here until error line (inclusive)
+                for j in range(idx, end_idx + 1):
+                    tb_lines.append(lines[j])
+                break
+
+        if tb_lines:
+            traceback = '\n'.join(tb_lines)
+        # If no traceback but we found exception raise, extract from that point
+        elif last_error_msg:
+            for idx, line in enumerate(lines):
+                stripped = line.strip()
+                for ep in exception_raise_patterns:
+                    if re.search(ep, stripped):
+                        traceback = '\n'.join(lines[idx:])
+                        break
+                if traceback:
+                    break
+    else:
+        # No traceback, just take the error message
+        traceback = ""
+        # Use content as error message
+        error_msg = content[:200]
+
+    # If we found an exception raise but no clear error line, use the extracted message
+    if last_error_msg and not error_msg:
+        error_msg = last_error_msg
+
+    # Ensure traceback includes the actual error line if we have an error message
+    if error_msg and traceback and error_msg not in traceback:
+        traceback += f"\n{error_msg}"
+
+    return error_msg, traceback[:3000] if traceback else traceback
+
+
 def get_test_result(xml_path, test_case):
-    """Get test case result from XML file"""
+    """Get test case result from XML file. Returns status, error_msg, and traceback."""
     if not xml_path:
-        return None, None
-    
+        return None, None, None
+
     try:
         tree = ET.parse(xml_path)
         root = tree.getroot()
-        
+
         for testcase in root.findall('.//testcase'):
             if testcase.get('name') == test_case:
                 failure = testcase.find('failure')
                 if failure is not None:
                     msg = failure.text or failure.get('message', '')
-                    return 'failed', msg[:500] if msg else 'failed'
+                    error_msg, traceback = parse_failure_content(msg)
+                    return 'failed', error_msg, traceback
                 skipped = testcase.find('skipped')
                 if skipped is not None:
                     msg = skipped.text or skipped.get('message', '')
-                    return 'skipped', msg[:500] if msg else 'skipped'
-                return 'passed', ''
-        
-        return 'not found', 'Test case not found'
+                    return 'skipped', msg[:500] if msg else 'skipped', None
+                return 'passed', '', None
+
+        return 'not found', 'Test case not found', None
     except Exception as e:
-        return 'error', str(e)
+        return 'error', str(e), None
 
 
 def analyze_test_case_with_llm(test_file, test_class, test_case, origin_test_file):
@@ -531,17 +630,102 @@ def find_duplicated_issues(ws):
     return merged_duplicates
 
 
+def determine_category(title, summary, test_cases_str, traceback, test_module, labels):
+    """
+    Determine the category of an issue based on its content.
+    Categories:
+    1. Dtype / Precision Related
+    2. Sparse Operations Related
+    3. Inductor / Compilation Related
+    4. Flash Attention / Transformer Related
+    5. PT2E
+    6. Distributed
+    7. TorchAO
+    8. Others
+    """
+    text = f"{title} {summary} {test_cases_str} {traceback}".lower()
+    labels_lower = str(labels).lower() if labels else ""
+    
+    # 1. Distributed - check first as distributed is a clear module
+    distributed_keywords = [
+        'distributed', 'device_mesh', 'ProcessGroup', 'FSDP', 'DDP', 'c10d',
+        'tensor parallel', 'all_reduce', 'all_gather', 'reduce_scatter',
+        'comm', 'rank', 'world_size', 'process group'
+    ]
+    if any(k in text for k in distributed_keywords):
+        return "Distributed"
+    
+    # 2. TorchAO (quantization, optimizer, etc.)
+    torchao_keywords = [
+        'torchao', 'quantization', 'quantize', 'int8', 'int4', 'fp8',
+        'optimizer', 'Adam', 'SGD', 'adamw', 'qat', 'lora', 'adapter'
+    ]
+    if any(k in text for k in torchao_keywords):
+        return "TorchAO"
+    
+    # 3. PT2E (torch.export, ExportedProgram, fake tensors)
+    pt2e_keywords = [
+        'torch.export', 'export', 'exported', 'dynamo', 'fake_tensor',
+        'graph_code', 'graph_submodule', 'capture', 'aot', 'aotautograd',
+        'forward_from_graph', '_export', 'exported_program'
+    ]
+    if any(k in text for k in pt2e_keywords):
+        return "PT2E"
+    
+    # 4. Flash Attention / Transformer Related
+    flash_attention_keywords = [
+        'flash', 'flash_attention', 'flashattention', 'sdpa', 'scaled_dot_product',
+        'scaled_dot_product_attention', 'mem_eff', 'memory efficient',
+        'transformer', 'attention', 'qwen', 'llama', 'bert', 'gpt',
+        'mha', 'mqa', 'gqa', 'rope', 'rms_norm', 'layernorm',
+        'linear', 'mlp', 'feed forward', 'feedforward'
+    ]
+    if any(k in text for k in flash_attention_keywords):
+        return "Flash Attention / Transformer Related"
+    
+    # 5. Sparse Operations Related
+    sparse_keywords = [
+        'sparse', 'csr', 'csc', 'coo', 'sampled_addmm', 'sampled_addmm',
+        'spmm', 'sparse_ops', 'sparse_matmul', 'torch.sparse'
+    ]
+    if any(k in text for k in sparse_keywords):
+        return "Sparse Operations Related"
+    
+    # 6. Inductor / Compilation Related
+    inductor_keywords = [
+        'inductor', 'compile', 'compilation', 'codegen', 'triton',
+        'kernel', 'loop', 'schedule', 'fx', 'graph', 'lower',
+        'tile', 'vectorize', 'scheduler', 'abs_float'
+    ]
+    if any(k in text for k in inductor_keywords):
+        return "Inductor / Compilation Related"
+    
+    # 7. Dtype / Precision Related
+    dtype_precision_keywords = [
+        'dtype', 'precision', 'accuracy', 'type promotion', 'typepromotion',
+        'bf16', 'fp16', 'float16', 'float32', 'int8', 'int4', 'amp',
+        'atomic', 'nan', 'inf', 'numerical', 'round', 'ceil', 'floor',
+        'small', 'close', 'assertionerror'
+    ]
+    if any(k in text for k in dtype_precision_keywords):
+        return "Dtype / Precision Related"
+    
+    # Default: Others
+    return "Others"
+
+
 def process_issues_sheet(wb):
     """Process Issues sheet to add owner_transfer, action_TBD, and duplicated_issue columns"""
     ws_issues = wb['Issues']
     ws_test = wb['Test Cases']
     
-    # Add new columns to Issues sheet (columns 19, 20, 21)
+    # Add new columns to Issues sheet (columns 19, 20, 21, 24)
     ws_issues.cell(1, 19, 'owner_transfer')
     ws_issues.cell(1, 20, 'action_TBD')
     ws_issues.cell(1, 21, 'duplicated_issue')
     ws_issues.cell(1, 22, 'priority')
     ws_issues.cell(1, 23, 'priority_reason')
+    ws_issues.cell(1, 24, 'Category')
     
     # Build index: Issue ID -> test case results
     issue_test_results = {}
@@ -611,6 +795,20 @@ def process_issues_sheet(wb):
         reporter = ws_issues.cell(row, 5).value
         assignee = ws_issues.cell(row, 4).value
         labels = ws_issues.cell(row, 6).value
+        title = str(ws_issues.cell(row, 2).value) if ws_issues.cell(row, 2).value else ''
+        module = str(ws_issues.cell(row, 12).value) if ws_issues.cell(row, 12).value else ''
+        summary = str(ws_issues.cell(row, 10).value) if ws_issues.cell(row, 10).value else ''
+        test_module = str(ws_issues.cell(row, 13).value) if ws_issues.cell(row, 13).value else ''
+        traceback = ''
+        for tr in range(2, ws_test.max_row + 1):
+            if ws_test.cell(tr, 1).value == issue_id:
+                traceback = str(ws_test.cell(tr, 9).value) if ws_test.cell(tr, 9).value else ''
+                break
+        test_cases_str = ''
+        for tr in range(2, ws_test.max_row + 1):
+            if ws_test.cell(tr, 1).value == issue_id:
+                tc = str(ws_test.cell(tr, 7).value) if ws_test.cell(tr, 7).value else ''
+                test_cases_str += ' ' + tc
         
         test_info = issue_test_results.get(issue_id, {
             'xpu_statuses': set(),
@@ -701,10 +899,6 @@ def process_issues_sheet(wb):
             else:
                 # Check for various categories
                 is_upstream = 'ut_upstream' in labels_str or 'inductor' in labels_str
-                is_flash_attention = 'flash' in title or 'flash' in summary or 'flash' in test_cases_str or 'sdpa' in title or 'sdpa' in summary or 'sdpa' in test_cases_str or 'transformer' in title or 'transformer' in summary or 'transformer' in test_cases_str or 'scaled_dot_product' in title or 'scaled_dot_product' in summary or 'scaled_dot_product' in test_cases_str or 'mem_eff' in title or 'mem_eff' in summary or 'mem_eff' in test_cases_str
-                is_sparse = 'sparse' in title or 'sparse' in summary or 'sparse' in test_module or 'sparse' in test_cases_str or 'csr' in title or 'csr' in summary or 'csr' in test_cases_str or 'sampled_addmm' in title or 'sampled_addmm' in summary or 'sampled_addmm' in test_cases_str
-                is_inductor = 'inductor' in title or 'inductor' in summary or 'inductor' in test_cases_str or 'compile' in title or 'compile' in summary or 'compile' in test_cases_str or 'aot' in title or 'aot' in summary or 'aot' in test_cases_str
-                is_dtype = 'dtype' in title or 'dtype' in summary or 'dtype' in test_cases_str or 'precision' in title or 'precision' in summary or 'precision' in test_cases_str or 'accuracy' in title or 'accuracy' in summary or 'accuracy' in test_cases_str or 'type promotion' in title or 'type promotion' in summary
                 is_wontfix = 'wont' in labels_str or 'not target' in labels_str
                 is_not_target_upstream = is_not_target and is_upstream
                 
@@ -716,18 +910,6 @@ def process_issues_sheet(wb):
                     owner_transfer = assignee
                 elif is_upstream:
                     action_tbd = 'Needs PyTorch Repo Changes (upstream)'
-                    owner_transfer = assignee
-                elif is_flash_attention:
-                    action_tbd = 'Flash Attention / Transformer Related'
-                    owner_transfer = assignee
-                elif is_sparse:
-                    action_tbd = 'Sparse Operations Related'
-                    owner_transfer = assignee
-                elif is_inductor:
-                    action_tbd = 'Inductor / Compilation Related'
-                    owner_transfer = assignee
-                elif is_dtype:
-                    action_tbd = 'Dtype / Precision Related'
                     owner_transfer = assignee
         
         # Determine priority based on issue content and test results
@@ -801,6 +983,10 @@ def process_issues_sheet(wb):
             ws_issues.cell(row, 20, action_tbd)
         ws_issues.cell(row, 22, priority)
         ws_issues.cell(row, 23, priority_reason)
+        
+        # Determine and set Category
+        category = determine_category(title, summary, test_cases_str, traceback, test_module, labels)
+        ws_issues.cell(row, 24, category)
     
     print(f"Processed {ws_issues.max_row - 1} issues")
     return wb
@@ -953,9 +1139,11 @@ def main():
             matched = find_best_xml_match(xml_prefix, xpu_xml_files)
             if matched:
                 xml_path, commit, run_id, _ = matched
-                status, comment_xpu = get_test_result(xml_path, test_case)
+                status, error_msg, traceback = get_test_result(xml_path, test_case)
                 ws.cell(row, 11, status)
-                ws.cell(row, 12, comment_xpu)
+                ws.cell(row, 12, error_msg if error_msg else '')
+                if traceback and not ws.cell(row, 9).value:
+                    ws.cell(row, 9, traceback[:3000])
                 ws.cell(row, 13, commit)
                 ws.cell(row, 14, run_id)
                 ws.cell(row, 15, os.path.basename(xml_path))
@@ -965,14 +1153,16 @@ def main():
         else:
             ws.cell(row, 11, 'not found')
             ws.cell(row, 12, reason)
-        
+
         # Get stock CI result from XML
         stock_prefix = convert_to_stock_prefix(test_file)
         if stock_prefix and stock_prefix in stock_xml_files:
             stock_xml = stock_xml_files[stock_prefix]
-            stock_status, stock_comment = get_test_result(stock_xml, test_case)
+            stock_status, stock_error_msg, stock_traceback = get_test_result(stock_xml, test_case)
             ws.cell(row, 16, stock_status)
-            ws.cell(row, 17, stock_comment)
+            ws.cell(row, 17, stock_error_msg if stock_error_msg else '')
+            if stock_traceback and not ws.cell(row, 9).value:
+                ws.cell(row, 9, stock_traceback[:3000])
         else:
             ws.cell(row, 16, 'not found')
             ws.cell(row, 17, 'Not in stock CI')

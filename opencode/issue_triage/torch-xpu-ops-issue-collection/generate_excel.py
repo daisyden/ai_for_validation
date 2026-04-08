@@ -1295,9 +1295,9 @@ wb = openpyxl.Workbook()
 ws_issues = wb.active
 ws_issues.title = "Issues"
 
-headers = ["Issue ID", "Title", "Status", "Assignee", "Reporter", "Labels", 
-           "Created Time", "Updated Time", "Milestone", "Summary", "Type", 
-           "Module", "Test Module", "Dependency", "PR", "PR Owner", "PR Status", "PR Description"]
+headers = ["Issue ID", "Title", "Status", "Assignee", "Reporter", "Labels",
+           "Created Time", "Updated Time", "Milestone", "Summary", "Type",
+           "Module", "Test Module", "Dependency", "PR", "PR Owner", "PR Status", "PR Description", "Category"]
 
 for col, header in enumerate(headers, 1):
     cell = ws_issues.cell(row=1, column=col, value=header)
@@ -1382,6 +1382,7 @@ for issue in issues:
     ws_issues.cell(row=issue_row, column=16, value=pr_owner)
     ws_issues.cell(row=issue_row, column=17, value=pr_status)
     ws_issues.cell(row=issue_row, column=18, value=pr_desc)
+    ws_issues.cell(row=issue_row, column=19, value="")
     
     # Parse test cases and e2e info
     test_cases = parse_test_cases_from_body(body)
