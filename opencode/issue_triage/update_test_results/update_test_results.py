@@ -540,6 +540,8 @@ def process_issues_sheet(wb):
     ws_issues.cell(1, 19, 'owner_transfer')
     ws_issues.cell(1, 20, 'action_TBD')
     ws_issues.cell(1, 21, 'duplicated_issue')
+    ws_issues.cell(1, 22, 'priority')
+    ws_issues.cell(1, 23, 'priority_reason')
     
     # Build index: Issue ID -> test case results
     issue_test_results = {}
@@ -728,6 +730,63 @@ def process_issues_sheet(wb):
                     action_tbd = 'Dtype / Precision Related'
                     owner_transfer = assignee
         
+        # Determine priority based on issue content and test results
+        priority = 'P2'
+        priority_reason = ''
+        
+        title = str(ws_issues.cell(row, 2).value) if ws_issues.cell(row, 2).value else ''
+        summary = str(ws_issues.cell(row, 10).value) if ws_issues.cell(row, 10).value else ''
+        test_module = str(ws_issues.cell(row, 13).value) if ws_issues.cell(row, 13).value else ''
+        labels_str = str(labels).lower() if labels else ''
+        
+        # Check if E2E model/application issue (not benchmark/unittest)
+        is_model_issue = 'model' in title.lower() or 'model' in summary.lower() or 'application' in title.lower() or 'application' in summary.lower() or 'huggingface' in title.lower() or 'timm' in title.lower() or 'torchbench' in title.lower()
+        is_e2e = test_module == 'e2e'
+        is_ut = test_module == 'ut'
+        
+        # Check for regression (passed before, failed now)
+        is_regression = 'regression' in labels_str or 'regression' in title.lower() or 'was pass' in summary.lower() or 'previously pass' in summary.lower() or 'before' in summary.lower() and 'now' in summary.lower()
+        
+        # Check for build crash
+        is_build_crash = 'build' in test_module.lower() or 'build' in title.lower() or 'crash' in title.lower() or 'segmentation' in title.lower() or 'segfault' in title.lower() or 'signal' in summary.lower()
+        
+        # Count failed test cases for this issue
+        failed_count = 0
+        for tr in range(2, ws_test.max_row + 1):
+            if ws_test.cell(tr, 1).value == issue_id:
+                tc_status = ws_test.cell(tr, 11).value
+                if tc_status in ['failed', 'error']:
+                    failed_count += 1
+        
+        # Determine priority
+        # P0: Build crash
+        if is_build_crash:
+            priority = 'P0'
+            priority_reason = 'Build crash - critical blocking issue'
+        # P0: Real model/application impact (not unittest/benchmark)
+        elif is_model_issue and not ('test' in title.lower() and 'case' in title.lower()):
+            priority = 'P0'
+            priority_reason = 'Impacts real model/application'
+        # P0: Regression
+        elif is_regression:
+            priority = 'P0'
+            priority_reason = 'Regression - passed before but failed now'
+        # P1: E2E accuracy or functionality issue
+        elif is_e2e and ('accuracy' in title.lower() or 'accuracy' in summary.lower() or 'fail' in title.lower() or 'fail' in summary.lower()):
+            priority = 'P1'
+            priority_reason = 'E2E benchmark accuracy/functionality issue'
+        # P2: E2E performance issue
+        elif is_e2e and ('performance' in title.lower() or 'slow' in title.lower() or 'latency' in title.lower()):
+            priority = 'P2'
+            priority_reason = 'E2E benchmark performance issue'
+        # P1: UT with more than 20 failed cases
+        elif is_ut and failed_count > 20:
+            priority = 'P1'
+            priority_reason = f'UT with {failed_count} failed test cases'
+        else:
+            priority = 'P2'
+            priority_reason = 'UT issue with few failures'
+        
         # Note: Rule 4 (cuda_case_not_exist) is intentionally not setting owner_transfer
         # as it requires long time LLM analysis
         
@@ -735,11 +794,13 @@ def process_issues_sheet(wb):
         if duplicated_issues:
             ws_issues.cell(row, 21, ','.join(sorted(duplicated_issues)))
         
-        # Set owner_transfer and action_TBD
+        # Set owner_transfer, action_TBD, priority
         if owner_transfer:
             ws_issues.cell(row, 19, owner_transfer)
         if action_tbd:
             ws_issues.cell(row, 20, action_tbd)
+        ws_issues.cell(row, 22, priority)
+        ws_issues.cell(row, 23, priority_reason)
     
     print(f"Processed {ws_issues.max_row - 1} issues")
     return wb
