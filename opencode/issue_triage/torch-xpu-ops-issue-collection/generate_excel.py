@@ -8,7 +8,7 @@ import requests
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = "/home/daisydeng"
-RESULT_DIR = "/home/daisydeng/ai_for_validation/opencode/issue_triage/result"
+RESULT_DIR = os.environ.get("RESULT_DIR", "/home/daisydeng/ai_for_validation/opencode/issue_triage/result")
 DATA_DIR = os.path.join(ROOT_DIR, "issue_traige", "data")
 DOC_DIR = os.path.join(ROOT_DIR, "issue_traige", "doc")
 

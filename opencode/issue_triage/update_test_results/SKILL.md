@@ -52,7 +52,7 @@ python3 update_test_results.py
 ```
 
 ## Output
-- Updated `/home/daisydeng/issue_traige/data/torch_xpu_ops_issues.xlsx`
+- Updated `$RESULT_DIR/torch_xpu_ops_issues.xlsx` (default: `~/ai_for_validation/opencode/issue_triage/result/`)
 
 ## Key Parameters
 - MAX_LLM_CASES = 3 (unique issues with double "not found")

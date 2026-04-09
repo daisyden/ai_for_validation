@@ -32,7 +32,7 @@ import glob
 import time
 
 ROOT_DIR = "/home/daisydeng"
-RESULT_DIR = "/home/daisydeng/ai_for_validation/opencode/issue_triage/result"
+RESULT_DIR = os.environ.get("RESULT_DIR", "/home/daisydeng/ai_for_validation/opencode/issue_triage/result")
 
 
 def get_torch_xpu_ops_xml_files():
@@ -576,7 +576,7 @@ def analyze_test_case_with_llm_qwen(test_file, test_class, test_case, origin_tes
     import time
     
     LLM_ENDPOINT = "http://10.239.15.43/v1/chat/completions"
-    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-XZrfiPGmZaGLZFPNUpy6ww")
+    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-xxxxxxxxxx")
     LLM_MODEL = "Qwen3-32B"
     
     pytorch_root = os.path.expanduser('~/pytorch')
@@ -695,7 +695,7 @@ def determine_category_llm(title, summary, test_cases_info, test_module, labels)
     import re
     
     LLM_ENDPOINT = "http://10.239.15.43/v1/chat/completions"
-    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-XZrfiPGmZaGLZFPNUpy6ww")
+    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-xxxxxxxxxx")
     LLM_MODEL = "Qwen3-32B"
     
     if not title and not summary:
@@ -787,7 +787,7 @@ def check_info_requested_to_reporter_llm(issue_title, issue_summary, error_msg, 
     import re
     
     LLM_ENDPOINT = "http://10.239.15.43/v1/chat/completions"
-    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-XZrfiPGmZaGLZFPNUpy6ww")
+    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-xxxxxxxxxx")
     LLM_MODEL = "Qwen3-32B"
     
     issue_content = f"{issue_title} {issue_summary} {error_msg} {traceback}".strip()
@@ -807,9 +807,9 @@ Determine:
 4. Is it a clear bug with complete information?
 
 Respond with ONE of:
-- "Ready to analyze" - if sufficient info to start debugging
-- "Need reproduce steps" - if no clear repro steps
-- "Need more information - [specific missing info]" - if key details missing
+- "Ready to analyze" - with sufficient info to start debugging
+- "Need reproduce steps" - if a bug without clear repro steps
+- "Need more information - [specific missing info]" - if the comments requesting key details
 - "Feature Request - needs triage" - if it's a feature request
 
 YOUR ANSWER:"""
@@ -866,7 +866,7 @@ def determine_priority_llm(title, summary, error_msg, test_module, labels_str, t
     import re
     
     LLM_ENDPOINT = "http://10.239.15.43/v1/chat/completions"
-    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-XZrfiPGmZaGLZFPNUpy6ww")
+    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-xxxxxxxxxx")
     LLM_MODEL = "Qwen3-32B"
     
     tc_info_str = ""
@@ -890,7 +890,7 @@ Test Cases:
 Determine priority (P0=critical, P1=high, P2=medium, P3=low):
 - P0: Build crash, regression (was passing), real model failure, security
 - P1: Many test failures, e2e accuracy issue, performance regression
-- P2: Few failures, feature gaps, minor issues
+- P2: Few UT failures, feature gaps, minor issues
 - P3: Minor, cosmetic, documentation
 
 Return ONLY format: "PRIORITY - reason" (e.g., "P1 - Regression in performance")
@@ -1243,7 +1243,7 @@ def analyze_root_cause_llm(issue_id, issue_title, issue_summary, test_file, test
     
     ROOT_CAUSE_LOG = os.path.expanduser('~/ai_for_validation/opencode/issue_triage/result/root_cause.txt')
     LLM_ENDPOINT = "http://10.239.15.43/v1/chat/completions"
-    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-XZrfiPGmZaGLZFPNUpy6ww")
+    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-xxxxxxxxxx")
     LLM_MODEL = "Qwen3-32B"
     
     if not issue_title and not issue_summary and not error_msg and not traceback:

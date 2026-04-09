@@ -59,7 +59,7 @@ python3 generate_excel.py
 ```
 
 ## Output
-- `/home/daisydeng/issue_traige/data/torch_xpu_ops_issues.xlsx`
+- `$RESULT_DIR/torch_xpu_ops_issues.xlsx` (default: `~/ai_for_validation/opencode/issue_triage/result/`)
 
 ## Prerequisites
 - GitHub token with repo access (set GITHUB_TOKEN env var)

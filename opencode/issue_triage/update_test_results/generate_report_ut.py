@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import os
 
 ROOT_DIR = "/home/daisydeng"
-RESULT_DIR = "/home/daisydeng/ai_for_validation/opencode/issue_triage/result"
+RESULT_DIR = os.environ.get("RESULT_DIR", "/home/daisydeng/ai_for_validation/opencode/issue_triage/result")
 
 
 def generate_report():

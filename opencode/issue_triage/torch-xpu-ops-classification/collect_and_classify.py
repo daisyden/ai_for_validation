@@ -19,7 +19,7 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(SCRIP
 
 PHASE1_DIR = os.path.join(BASE_DIR, "torch-xpu-ops-issue-collection")
 PHASE2_DIR = os.path.join(BASE_DIR, "torch-ops-extraction")
-OUTPUT_DIR = os.path.join(BASE_DIR, "result")
+RESULT_DIR = os.environ.get("RESULT_DIR", os.path.join(BASE_DIR, "result"))
 DATA_DIR = os.path.join(ROOT_DIR, "issue_traige", "data")
 
 
@@ -90,13 +90,10 @@ def main():
             sys.exit(1)
     
     # Copy result to output directory
-    input_file = os.path.join(DATA_DIR, "torch_xpu_ops_issues.xlsx")
-    output_file = os.path.join(OUTPUT_DIR, "torch_xpu_ops_classified.xlsx")
+    input_file = os.path.join(RESULT_DIR, "torch_xpu_ops_issues.xlsx")
     
     if os.path.exists(input_file):
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        shutil.copy2(input_file, output_file)
-        print(f"\nResult saved to: {output_file}")
+        print(f"\nResult saved to: {input_file}")
     
     print("\n" + "=" * 60)
     print("Complete!")

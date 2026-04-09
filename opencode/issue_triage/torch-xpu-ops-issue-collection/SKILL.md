@@ -146,9 +146,10 @@ For each issue, extract PR information from the issue body and comments:
   - PR Status: closed
 
 ## File Outputs
-- `/home/daisydeng/issue_traige/data/torch_xpu_ops_issues.json` - Raw issue data
-- `/home/daisydeng/issue_traige/data/torch_xpu_ops_comments.json` - Comments data
-- `/home/daisydeng/issue_traige/data/torch_xpu_ops_issues.xlsx` - Final Excel file with PR columns
+- `$RESULT_DIR/torch_xpu_ops_issues.json` - Raw issue data
+- `$RESULT_DIR/torch_xpu_ops_comments.json` - Comments data
+- `$RESULT_DIR/torch_xpu_ops_issues.xlsx` - Final Excel file with PR columns
+(default: `~/ai_for_validation/opencode/issue_triage/result/`)
 
 ## Key Implementation Notes
 1. Use GitHub token for API authentication (set GITHUB_TOKEN environment variable)
@@ -161,5 +162,6 @@ For each issue, extract PR information from the issue body and comments:
 8. Extract PR URLs from issue body and comments using regex patterns
 9. Fetch PR status and owner from GitHub API for each extracted PR
 
-## Related Files
-- `~/issue_traige/doc/ops_dependency.csv` - Mapping of torch ops to dependency libraries
+### Related Files
+- `$DOC_DIR/ops_dependency.csv` - Mapping of torch ops to dependency libraries
+(default: `~/issue_traige/doc/`)

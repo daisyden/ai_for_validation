@@ -32,7 +32,7 @@ cd ~/ai_for_validation/opencode/issue_triage/torch-xpu-ops-issue-collection
 python3 generate_excel.py
 ```
 
-**Output**: `~/issue_traige/data/torch_xpu_ops_issues.xlsx`
+**Output**: `$RESULT_DIR/torch_xpu_ops_issues.xlsx` (default: `~/ai_for_validation/opencode/issue_triage/result/`)
 
 ---
 
@@ -51,10 +51,10 @@ Extracts torch operation information from issue test cases to classify issues by
 **Usage**:
 ```bash
 cd ~/ai_for_validation/opencode/issue_triage/torch-ops-extraction
-python3 extract_torch_ops.py ~/issue_traige/data/torch_xpu_ops_issues.xlsx
+python3 extract_torch_ops.py $RESULT_DIR/torch_xpu_ops_issues.xlsx
 ```
 
-**Input**: Excel file from Step 1
+**Input**: Excel file from Step 1 (`$RESULT_DIR/torch_xpu_ops_issues.xlsx`)
 
 ---
 
@@ -73,7 +73,7 @@ Extracts PR references from GitHub issue comments with fix-related keywords and 
 **Usage**:
 ```bash
 cd ~/ai_for_validation/opencode/issue_triage/pr-extraction
-python3 pr_extraction.py ~/issue_traige/data/torch_xpu_ops_issues.xlsx
+python3 pr_extraction.py $RESULT_DIR/torch_xpu_ops_issues.xlsx
 ```
 
 **Output**: Updates PR, PR Owner, PR Status columns in Issues sheet
@@ -117,7 +117,7 @@ python3 generate_report.py
 
 ## Excel File Structure
 
-Input/Output: `~/issue_traige/data/torch_xpu_ops_issues.xlsx`
+Input/Output: `$RESULT_DIR/torch_xpu_ops_issues.xlsx` (default: `~/ai_for_validation/opencode/issue_triage/result/`)
 
 ### Sheets:
 1. **Issues** - Main issue data with PR information
@@ -172,17 +172,20 @@ Some tests use this pattern to import from pytorch/test with XPU patches instead
 ## Run Full Pipeline
 
 ```bash
+# Set result directory (optional, default: ~/ai_for_validation/opencode/issue_triage/result)
+export RESULT_DIR=~/ai_for_validation/opencode/issue_triage/result
+
 # Step 1: Collect issues
 cd ~/ai_for_validation/opencode/issue_triage/torch-xpu-ops-issue-collection
 python3 generate_excel.py
 
 # Step 2: Extract torch ops
 cd ~/ai_for_validation/opencode/issue_triage/torch-ops-extraction
-python3 extract_torch_ops.py ~/issue_traige/data/torch_xpu_ops_issues.xlsx
+python3 extract_torch_ops.py $RESULT_DIR/torch_xpu_ops_issues.xlsx
 
 # Step 3: Extract PRs
 cd ~/ai_for_validation/opencode/issue_triage/pr-extraction
-python3 pr_extraction.py ~/issue_traige/data/torch_xpu_ops_issues.xlsx
+python3 pr_extraction.py $RESULT_DIR/torch_xpu_ops_issues.xlsx
 
 # Step 4: Update test results
 cd ~/ai_for_validation/opencode/issue_triage/update_test_results
