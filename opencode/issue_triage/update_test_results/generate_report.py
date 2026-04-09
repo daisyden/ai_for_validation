@@ -85,7 +85,7 @@ def generate_report():
 
     # Action reason mapping
     action_reason_map = {
-        'Need reproduce step and more information': 'Missing reproduce steps or error details',
+        'Need reproduce steps': 'Missing reproduce steps',
         'Needs PyTorch Repo Changes (upstream)': 'Requires upstream fix in PyTorch',
         'Check case availability': 'No test case status in XPU/Stock CI data',
         'Close fixed issue': 'All test cases now passing',
@@ -97,13 +97,27 @@ def generate_report():
         'assign owner': 'Issue has no assignee',
     }
 
+    # Need more information action reason mapping (extract specific info needed)
+    def get_info_needed_reason(action):
+        """Extract what information is needed from action string"""
+        if 'Need more information' not in action:
+            return ''
+        # Extract the part after the dash
+        if '-' in action:
+            parts = action.split('-', 1)
+            if len(parts) > 1:
+                return parts[1].strip()
+        return ''
+
     # Separate information_required from other actions
-    info_required_keywords = ['reproduce', 'information', 'missing', 'awaiting', 'need ']
+    # Keywords that indicate reporter needs to provide information
+    info_required_keywords = ['reproduce', 'information', 'missing', 'awaiting']
     information_required = {}
     other_actions = {}
 
     for action, issues_list in action_groups.items():
-        is_info_required = any(kw in action.lower() for kw in info_required_keywords)
+        action_lower = action.lower()
+        is_info_required = any(kw in action_lower for kw in info_required_keywords)
         if is_info_required:
             information_required[action] = issues_list
         else:
@@ -251,6 +265,12 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     
 # Information Required section (new)
     if information_required:
+        # Sort actions: reproduce steps first, then specific info types
+        sorted_info_actions = sorted(information_required.items(), key=lambda x: (
+            0 if 'reproduce' in x[0].lower() else 1,  # Reproduce steps first
+            x[0]  # Then sort by action name
+        ))
+        
         md += """
 ### 1. Information Required
 
@@ -259,8 +279,16 @@ Information needed from reporters to proceed with issue triage.
 | ID | Title | Owner | Owner Transferred | Required Info | Priority | Action Reason | Category | Root Cause | PR | Module | Test Module |
 |---|-------|-------|-------------------|--------------|---------|--------|----------|-----------|-----|--------|-------------|
 """
-        for action, issues_list in sorted(information_required.items()):
+        for action, issues_list in sorted_info_actions:
             action_reason = action_reason_map.get(action, '')
+            # For "Need more information - X" actions, show the specific info needed
+            if 'Need more information' in action:
+                info_needed = get_info_needed_reason(action)
+                action_display = 'Need more information'
+            else:
+                info_needed = ''
+                action_display = action
+            
             for issue in issues_list:
                 title = (issue['title'] or '')[:35]
                 owner = issue['assignee'] or ''
@@ -273,7 +301,10 @@ Information needed from reporters to proceed with issue triage.
                 reason = (issue['priority_reason'] or '')[:50]
                 category = issue['category'] or ''
                 root_cause = issue['root_cause'] or ''
-                md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {action} | {priority} | {action_reason} | {category} | {root_cause} | {pr_link} | {module} | {test_module} |\n"
+                
+                # For Need more information, show the specific info needed in Required Info column
+                required_info = info_needed if info_needed else action_display
+                md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {required_info} | {priority} | {action_reason} | {category} | {root_cause} | {pr_link} | {module} | {test_module} |\n"
 
     # Other actions section
     other_action_list = list(sorted(other_actions.keys()))

@@ -1163,7 +1163,6 @@ def process_issues_sheet(wb):
     ws_issues = wb['Issues']
     ws_test = wb['Test Cases']
     
-    # Add new columns to Issues sheet (columns 19, 20, 21, 24)
     ws_issues.cell(1, 19, 'owner_transfer')
     ws_issues.cell(1, 20, 'action_TBD')
     ws_issues.cell(1, 21, 'duplicated_issue')
@@ -1176,11 +1175,7 @@ def process_issues_sheet(wb):
     llm_root_cause_count = 0
     root_cause_cache = {}
     
-    # Build index: Issue ID -> test case results
     issue_test_results = {}
-    issue_prs = {}
-    issue_reporters = {}
-    
     for row in range(2, ws_test.max_row + 1):
         issue_id = ws_test.cell(row, 1).value
         xpu_status = ws_test.cell(row, 11).value
@@ -1206,7 +1201,6 @@ def process_issues_sheet(wb):
             for dup_id in str(dup_issue).split(','):
                 issue_test_results[issue_id]['duplicated_issues'].add(dup_id.strip())
     
-    # Collect E2E status for issues
     ws_e2e = wb['E2E Test Cases']
     for row in range(2, ws_e2e.max_row + 1):
         issue_id = ws_e2e.cell(row, 1).value
@@ -1227,7 +1221,8 @@ def process_issues_sheet(wb):
         if e2e_status:
             issue_test_results[issue_id]['e2e_statuses'].add(e2e_status)
     
-    # Get PR info from Issues sheet
+    issue_prs = {}
+    issue_reporters = {}
     for row in range(2, ws_issues.max_row + 1):
         issue_id = ws_issues.cell(row, 1).value
         pr = ws_issues.cell(row, 15).value
@@ -1237,22 +1232,23 @@ def process_issues_sheet(wb):
         issue_prs[issue_id] = pr
         issue_reporters[issue_id] = reporter
     
-    # Process each issue
     for row in range(2, ws_issues.max_row + 1):
         issue_id = ws_issues.cell(row, 1).value
         pr = ws_issues.cell(row, 15).value
         reporter = ws_issues.cell(row, 5).value
         assignee = ws_issues.cell(row, 4).value
         labels = ws_issues.cell(row, 6).value
-        title = str(ws_issues.cell(row, 2).value) if ws_issues.cell(row, 2).value else ''
+        title_raw = str(ws_issues.cell(row, 2).value) if ws_issues.cell(row, 2).value else ''
         module = str(ws_issues.cell(row, 12).value) if ws_issues.cell(row, 12).value else ''
-        summary = str(ws_issues.cell(row, 10).value) if ws_issues.cell(row, 10).value else ''
-        test_module = str(ws_issues.cell(row, 13).value) if ws_issues.cell(row, 13).value else ''
+        summary_raw = str(ws_issues.cell(row, 10).value) if ws_issues.cell(row, 10).value else ''
+        test_module_raw = ws_issues.cell(row, 13).value
+        test_module = str(test_module_raw) if test_module_raw else ''
         traceback = ''
         for tr in range(2, ws_test.max_row + 1):
             if ws_test.cell(tr, 1).value == issue_id:
                 traceback = str(ws_test.cell(tr, 9).value) if ws_test.cell(tr, 9).value else ''
                 break
+        
         test_cases_str = ''
         for tr in range(2, ws_test.max_row + 1):
             if ws_test.cell(tr, 1).value == issue_id:
@@ -1270,26 +1266,22 @@ def process_issues_sheet(wb):
         stock_statuses = test_info['stock_statuses']
         cuda_case_not_exist = test_info['cuda_case_not_exist']
         duplicated_issues = test_info['duplicated_issues']
+        e2e_statuses = test_info.get('e2e_statuses', set())
         
-        # Default values
         owner_transfer = ''
         action_tbd = ''
         
-        # Check for Not target or wont fix in labels
         labels_str = str(labels).lower() if labels else ''
+        title_lower = title_raw.lower()
+        summary_lower = summary_raw.lower() if summary_raw else ''
+        
         is_not_target = ('not target' in labels_str or 'wont' in labels_str or "won't" in labels_str)
         
-        # Rule 5: Labels contain Not target or wont fix
         if is_not_target:
             owner_transfer = reporter
             action_tbd = 'add to skiplist'
         
-        # Rule 1: All test cases passed in torch-xpu-ops nightly or stock CI
-        # Note: Must have passed (not skipped), and not for 'random' labeled issues
-        labels_str = str(labels).lower() if labels else ''
         is_random = 'random' in labels_str
-        
-        # Check UT (unit test) passed
         ut_passed = False
         if not is_random and xpu_statuses and stock_statuses:
             xpu_all_passed = (xpu_statuses == {'passed'})
@@ -1300,88 +1292,56 @@ def process_issues_sheet(wb):
                 action_tbd = 'Close fixed issue'
                 ut_passed = True
         
-        # Rule 1b: E2E test cases all passed
-        e2e_statuses = test_info.get('e2e_statuses', set())
-        if not ut_passed and e2e_statuses:
-            # Check if all E2E statuses are pass (not fail)
-            e2e_all_passed = all(s == 'pass' for s in e2e_statuses)
-            if e2e_all_passed:
-                owner_transfer = reporter
-                action_tbd = 'Close fixed issue'
+        e2e_all_passed = all(s == 'pass' for s in e2e_statuses) if e2e_statuses else False
+        if not ut_passed and e2e_all_passed:
+            owner_transfer = reporter
+            action_tbd = 'Close fixed issue'
         
-        # Check PR status
         pr_status = ws_issues.cell(row, 17).value
         pr_closed = pr_status in ['closed', 'merged']
         
-        # If no owner_transfer yet and PRs are closed
         if not owner_transfer and pr_closed:
-            # Rule 2: No failed cases - verify the issue
             has_failed = ('failed' in xpu_statuses) or ('failed' in stock_statuses)
             
             if not has_failed:
                 owner_transfer = reporter
                 action_tbd = 'Verify the issue'
             else:
-                # Rule 3: Has failed cases - revisit PR
                 owner_transfer = assignee
                 action_tbd = 'Revisit the PR as case failed'
         
-        # Rule 6: For issues still with no action_TBD, analyze content to determine TBD action
-        if not action_tbd:
-            labels_str = str(labels).lower() if labels else ''
-            title = str(ws_issues.cell(row, 2).value).lower() if ws_issues.cell(row, 2).value else ''
-            summary = str(ws_issues.cell(row, 10).value).lower() if ws_issues.cell(row, 10).value else ''
-            test_module = str(ws_issues.cell(row, 13).value).lower() if ws_issues.cell(row, 13).value else ''
-            
-            # Get test case names for this issue
-            test_cases_str = ''
-            for tr in range(2, ws_test.max_row + 1):
-                if ws_test.cell(tr, 1).value == issue_id:
-                    tc = str(ws_test.cell(tr, 7).value).lower() if ws_test.cell(tr, 7).value else ''
-                    test_cases_str += ' ' + tc
-            
-            # Check for "Torch not compiled with CUDA enabled" - needs enabling test
-            if 'torch not compiled with cuda enabled' in summary or 'torch not compiled with cuda enabled' in title:
-                owner_transfer = 'daisyden'
-                action_tbd = 'Enable test'
-            
-            else:
-                # Check for various categories
-                is_upstream = 'ut_upstream' in labels_str or 'inductor' in labels_str
-                is_wontfix = 'wont' in labels_str or 'not target' in labels_str
-                is_not_target_upstream = is_not_target and is_upstream
-                
-                if is_not_target_upstream:
-                    action_tbd = 'Needs Upstream Skip PR (not_target + ut_upstream)'
-                    owner_transfer = assignee
-                elif is_wontfix:
-                    action_tbd = 'Needs Skip PR (wontfix / not_target)'
-                    owner_transfer = assignee
-                elif is_upstream:
-                    action_tbd = 'Needs PyTorch Repo Changes (upstream)'
-                    owner_transfer = assignee
+        is_upstream = 'ut_upstream' in labels_str or 'inductor' in labels_str
+        is_wontfix = 'wont ' in labels_str or ' wont ' in labels_str or 'wontfix' in labels_str or 'not target' in labels_str.replace('nottarget', '')
+        is_not_target_upstream = is_not_target and is_upstream
         
-        # Determine priority based on issue content and test results
+        if not action_tbd:
+            if is_not_target_upstream:
+                action_tbd = 'Needs Upstream Skip PR (not_target + ut_upstream)'
+                owner_transfer = assignee
+            elif is_wontfix:
+                action_tbd = 'Needs Skip PR (wontfix / not_target)'
+                owner_transfer = assignee
+            elif is_upstream:
+                action_tbd = 'Needs PyTorch Repo Changes (upstream)'
+                owner_transfer = assignee
+        
         priority = 'P2'
         priority_reason = ''
         
-        title = str(ws_issues.cell(row, 2).value) if ws_issues.cell(row, 2).value else ''
-        summary = str(ws_issues.cell(row, 10).value) if ws_issues.cell(row, 10).value else ''
-        test_module = str(ws_issues.cell(row, 13).value) if ws_issues.cell(row, 13).value else ''
-        labels_str = str(labels).lower() if labels else ''
-        
-        # Check if E2E model/application issue (not benchmark/unittest)
-        is_model_issue = 'model' in title.lower() or 'model' in summary.lower() or 'application' in title.lower() or 'application' in summary.lower() or 'huggingface' in title.lower() or 'timm' in title.lower() or 'torchbench' in title.lower()
+        is_model_issue = ('model' in title_raw.lower() or 'model' in summary_raw.lower() or 
+                        'application' in title_raw.lower() or 'application' in summary_raw.lower() or
+                        'huggingface' in title_raw.lower() or 'timm' in title_raw.lower() or 'torchbench' in title_raw.lower())
         is_e2e = test_module == 'e2e'
         is_ut = test_module == 'ut'
         
-        # Check for regression (passed before, failed now)
-        is_regression = 'regression' in labels_str or 'regression' in title.lower() or 'was pass' in summary.lower() or 'previously pass' in summary.lower() or 'before' in summary.lower() and 'now' in summary.lower()
+        is_regression = ('regression' in labels_str or 'regression' in title_raw.lower() or 
+                        'was pass' in summary_raw.lower() or 'previously pass' in summary_raw.lower() or
+                        ('before' in summary_raw.lower() and 'now' in summary_raw.lower()))
         
-        # Check for build crash
-        is_build_crash = 'build' in test_module.lower() or 'build' in title.lower() or 'crash' in title.lower() or 'segmentation' in title.lower() or 'segfault' in title.lower() or 'signal' in summary.lower()
+        is_build_crash = ('build' in test_module.lower() or 'build' in title_raw.lower() or 
+                         'crash' in title_raw.lower() or 'segmentation' in title_raw.lower() or
+                         'segfault' in title_raw.lower() or 'signal' in summary_raw.lower())
         
-        # Count failed test cases for this issue
         failed_count = 0
         for tr in range(2, ws_test.max_row + 1):
             if ws_test.cell(tr, 1).value == issue_id:
@@ -1389,28 +1349,23 @@ def process_issues_sheet(wb):
                 if tc_status in ['failed', 'error']:
                     failed_count += 1
         
-        # Determine priority
-        # P0: Build crash
         if is_build_crash:
             priority = 'P0'
             priority_reason = 'Build crash - critical blocking issue'
-        # P0: Real model/application impact (not unittest/benchmark)
-        elif is_model_issue and not ('test' in title.lower() and 'case' in title.lower()):
+        elif is_model_issue and not ('test' in title_raw.lower() and 'case' in title_raw.lower()):
             priority = 'P0'
             priority_reason = 'Impacts real model/application'
-        # P0: Regression
         elif is_regression:
             priority = 'P0'
             priority_reason = 'Regression - passed before but failed now'
-        # P1: E2E accuracy or functionality issue
-        elif is_e2e and ('accuracy' in title.lower() or 'accuracy' in summary.lower() or 'fail' in title.lower() or 'fail' in summary.lower()):
+        elif is_e2e and ('accuracy' in title_raw.lower() or 'accuracy' in summary_raw.lower() or 
+                        'fail' in title_raw.lower() or 'fail' in summary_raw.lower()):
             priority = 'P1'
             priority_reason = 'E2E benchmark accuracy/functionality issue'
-        # P2: E2E performance issue
-        elif is_e2e and ('performance' in title.lower() or 'slow' in title.lower() or 'latency' in title.lower()):
+        elif is_e2e and ('performance' in title_raw.lower() or 'slow' in title_raw.lower() or 
+                        'latency' in title_raw.lower()):
             priority = 'P2'
             priority_reason = 'E2E benchmark performance issue'
-        # P1: UT with more than 20 failed cases
         elif is_ut and failed_count > 20:
             priority = 'P1'
             priority_reason = f'UT with {failed_count} failed test cases'
@@ -1418,79 +1373,109 @@ def process_issues_sheet(wb):
             priority = 'P2'
             priority_reason = 'UT issue with few failures'
         
-        # Note: Rule 4 (cuda_case_not_exist) is intentionally not setting owner_transfer
-        # as it requires long time LLM analysis
-        
-        # Add duplicated issues to Issues sheet
         if duplicated_issues:
             ws_issues.cell(row, 21, ','.join(sorted(duplicated_issues)))
         
-        # New Rule: Check case availability and information requirements
-        # IMPORTANT: Only apply if no action_tbd has been set yet and issue is on public branch
         if not action_tbd:
-            labels_str = str(labels).lower() if labels else ''
-            title_raw = str(ws_issues.cell(row, 2).value) if ws_issues.cell(row, 2).value else ''
-            summary_raw = str(ws_issues.cell(row, 10).value) if ws_issues.cell(row, 10).value else ''
-
             version_info = extract_version_info(title_raw + ' ' + summary_raw)
             is_public = is_public_branch(version_info)
-
-            # Check test case and E2E status from both sheets
+            
             has_xpu_status = bool(xpu_statuses)
             has_stock_status = bool(stock_statuses)
-            has_e2e_status = bool(test_info.get('e2e_statuses', set()))
-
-            all_statuses_empty = (
-                not has_xpu_status and
-                not has_stock_status and
-                not has_e2e_status
+            has_e2e_status = bool(e2e_statuses)
+            
+            is_e2e_issue = test_module_raw == 'e2e'
+            
+            all_statuses_empty = not has_xpu_status and not has_stock_status and not has_e2e_status
+            
+            is_feature_request = (
+                ('feature' in title_lower or 'feature' in summary_lower) or
+                ('request' in title_lower or 'request' in summary_lower) or
+                ('implement' in title_lower or 'implement' in summary_lower) or
+                ('add support' in title_lower or 'add support' in summary_lower) or
+                ('enable' in title_lower and 'test' not in title_lower and 'feature' in summary_lower) or
+                (labels and 'enhancement' in str(labels).lower())
             )
-
-            # Rule A: On public branch with no test case availability info
-            if is_public and all_statuses_empty:
+            
+            # E2E issues are always tracked for upstream changes - they have their own test framework
+            if is_e2e_issue:
+                # For all E2E issues: if they have pass status and are resolved, close them
+                # Regardless of whether they have status data, E2E issues don't need case availability check
+                if is_e2e_issue and has_e2e_status and e2e_all_passed:
+                    owner_transfer = reporter
+                    action_tbd = 'Close fixed issue'
+                else:
+                    # E2E issue needs upstream investigation
+                    action_tbd = 'Needs PyTorch Repo Changes (upstream)'
+                    owner_transfer = assignee
+            elif is_public and all_statuses_empty and not is_feature_request:
+                if e2e_all_passed:
+                    owner_transfer = reporter
+                    action_tbd = 'Close fixed issue'
+                else:
+                    action_tbd = 'Needs PyTorch Repo Changes (upstream)'
+                    owner_transfer = assignee
+            elif is_public and all_statuses_empty and not is_feature_request and not is_e2e_issue:
                 action_tbd = 'Check case availability'
                 owner_transfer = reporter
-
-            # Rule B: Check if reproduce step or other information is missing
-            if not action_tbd:
+            
+            if not action_tbd and not is_feature_request and not is_e2e_issue:
                 issue_content = title_raw + ' ' + summary_raw
-
-                missing_info_type = None
-
-                if not check_reproduce_step(issue_content):
-                    missing_info_type = 'reproduce step'
-
-                if not check_info_requested_to_reporter(issue_content):
-                    if missing_info_type:
-                        missing_info_type += ' and more information'
+                
+                is_bug_or_perf = any(kw in title_lower or kw in summary_lower for kw in [
+                    'bug', 'fail', 'error', 'crash', 'assertion', 'exception',
+                    'performance', 'slow', 'latency', 'timeout', 'regression',
+                    'accuracy', 'wrong result', 'precision', 'dtype'
+                ])
+                
+                has_already_requested = check_info_requested_to_reporter(issue_content)
+                
+                if is_bug_or_perf:
+                    if not check_reproduce_step(issue_content):
+                        action_tbd = 'Need reproduce steps'
+                        owner_transfer = reporter
+                    elif has_already_requested:
+                        action_tbd = 'Awaiting response from reporter'
+                        owner_transfer = reporter
                     else:
-                        missing_info_type = 'more information'
-
-                if missing_info_type:
-                    # Check if this is info that was already requested
-                    has_already_requested = check_info_requested_to_reporter(issue_content)
+                        action_tbd = 'Needs PyTorch Repo Changes (upstream)'
+                else:
                     if has_already_requested:
                         action_tbd = 'Awaiting response from reporter'
+                        owner_transfer = reporter
                     else:
-                        action_tbd = f'Need {missing_info_type}'
-                    owner_transfer = reporter
-
-        # Set owner_transfer, action_TBD, priority
+                        info_needed = []
+                        if 'accuracy' in title_lower or 'accuracy' in summary_lower:
+                            info_needed.append('accuracy comparison data')
+                        if 'performance' in title_lower or 'performance' in summary_lower:
+                            info_needed.append('performance numbers/baseline')
+                        if 'regression' in title_lower or 'regression' in summary_lower:
+                            info_needed.append('previous good version info')
+                        if not info_needed:
+                            info_needed.append('error logs and reproduction steps')
+                        
+                        info_str = ', '.join(info_needed) if info_needed else 'additional details'
+                        action_tbd = f'Need more information - {info_str}'
+                        owner_transfer = reporter
+        
         if owner_transfer:
             ws_issues.cell(row, 19, owner_transfer)
         if action_tbd:
             ws_issues.cell(row, 20, action_tbd)
+        # Remove old format entries that should be replaced
+        old_format = 'Need reproduce step and more information'
+        current_cell_value = ws_issues.cell(row, 20).value
+        if current_cell_value == old_format:
+            ws_issues.cell(row, 20, action_tbd if action_tbd else '')
+        
         ws_issues.cell(row, 22, priority)
         ws_issues.cell(row, 23, priority_reason)
         
-        # Determine and set Category
-        category = determine_category(title, summary, test_cases_str, traceback, test_module, labels)
+        category = determine_category(title_raw, summary_raw, test_cases_str, traceback, test_module, labels)
         ws_issues.cell(row, 24, category)
         
-        # Analyze root cause only if action_TBD is blank
         current_action_tbd = ws_issues.cell(row, 20).value
         if not current_action_tbd:
-            # Get test case info for this issue
             issue_test_file = ''
             issue_test_class = ''
             issue_test_case = ''
@@ -1511,12 +1496,9 @@ def process_issues_sheet(wb):
                     if issue_error_msg and issue_traceback:
                         break
             
-            issue_title_raw = str(ws_issues.cell(row, 2).value) if ws_issues.cell(row, 2).value else ''
-            
-            # Always get rule-based root cause first as fallback
             root_cause = analyze_root_cause(
-                issue_title_raw,
-                summary,
+                title_raw,
+                summary_raw,
                 issue_test_file,
                 issue_test_class,
                 issue_test_case,
@@ -1524,15 +1506,14 @@ def process_issues_sheet(wb):
                 issue_traceback,
                 test_module
             )
-
-            # Try LLM for first MAX_LLM_ROOT_CAUSE issues (always call for better results)
+            
             if llm_root_cause_count < MAX_LLM_ROOT_CAUSE:
                 print(f"  [LLM ROOT CAUSE #{llm_root_cause_count+1}] Issue {issue_id}: Calling LLM for root cause analysis...")
                 llm_start = time.time()
                 llm_root_cause = analyze_root_cause_llm(
                     issue_id,
-                    issue_title_raw,
-                    summary,
+                    title_raw,
+                    summary_raw,
                     issue_test_file,
                     issue_test_class,
                     issue_test_case,
