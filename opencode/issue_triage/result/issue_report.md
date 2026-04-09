@@ -8,7 +8,7 @@
 - Torch-XPU-OPS Nightly CI: XML files from `Inductor-XPU-UT-Data-*` + `Inductor-wheel-nightly-LTS2-XPU-E2E-Data-*` (commit: `a2d516a58c64f18b76880f3a77efbc02885d65af`)
 - Stock PyTorch XPU CI: XML files from `test-default-*-linux.idc.xpu_*.zip` (run IDs: 69741866812, 69741866834, 69741866862, 69741866911, etc.)
 
-Generated: 2026-04-08 22:51:48
+Generated: 2026-04-08 23:01:09
 
 ---
 
@@ -20,7 +20,7 @@ Generated: 2026-04-08 22:51:48
    - [By Module](#by-module)
    - [By Dependency](#by-dependency)
    - [By Action TBD](#by-action-tbd)
-   - [By Category](#by-category)
+   - [By Category](#by-category-stats)
    - [By Priority](#by-priority)
 3. [New Submitted Issues (Past Week)](#3-new-submitted-issues-past-week)
 4. [Action Required](#4-action-required)
@@ -55,7 +55,7 @@ Generated: 2026-04-08 22:51:48
 
 ## 2. Statistics {#2-statistics}
 
-### By Test Module
+### By Test Module {#by-test-module}
 
 | Test Module | Count |
 |-------------|-------|
@@ -63,7 +63,7 @@ Generated: 2026-04-08 22:51:48
 | e2e | 39 |
 | build | 7 |
 
-### By Module
+### By Module {#by-module}
 
 | Module | Count |
 |--------|-------|
@@ -75,7 +75,7 @@ Generated: 2026-04-08 22:51:48
 | profiling | 5 |
 | low_precision | 3 |
 
-### By Dependency
+### By Dependency {#by-dependency}
 
 | Dependency | Count |
 |------------|-------|
@@ -85,7 +85,7 @@ Generated: 2026-04-08 22:51:48
 | Triton | 5 |
 | oneCCL | 1 |
 
-### By Action TBD
+### By Action TBD {#by-action-tbd}
 
 | Action TBD | Count |
 |------------|-------|
@@ -97,7 +97,7 @@ Generated: 2026-04-08 22:51:48
 | add to skiplist | 4 |
 | Verify the issue | 3 |
 
-### By Category
+### By Category (Statistics) {#by-category-stats}
 
 | Category | Count |
 |----------|-------|
@@ -110,7 +110,7 @@ Generated: 2026-04-08 22:51:48
 | Sparse Operations Related | 14 |
 | PT2E | 13 |
 
-### By Priority
+### By Priority {#by-priority}
 
 | Priority | Count |
 |----------|-------|
