@@ -682,6 +682,261 @@ Return ONLY valid JSON:
         }
 
 
+def determine_category_llm(title, summary, test_cases_info, test_module, labels):
+    """
+    Use Qwen3-32B via internal API to determine the category of an issue.
+    Categories: Distributed, TorchAO, PT2E, Flash Attention/Transformer, Sparse, Inductor/Compilation, Dtype/Precision, Backend/Device, Others
+    
+    Returns: category string
+    """
+    import requests
+    import json
+    import time
+    import re
+    
+    LLM_ENDPOINT = "http://10.239.15.43/v1/chat/completions"
+    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-XZrfiPGmZaGLZFPNUpy6ww")
+    LLM_MODEL = "Qwen3-32B"
+    
+    if not title and not summary:
+        return "Others"
+    
+    tc_info_str = ""
+    if test_cases_info:
+        for tc in test_cases_info:
+            error_val = tc.get('error_msg') or ''
+            tc_info_str += f"- Test: {tc.get('test_case', '')}, Error: {str(error_val)[:100]}\n"
+    
+    test_module_str = test_module or "Unknown"
+    labels_str = labels or "None"
+    
+    prompt = f"""You are analyzing PyTorch XPU issue to determine its category.
+
+Issue Title: {title}
+Issue Summary: {summary}
+Test Module: {test_module_str}
+Labels: {labels_str}
+
+Test Cases Info:
+{tc_info_str}
+
+Categorize this issue into ONE of:
+1. Distributed - distributed training, NCCL/Gloo, ProcessGroup, FSDP, DDP
+2. TorchAO - quantization, int8/int4/fp8, optimizer, Adam
+3. PT2E - torch.export, dynamo, fake_tensor, ExportedProgram
+4. Flash Attention/Transformer - flash_attention, sdpa, attention kernel, transformer
+5. Sparse - sparse operations, csr/csc/coo
+6. Inductor/Compilation - inductor, compile, codegen, triton
+7. Dtype/Precision - dtype conversion, precision mismatch, bf16/fp16
+8. Backend/Device - XPU device, kernel implementation
+9. Feature Not Supported - unimplemented operator/feature
+10. Skip/No Test Exists - missing tests, decorators
+11. Others - miscellaneous
+
+Return ONLY the category number and name (no JSON, no explanation):
+Example: "5 - Inductor/Compilation"
+
+YOUR ANSWER:"""
+
+    headers = {
+        "Authorization": f"Bearer {LLM_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": LLM_MODEL,
+        "messages": [
+            {"role": "system", "content": "Output ONLY 'Category Number - Category Name'. No markdown. No JSON. No thinking tags."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.0,
+        "max_tokens": 50
+    }
+    
+    start_time = time.time()
+    
+    try:
+        response = requests.post(LLM_ENDPOINT, headers=headers, json=payload, timeout=180)
+        elapsed = time.time() - start_time
+        
+        if response.status_code == 200:
+            result = response.json()
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            content = content.replace("[TO]", "").replace("[/TO]", "").replace("<think>", "").replace("]", "").strip()
+            
+            match = re.search(r'(\d+)\s*[-–]\s*[\w\s/]+', content)
+            if match:
+                return f"{match.group(1)} - " + content[match.start():match.end()].split('-')[-1].strip()
+            else:
+                return content.strip()[:50]
+        
+        return f"API Error: {response.status_code}"
+        
+    except Exception as e:
+        return f"Error: {str(e)[:30]}"
+
+
+def check_info_requested_to_reporter_llm(issue_title, issue_summary, error_msg, traceback):
+    """
+    Use Qwen3-32B via internal API to check if more info needs to be requested from reporter.
+    Returns: action string (e.g., "Need reproduce steps", "Ready to analyze", "Need more information")
+    """
+    import requests
+    import json
+    import time
+    import re
+    
+    LLM_ENDPOINT = "http://10.239.15.43/v1/chat/completions"
+    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-XZrfiPGmZaGLZFPNUpy6ww")
+    LLM_MODEL = "Qwen3-32B"
+    
+    issue_content = f"{issue_title} {issue_summary} {error_msg} {traceback}".strip()
+    
+    if not issue_content or len(issue_content) < 20:
+        return "Need more information"
+    
+    prompt = f"""You are analyzing a PyTorch XPU GitHub issue to determine if more information is needed from the reporter.
+
+Issue Content:
+{issue_content[:1500]}
+
+Determine:
+1. Is this a feature request or enhancement?
+2. Does it have sufficient error information?
+3. Does it have reproduction steps?
+4. Is it a clear bug with complete information?
+
+Respond with ONE of:
+- "Ready to analyze" - if sufficient info to start debugging
+- "Need reproduce steps" - if no clear repro steps
+- "Need more information - [specific missing info]" - if key details missing
+- "Feature Request - needs triage" - if it's a feature request
+
+YOUR ANSWER:"""
+
+    headers = {
+        "Authorization": f"Bearer {LLM_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": LLM_MODEL,
+        "messages": [
+            {"role": "system", "content": "Output ONLY what action to take. Be brief. No markdown. No JSON."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.0,
+        "max_tokens": 60
+    }
+    
+    start_time = time.time()
+    
+    try:
+        response = requests.post(LLM_ENDPOINT, headers=headers, json=payload, timeout=180)
+        elapsed = time.time() - start_time
+        
+        if response.status_code == 200:
+            result = response.json()
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            content = content.replace("[TO]", "").replace("[/TO]", "").replace("<think>", "").replace("]", "").strip()
+            
+            if "Ready to analyze" in content:
+                return "Ready to analyze"
+            elif "reproduce" in content.lower():
+                return "Need reproduce steps"
+            elif "Feature" in content:
+                return "Feature Request"
+            else:
+                return content.strip()[:60]
+        
+        return "Need more information"
+        
+    except Exception as e:
+        return "Need more information"
+
+
+def determine_priority_llm(title, summary, error_msg, test_module, labels_str, test_cases_info):
+    """
+    Use Qwen3-32B via internal API to determine the priority of an issue.
+    Returns: (priority, reason) tuple
+    """
+    import requests
+    import json
+    import time
+    import re
+    
+    LLM_ENDPOINT = "http://10.239.15.43/v1/chat/completions"
+    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-XZrfiPGmZaGLZFPNUpy6ww")
+    LLM_MODEL = "Qwen3-32B"
+    
+    tc_info_str = ""
+    if test_cases_info:
+        for tc in test_cases_info:
+            tc_info_str += f"- {tc.get('test_case', '')}: {str(tc.get('error_msg', ''))[:80]}\n"
+    
+    prompt = f"""You are analyzing PyTorch XPU issue priority.
+
+Title: {title}
+Summary: {summary[:500]}
+Test Module: {test_module or 'Unknown'}
+Labels: {labels_str}
+
+Error Info:
+{error_msg[:300] if error_msg else 'N/A'}
+
+Test Cases:
+{tc_info_str}
+
+Determine priority (P0=critical, P1=high, P2=medium, P3=low):
+- P0: Build crash, regression (was passing), real model failure, security
+- P1: Many test failures, e2e accuracy issue, performance regression
+- P2: Few failures, feature gaps, minor issues
+- P3: Minor, cosmetic, documentation
+
+Return ONLY format: "PRIORITY - reason" (e.g., "P1 - Regression in performance")
+
+YOUR ANSWER:"""
+
+    headers = {
+        "Authorization": f"Bearer {LLM_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": LLM_MODEL,
+        "messages": [
+            {"role": "system", "content": "Output ONLY 'Priority - reason'. No markdown. No JSON. No thinking tags."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.0,
+        "max_tokens": 50
+    }
+    
+    start_time = time.time()
+    
+    try:
+        response = requests.post(LLM_ENDPOINT, headers=headers, json=payload, timeout=180)
+        elapsed = time.time() - start_time
+        
+        if response.status_code == 200:
+            result = response.json()
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            content = content.replace("<think>", "").replace("]", "").strip()
+            
+            match = re.search(r'(P[0-3])\s*[-–]\s*[^\n]+', content, re.IGNORECASE)
+            if match:
+                priority = match.group(1).upper()
+                reason = content[match.start():].split('-')[-1].strip()[:50]
+                return priority, reason, elapsed
+            
+            return "P2", "Default priority", elapsed
+        
+        return "P2", f"API Error: {response.status_code}", 0
+        
+    except Exception as e:
+        return "P2", f"Error: {str(e)[:30]}", 0
+
+
 def find_duplicated_issues(ws):
     """Find duplicated issues based on Test Class + Test Case or similar Traceback"""
     from collections import defaultdict
@@ -1289,7 +1544,11 @@ def process_issues_sheet(wb):
     ws_issues.cell(1, 25, 'Root Cause')
     
     MAX_LLM_ROOT_CAUSE = 500
+    MAX_LLM_CATEGORY = 500
+    MAX_LLM_PRIORITY = 500 
     llm_root_cause_count = 0
+    llm_category_count = 0
+    llm_priority_count = 0
     root_cause_cache = {}
     
     issue_test_results = {}
@@ -1490,6 +1749,27 @@ def process_issues_sheet(wb):
             priority = 'P2'
             priority_reason = 'UT issue with few failures'
         
+        if llm_priority_count < MAX_LLM_PRIORITY:
+            test_cases_for_llm = []
+            for tr in range(2, ws_test.max_row + 1):
+                if ws_test.cell(tr, 1).value == issue_id:
+                    tc_info = {
+                        'test_case': ws_test.cell(tr, 7).value,
+                        'error_msg': ws_test.cell(tr, 8).value,
+                        'traceback': ws_test.cell(tr, 9).value
+                    }
+                    test_cases_for_llm.append(tc_info)
+            llm_priority, llm_reason, _ = determine_priority_llm(
+                title_raw, summary_raw, error_msg if 'error_msg' in dir() else '',
+                test_module, str(labels) if labels else '',
+                test_cases_for_llm
+            )
+            if llm_priority.startswith('P') and not llm_reason.startswith('API'):
+                priority = llm_priority
+                priority_reason = llm_reason
+                llm_priority_count += 1
+                print(f"  [LLM PRIORITY #{llm_priority_count}] Issue {issue_id}: {priority} - {priority_reason}")
+        
         if duplicated_issues:
             ws_issues.cell(row, 21, ','.join(sorted(duplicated_issues)))
         
@@ -1546,6 +1826,23 @@ def process_issues_sheet(wb):
                 ])
                 
                 has_already_requested = check_info_requested_to_reporter(issue_content)
+                llm_error_msg = ''
+                llm_traceback = ''
+                for tr in range(2, ws_test.max_row + 1):
+                    if ws_test.cell(tr, 1).value == issue_id:
+                        llm_error_msg = str(ws_test.cell(tr, 8).value) if ws_test.cell(tr, 8).value else ''
+                        llm_traceback = str(ws_test.cell(tr, 9).value) if ws_test.cell(tr, 9).value else ''
+                        break
+                llm_info_action = check_info_requested_to_reporter_llm(
+                    title_raw, summary_raw, llm_error_msg, llm_traceback
+                )
+                if llm_info_action and llm_info_action not in ['Ready to analyze']:
+                    has_already_requested = True
+                    if 'reproduce' in llm_info_action.lower():
+                        action_tbd = 'Need reproduce steps'
+                    else:
+                        action_tbd = f'LLM Suggestion: {llm_info_action}'
+                    owner_transfer = reporter
                 
                 if is_bug_or_perf:
                     if not check_reproduce_step(issue_content):
@@ -1589,6 +1886,24 @@ def process_issues_sheet(wb):
         ws_issues.cell(row, 23, priority_reason)
         
         category = determine_category(title_raw, summary_raw, test_cases_str, traceback, test_module, labels)
+        if llm_category_count < MAX_LLM_CATEGORY:
+            test_cases_for_llm = []
+            for tr in range(2, ws_test.max_row + 1):
+                if ws_test.cell(tr, 1).value == issue_id:
+                    tc_info = {
+                        'test_case': ws_test.cell(tr, 7).value,
+                        'test_file': ws_test.cell(tr, 4).value,
+                        'error_msg': ws_test.cell(tr, 8).value,
+                        'torch_ops': ws_test.cell(tr, 10).value
+                    }
+                    test_cases_for_llm.append(tc_info)
+            category_llm = determine_category_llm(
+                title_raw, summary_raw, test_cases_for_llm, test_module, labels
+            )
+            if category_llm and not category_llm.startswith('API') and not category_llm.startswith('Error'):
+                category = category_llm
+                llm_category_count += 1
+                print(f"  [LLM CATEGORY #{llm_category_count}] Issue {issue_id}: {category}")
         ws_issues.cell(row, 24, category)
         
         current_action_tbd = ws_issues.cell(row, 20).value
@@ -1783,7 +2098,7 @@ def main():
     
     # Process all rows
     total = ws.max_row - 1
-    MAX_LLM_CASES = 3  # Process up to 3 unique issues with LLM
+    MAX_LLM_CASES = 500  # Process up to 3 unique issues with LLM
     llm_processed = 0
     llm_cache = {}  # Cache LLM results by issue id
     
