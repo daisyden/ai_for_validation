@@ -565,6 +565,123 @@ def analyze_test_case(test_file, test_case):
     return result
 
 
+def analyze_test_case_with_llm_qwen(test_file, test_class, test_case, origin_test_file=None):
+    """
+    Use Qwen3-32B via internal API to check CUDA and XPU test case existence.
+    Returns: dict with test existence info and measures elapsed time.
+    Used for double "not found" cases analysis.
+    """
+    import requests
+    import json
+    import time
+    
+    LLM_ENDPOINT = "http://10.239.15.43/v1/chat/completions"
+    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-XZrfiPGmZaGLZFPNUpy6ww")
+    LLM_MODEL = "Qwen3-32B"
+    
+    pytorch_root = os.path.expanduser('~/pytorch')
+    if not os.path.exists(pytorch_root):
+        pytorch_root = os.path.expanduser('~/issue_traige/pytorch')
+    
+    prompt = f"""You are in the pytorch directory: {pytorch_root}
+
+Check if the CUDA and XPU test exists in respective test files.
+
+Paths:
+- PyTorch test files: {pytorch_root}/test/
+- torch-xpu-ops test files: {pytorch_root}/third_party/torch-xpu-ops/test/xpu/
+
+Test File: {test_file}
+Origin Test File: {origin_test_file if origin_test_file else 'Not provided'}
+Test Class: {test_class}
+Test Case: {test_case}
+
+Base test is the actual test function in the test file,NOT just removing '_xpu' suffix.
+
+IMPORTANT: Explain WHY XPU test does not exist if cuda_exists is "No" or xpu_exists is "No":
+1. SKIP DECORators: @onlyCUDA, @skipCUDAIfNoHipdnn, @skipIfXpu, @requires_xccl
+2. PARAMETERIZATION: @dtypes, @parametrize_test generating tests
+3. REMOVED/RENAMED: Test removed/renamed in newer versions
+4. NOT APPLICABLE: CUDA/ROCm specific (hipdnn backend)
+5. OTHER: Other reasons
+
+Return ONLY valid JSON:
+{{
+    "explanation": "detailed explanation why XPU test exists or not"
+    "cuda_exists": "Yes/No",
+    "xpu_exists": "Yes/No/N/A",
+    "cuda_decorators": ["decorator1"],
+    "xpu_decorators": ["decorator1"],
+    "base_test_name": "original_test_function_name",
+    "cuda_test_file": "path/to/test_file.py",
+    "xpu_test_file": "path/to/test_xpu.py",
+    "cuda_test_name": "test_name_found",
+    "xpu_test_name": "test_name_found",
+}}
+"""
+    
+    headers = {
+        "Authorization": f"Bearer {LLM_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": LLM_MODEL,
+        "messages": [
+            {"role": "system", "content": "You are a PyTorch test analysis assistant. Return ONLY valid JSON."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.0,
+        "max_tokens": 4096
+    }
+    
+    start_time = time.time()
+    
+    try:
+        response = requests.post(
+            LLM_ENDPOINT,
+            headers=headers,
+            json=payload,
+            timeout=180
+        )
+        response.raise_for_status()
+        result = response.json()
+        elapsed = time.time() - start_time
+        
+        if result.get('choices') and len(result['choices']) > 0:
+            content = result['choices'][0].get('message', {}).get('content', '')
+            import re
+            json_match = re.search(r'\{[^{}]*\}', content, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group())
+                data['elapsed_time'] = elapsed
+                return data
+        
+        return {
+            'cuda_exists': 'Unknown',
+            'xpu_exists': 'Unknown',
+            'explanation': f'API response parsing failed: {str(result)[:200]}',
+            'elapsed_time': elapsed
+        }
+        
+    except requests.exceptions.Timeout:
+        elapsed = time.time() - start_time
+        return {
+            'cuda_exists': 'Timeout',
+            'xpu_exists': 'Timeout',
+            'explanation': 'Request timed out after 180s',
+            'elapsed_time': elapsed
+        }
+    except Exception as e:
+        elapsed = time.time() - start_time
+        return {
+            'cuda_exists': 'Error',
+            'xpu_exists': 'Error',
+            'explanation': f'API error: {str(e)}',
+            'elapsed_time': elapsed
+        }
+
+
 def find_duplicated_issues(ws):
     """Find duplicated issues based on Test Class + Test Case or similar Traceback"""
     from collections import defaultdict
@@ -1735,9 +1852,12 @@ def main():
                 comment = cached.get('comment', 'Cached result')
             elif llm_processed < MAX_LLM_CASES:
                 try:
-                    llm_result = analyze_test_case_with_llm(test_file, test_class, test_case, origin_test_file)
+                    use_qwen = True  # Enable Qwen3-32B for double not found cases
+                    llm_result = analyze_test_case_with_llm_qwen(test_file, test_class, test_case, origin_test_file)
                     cuda_exists = llm_result.get('cuda_exists', 'Unknown')
                     xpu_exists = llm_result.get('xpu_exists', 'Unknown')
+                    elapsed_time = llm_result.get('elapsed_time', 0)
+                    print(f"  [LLM Qwen3-32B] {test_class}.{test_case}: CUDA={cuda_exists}, XPU={xpu_exists} ({elapsed_time:.2f}s)")
                     
                     llm_comment = llm_result.get('explanation', '')
                     cuda_decorators = ', '.join(llm_result.get('cuda_decorators', []))

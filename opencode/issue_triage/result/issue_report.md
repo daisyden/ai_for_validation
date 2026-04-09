@@ -8,7 +8,7 @@
 - Torch-XPU-OPS Nightly CI: XML files from `Inductor-XPU-UT-Data-*` + `Inductor-wheel-nightly-LTS2-XPU-E2E-Data-*` (commit: `a2d516a58c64f18b76880f3a77efbc02885d65af`)
 - Stock PyTorch XPU CI: XML files from `test-default-*-linux.idc.xpu_*.zip` (run IDs: 69741866812, 69741866834, 69741866862, 69741866911, etc.)
 
-Generated: 2026-04-09 00:15:52
+Generated: 2026-04-09 02:08:50
 
 ---
 
@@ -89,7 +89,7 @@ Generated: 2026-04-09 00:15:52
 
 | Action TBD | Count |
 |------------|-------|
-| Need reproduce steps (Only for bugs or performance issue) | 167 |
+| Need reproduce steps | 167 |
 | Needs PyTorch Repo Changes (upstream) | 123 |
 | Need more information - error logs and reproduction steps | 73 |
 | Close fixed issue | 17 |
