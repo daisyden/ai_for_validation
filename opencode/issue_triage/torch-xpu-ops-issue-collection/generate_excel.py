@@ -1297,7 +1297,7 @@ ws_issues.title = "Issues"
 
 headers = ["Issue ID", "Title", "Status", "Assignee", "Reporter", "Labels",
            "Created Time", "Updated Time", "Milestone", "Summary", "Type",
-           "Module", "Test Module", "Dependency", "PR", "PR Owner", "PR Status", "PR Description", "Category"]
+           "Module", "Test Module", "Dependency", "PR", "PR Owner", "PR Status", "PR Description", "Category", "Root Cause"]
 
 for col, header in enumerate(headers, 1):
     cell = ws_issues.cell(row=1, column=col, value=header)

@@ -87,18 +87,31 @@ Gets test results from CI artifacts (torch-xpu-ops nightly and stock PyTorch XPU
 
 **Scripts**:
 - `update_test_results.py` - Main script to update test results
+- `generate_report.py` - Generate markdown report with issue analysis
 
 **When to use**:
 - When need to know test pass/fail status for issue test cases
 - When need to explain why tests are not found
+- When need root cause analysis for issues with blank action_TBD
+
+**Root Cause Analysis**:
+- `analyze_root_cause()` function determines root cause based on:
+  - Issue title, summary, error message, traceback
+  - Test file, test class, test case information from Test Cases and E2E Test Cases sheets
+  - Test module classification (ut/e2e)
+- Categories: Memory, Dtype/Precision, Inductor/Compilation, DNNL, Flash Attention, Distributed, Skip, API Mismatch, etc.
 
 **Usage**:
 ```bash
 cd ~/ai_for_validation/opencode/issue_triage/update_test_results
 python3 update_test_results.py
+python3 generate_report.py
 ```
 
-**Output**: Updates status columns (torch-xpu-ops nightly, stock CI, case existence)
+**Output**:
+- Updates status columns (torch-xpu-ops nightly, stock CI, case existence)
+- Adds Root Cause column (col 25) to Issues sheet for issues with blank action_TBD
+- Generates `issue_report.md` with By Root Cause statistics
 
 ---
 

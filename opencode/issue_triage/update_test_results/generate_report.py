@@ -37,6 +37,7 @@ def generate_report():
             'priority': ws_issues.cell(row, 22).value,
             'priority_reason': ws_issues.cell(row, 23).value,
             'category': ws_issues.cell(row, 24).value,
+            'root_cause': ws_issues.cell(row, 25).value,
         }
         issues.append(issue)
     
@@ -81,6 +82,32 @@ def generate_report():
         if action not in action_groups:
             action_groups[action] = []
         action_groups[action].append(issue)
+
+    # Action reason mapping
+    action_reason_map = {
+        'Need reproduce step and more information': 'Missing reproduce steps or error details',
+        'Needs PyTorch Repo Changes (upstream)': 'Requires upstream fix in PyTorch',
+        'Check case availability': 'No test case status in XPU/Stock CI data',
+        'Close fixed issue': 'All test cases now passing',
+        'Enable test': 'Test disabled due to missing CUDA/XPU support',
+        'Revisit the PR as case failed': 'Test failed after PR merge',
+        'add to skiplist': 'Labeled as not target/wontfix',
+        'Verify the issue': 'PR closed, needs verification',
+        'Awaiting response from reporter': 'Waiting for follow-up information',
+        'assign owner': 'Issue has no assignee',
+    }
+
+    # Separate information_required from other actions
+    info_required_keywords = ['reproduce', 'information', 'missing', 'awaiting', 'need ']
+    information_required = {}
+    other_actions = {}
+
+    for action, issues_list in action_groups.items():
+        is_info_required = any(kw in action.lower() for kw in info_required_keywords)
+        if is_info_required:
+            information_required[action] = issues_list
+        else:
+            other_actions[action] = issues_list
     
     # Build statistics
     test_module_stats = {}
@@ -188,6 +215,7 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 | Category | Count |
 |----------|-------|
 """
+    
     for cat, count in sorted(category_stats.items(), key=lambda x: -x[1]):
         md += f"| {cat} | {count} |\n"
     
@@ -206,30 +234,57 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
     for p, count in sorted(priority_stats.items()):
         md += f"| {p} | {count} |\n"
     
-    md += f"""
-### Other Stats
-
-| Category | Count |
-|----------|-------|
-| Not Assigned | {no_assignee_count} |
-| Duplicated Issues | {duplicated_count} |
-| Others | {others_count} |
-
----
-
-## 1. Action Required
-
-Issues that need action based on test results analysis.
-
-"""
+    root_cause_stats = {}
+    for issue in issues:
+        rc = issue['root_cause']
+        if rc and rc not in ['None', None, '']:
+            root_cause_stats[rc] = root_cause_stats.get(rc, 0) + 1
     
-    # Split action_required by action_TBD type
-    for action, issues_list in sorted(action_groups.items()):
-        md += f"""
-### 1.{list(action_groups.keys()).index(action)+1} {action}
+    md += """
+### By Root Cause
 
-| ID | Title | Owner | Owner Transferred | TBD | Priority | Reason | Category | PR | Module | Test Module |
-|---|-------|-------|-------------------|-----|---------|--------|----------|-----|--------|-------------|
+| Root Cause | Count |
+|------------|-------|
+"""
+    for rc, count in sorted(root_cause_stats.items(), key=lambda x: -x[1]):
+        md += f"| {rc} | {count} |\n"
+    
+# Information Required section (new)
+    if information_required:
+        md += """
+### 1. Information Required
+
+Information needed from reporters to proceed with issue triage.
+
+| ID | Title | Owner | Owner Transferred | Required Info | Priority | Action Reason | Category | Root Cause | PR | Module | Test Module |
+|---|-------|-------|-------------------|--------------|---------|--------|----------|-----------|-----|--------|-------------|
+"""
+        for action, issues_list in sorted(information_required.items()):
+            action_reason = action_reason_map.get(action, '')
+            for issue in issues_list:
+                title = (issue['title'] or '')[:35]
+                owner = issue['assignee'] or ''
+                owner_transfer = issue['owner_transfer'] or ''
+                module = issue['module'] or ''
+                test_module = issue['test_module'] or ''
+                pr = issue['pr'] or ''
+                pr_link = f"[PR]({pr})" if pr else ''
+                priority = issue['priority'] or ''
+                reason = (issue['priority_reason'] or '')[:50]
+                category = issue['category'] or ''
+                root_cause = issue['root_cause'] or ''
+                md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {action} | {priority} | {action_reason} | {category} | {root_cause} | {pr_link} | {module} | {test_module} |\n"
+
+    # Other actions section
+    other_action_list = list(sorted(other_actions.keys()))
+    for action_idx, action in enumerate(other_action_list, start=1):
+        issues_list = other_actions[action]
+        action_reason = action_reason_map.get(action, '')
+        md += f"""
+### 1.{action_idx} {action}
+
+| ID | Title | Owner | Owner Transferred | TBD | Priority | Action Reason | Category | Root Cause | PR | Module | Test Module |
+|---|-------|-------|-------------------|-----|---------|--------|----------|-----------|-----|--------|-------------|
 """
         for issue in issues_list:
             title = (issue['title'] or '')[:35]
@@ -240,15 +295,16 @@ Issues that need action based on test results analysis.
             pr = issue['pr'] or ''
             pr_link = f"[PR]({pr})" if pr else ''
             priority = issue['priority'] or ''
-            reason = issue['priority_reason'] or ''
+            reason = (issue['priority_reason'] or '')[:50]
             category = issue['category'] or ''
-            md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {action} | {priority} | {reason} | {category} | {pr_link} | {module} | {test_module} |\n"
+            root_cause = issue['root_cause'] or ''
+            md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {action} | {priority} | {action_reason} | {category} | {root_cause} | {pr_link} | {module} | {test_module} |\n"
     
     md += """
 ### Issues without Assignee
 
-| ID | Title | Owner | Owner Transferred | TBD | Priority | Reason | Category | PR | Module | Test Module |
-|---|-------|-------|-------------------|-----|---------|--------|----------|-----|--------|-------------|
+| ID | Title | Owner | Owner Transferred | TBD | Priority | Reason | Category | Root Cause | PR | Module | Test Module |
+|---|-------|-------|-------------------|-----|---------|--------|----------|-----------|-----|--------|-------------|
 """
     
     for issue in no_assignee[:50]:  # Limit to 50
@@ -263,11 +319,12 @@ Issues that need action based on test results analysis.
         priority = issue['priority'] or ''
         reason = issue['priority_reason'] or ''
         category = issue['category'] or ''
-        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {action} | {priority} | {reason} | {category} | {pr_link} | {module} | {test_module} |\n"
+        root_cause = issue['root_cause'] or ''
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {action} | {priority} | {reason} | {category} | {root_cause} | {pr_link} | {module} | {test_module} |\n"
     
     if len(no_assignee) > 50:
         md += f"\n*... and {len(no_assignee) - 50} more issues*\n"
-
+    
     md += """
 ---
 
@@ -275,8 +332,8 @@ Issues that need action based on test results analysis.
 
 Issues that share test cases with other issues.
 
-| ID | Title | Owner | Reporter | Duplicated With | Priority | Reason | Category | PR | Module | Test Module |
-|---|-------|-------|----------|-----------------|---------|--------|----------|-----|--------|-------------|
+| ID | Title | Owner | Reporter | Duplicated With | Priority | Reason | Category | Root Cause | PR | Module | Test Module |
+|---|-------|-------|----------|-----------------|---------|--------|----------|-----------|-----|--------|-------------|
 """
     
     for issue in duplicated:
@@ -291,7 +348,8 @@ Issues that share test cases with other issues.
         priority = issue['priority'] or ''
         reason = issue['priority_reason'] or ''
         category = issue['category'] or ''
-        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {reporter} | {dup} | {priority} | {reason} | {category} | {pr_link} | {module} | {test_module} |\n"
+        root_cause = issue['root_cause'] or ''
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {reporter} | {dup} | {priority} | {reason} | {category} | {root_cause} | {pr_link} | {module} | {test_module} |\n"
     
     md += """
 ---
@@ -300,8 +358,8 @@ Issues that share test cases with other issues.
 
 Issues that have dependencies on other components (non-empty).
 
-| ID | Title | Owner | Type | Priority | Reason | Category | Dependency | PR | Labels |
-|---|-------|------|------|---------|--------|----------|------------|-----|--------|
+| ID | Title | Owner | Type | Priority | Reason | Category | Root Cause | Dependency | PR | Labels |
+|---|-------|------|------|---------|--------|----------|-----------|------------|-----|--------|
 """
     
     # Filter and sort
@@ -318,7 +376,8 @@ Issues that have dependencies on other components (non-empty).
         priority = issue['priority'] or ''
         reason = issue['priority_reason'] or ''
         category = issue['category'] or ''
-        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {issue_type} | {priority} | {reason} | {category} | {dep} | {pr_link} | {labels} |\n"
+        root_cause = issue['root_cause'] or ''
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {issue_type} | {priority} | {reason} | {category} | {root_cause} | {dep} | {pr_link} | {labels} |\n"
     
     md += """
 ---
@@ -327,8 +386,8 @@ Issues that have dependencies on other components (non-empty).
 
 Issues that don't fall into the categories above.
 
-| ID | Title | Owner | Priority | Reason | Category | Labels | PR | Module | Test Module |
-|---|-------|-------|---------|--------|----------|--------|-----|--------|-------------|
+| ID | Title | Owner | Priority | Reason | Category | Root Cause | Labels | PR | Module | Test Module |
+|---|-------|-------|---------|--------|----------|-----------|--------|-----|--------|-------------|
 """
     
     for issue in others:
@@ -342,7 +401,8 @@ Issues that don't fall into the categories above.
         priority = issue['priority'] or ''
         reason = issue['priority_reason'] or ''
         category = issue['category'] or ''
-        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {priority} | {reason} | {category} | {labels} | {pr_link} | {module} | {test_module} |\n"
+        root_cause = issue['root_cause'] or ''
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {priority} | {reason} | {category} | {root_cause} | {labels} | {pr_link} | {module} | {test_module} |\n"
     
     # New issues in last 10 days
     ten_days_ago = datetime.now() - timedelta(days=10)
@@ -368,8 +428,8 @@ Issues that don't fall into the categories above.
 
 Issues created in the last 10 days (as of {datetime.now().strftime('%Y-%m-%d')}).
 
-| ID | Title | Status | Owner | Priority | Reason | Category | Labels | Module | Test Module |
-|---|-------|--------|-------|---------|--------|----------|--------|--------|-------------|
+| ID | Title | Status | Owner | Priority | Reason | Category | Root Cause | Labels | Module | Test Module |
+|---|-------|--------|-------|---------|--------|----------|-----------|--------|--------|-------------|
 """
     
     for issue in recent_issues:
@@ -382,7 +442,8 @@ Issues created in the last 10 days (as of {datetime.now().strftime('%Y-%m-%d')})
         priority = issue['priority'] or ''
         reason = issue['priority_reason'] or ''
         category = issue['category'] or ''
-        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {status} | {owner} | {priority} | {reason} | {category} | {labels} | {module} | {test_module} |\n"
+        root_cause = issue['root_cause'] or ''
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {status} | {owner} | {priority} | {reason} | {category} | {root_cause} | {labels} | {module} | {test_module} |\n"
     
     # Save to file
     output_path = os.path.join(RESULT_DIR, 'issue_report.md')

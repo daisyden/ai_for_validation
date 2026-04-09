@@ -29,6 +29,7 @@ import xml.etree.ElementTree as ET
 import os
 import re
 import glob
+import time
 
 ROOT_DIR = "/home/daisydeng"
 RESULT_DIR = "/home/daisydeng/ai_for_validation/opencode/issue_triage/result"
@@ -714,6 +715,449 @@ def determine_category(title, summary, test_cases_str, traceback, test_module, l
     return "Others"
 
 
+def extract_version_info(issue_content):
+    """
+    Extract version info from issue content (title, summary, comments).
+    Returns version string or None.
+    """
+    if not issue_content:
+        return None
+
+    version_patterns = [
+        r'2\.\d+(\.\d+)?[a-z0-9]*',
+        r'v2\.\d+(\.\d+)?',
+        r'git[a-f0-9]+',
+        r' nightly',
+        r'a\d+',
+    ]
+
+    for pattern in version_patterns:
+        match = re.search(pattern, issue_content, re.IGNORECASE)
+        if match:
+            return match.group(0)
+
+    return None
+
+
+def check_reproduce_step(issue_content):
+    """
+    Check if reproduce step is available in issue content.
+    Returns True if reproduce step exists, False otherwise.
+    """
+    if not issue_content:
+        return False
+
+    content_lower = issue_content.lower()
+
+    strong_indicators = [
+        'pip install',
+        'git clone',
+        'git checkout',
+        'python3',
+        'benchmark',
+        'reproducer',
+        '```',
+        'bash',
+        'sh ',
+        './',
+        'conda',
+        'pip3 install',
+    ]
+
+    medium_indicators = [
+        'reproduce',
+        'steps to reproduce',
+        'how to reproduce',
+        'minimal example',
+        'test case',
+        'run the',
+        'execute',
+        'command',
+        'script',
+        'code snippet',
+    ]
+
+    soft_indicators = [
+        'git ',
+        'python',
+        'run ',
+    ]
+
+    strong_count = sum(1 for kw in strong_indicators if kw in content_lower)
+    medium_count = sum(1 for kw in medium_indicators if kw in content_lower)
+    soft_count = sum(1 for kw in soft_indicators if kw in content_lower)
+
+    if strong_count >= 1:
+        return True
+    if strong_count >= 1 and medium_count >= 1:
+        return True
+    if medium_count >= 2:
+        return True
+    if medium_count >= 1 and soft_count >= 2:
+        return True
+    if soft_count >= 3:
+        return True
+
+    return False
+
+
+def check_info_requested_to_reporter(issue_content):
+    """
+    Check if maintainer has requested more information from reporter.
+    Returns True if info was requested from reporter.
+    """
+    if not issue_content:
+        return False
+
+    request_keywords = [
+        'could you please provide',
+        'please provide more',
+        'can you provide additional',
+        'need more information',
+        'needs more info',
+        'please add',
+        'please share',
+        'need the reproduce',
+        'we need',
+        'please attach',
+        'please run',
+        'please check',
+        'please verify',
+    ]
+
+    content_lower = issue_content.lower()
+    return any(kw in content_lower for kw in request_keywords)
+
+
+def is_public_branch(version_str):
+    """
+    Check if version indicates a public branch (main, release) vs private branch/PR.
+    Returns True if public branch, False if private.
+    """
+    if not version_str:
+        return False
+
+    version_lower = version_str.lower()
+
+    if 'pr' in version_lower and 'http' in version_lower:
+        return False
+
+    if version_lower in ['main', 'master']:
+        return True
+
+    if re.match(r'^v?2\.\d+(\.\d+)?$', version_lower):
+        return True
+
+    if re.match(r'^\d+\.\d+\.\d+a\d+\+git[0-9a-f]+$', version_lower):
+        return True
+
+    if '+git' in version_lower and not 'pr' in version_lower:
+        return True
+
+    return False
+
+
+def analyze_root_cause_llm(issue_id, issue_title, issue_summary, test_file, test_class, test_case, error_msg, traceback, test_module=None):
+    """
+    Use internal Qwen3-32B LLM to analyze root cause of an issue.
+    Returns brief but specific root cause description.
+    Logs to ~/ai_for_validation/opencode/issue_triage/result/root_cause.txt
+    """
+    import subprocess
+    import json
+    import time
+    import requests
+    import os
+    
+    ROOT_CAUSE_LOG = os.path.expanduser('~/ai_for_validation/opencode/issue_triage/result/root_cause.txt')
+    LLM_ENDPOINT = "http://10.239.15.43/v1/chat/completions"
+    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-XZrfiPGmZaGLZFPNUpy6ww")
+    LLM_MODEL = "Qwen3-32B"
+    
+    if not issue_title and not issue_summary and not error_msg and not traceback:
+        return ""
+    
+    # Clear/create log file for this session
+    with open(ROOT_CAUSE_LOG, 'a') as log:
+        log.write(f"\n{'='*80}\n")
+        log.write(f"LLM Root Cause Analysis Session\n")
+        log.write(f"{'='*80}\n")
+    
+    def log_result(issue_id, root_cause, elapsed):
+        """Log to file and print"""
+        msg = f"Issue {issue_id}: {root_cause} ({elapsed:.2f}s)"
+        print(f"  {msg}")
+        with open(ROOT_CAUSE_LOG, 'a') as log:
+            log.write(msg + "\n")
+    
+    prompt = f"""You are analyzing PyTorch XPU issue root cause.
+
+Issue ID: {issue_id}
+Title: {issue_title}
+Summary: {issue_summary}
+Test: {test_class}.{test_case}
+Error: {error_msg}
+Traceback: {traceback[:500] if traceback else 'N/A'}
+
+Classify into ONE category:
+1. Memory/Shared Memory Issue
+2. Dtype/Precision Issue
+3. Inductor/Compilation Issue
+4. DNNL/OneDNN Issue
+5. Flash Attention/Specific Ops Issue
+6. Distributed/Gloo Issue
+7. Skip/No Test Exists
+8. Backend/Device Issue
+9. API/Template Mismatch
+10. Feature Not Supported
+11. Timeout/Performance Issue
+12. Runtime Error
+13. Assertion Failure
+14. Type/Value Error
+15. Others
+
+Answer format: "CATEGORY - brief_reason" (e.g., "Dtype/Precision Issue - bf16 precision mismatch")
+
+YOUR ANSWER (no JSON, no thinking tags, just the answer):"""
+
+    headers = {
+        "Authorization": f"Bearer {LLM_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "model": LLM_MODEL,
+        "messages": [
+            {"role": "system", "content": "Output ONLY 'Category - reason'. No markdown. No JSON. No thinking tags."},
+            {"role": "user", "content": prompt}
+        ],
+        "max_tokens": 100,
+        "temperature": 0.0
+    }
+    
+    start = time.time()
+    try:
+        response = requests.post(LLM_ENDPOINT, headers=headers, json=data, timeout=180)
+        elapsed = time.time() - start
+        
+        if response.status_code == 200:
+            resp_data = response.json()
+            content = resp_data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            
+            # Clean thinking tags if present
+            content = content.replace("<think>", "").replace("</think>", "").strip()
+            
+            # Extract CATEGORY - reason pattern
+            import re
+            match = re.search(r'(Memory|Dtype|Precision|Inductor|Compilation|DNNL|OneDNN|Flash|Attention|Distributed|Gloo|Backend|Device|API|Template|Mismatch|Feature|Not|Supported|Timeout|Performance|Runtime|Error|Assertion|Failure|Type|Value|Others)\s*[-–]\s*[^\n]+', content, re.IGNORECASE)
+            
+            if match:
+                root_cause = match.group(0).strip()
+            else:
+                # Fallback: clean content and take first meaningful line
+                lines = [l.strip() for l in content.split("\n") if l.strip() and len(l.strip()) > 5]
+                root_cause = lines[-1][:80] if lines else content.strip()[:80]
+            
+            log_result(issue_id, root_cause, elapsed)
+            return root_cause
+        else:
+            elapsed = time.time() - start
+            error_msg = f"API Error: {response.status_code}"
+            log_result(issue_id, error_msg, elapsed)
+            return ""
+            
+    except Exception as e:
+        elapsed = time.time() - start
+        error_msg = f"Exception: {str(e)[:50]}"
+        log_result(issue_id, error_msg, elapsed)
+        return ""
+    
+    return ""
+    
+    pytorch_root = os.path.expanduser('~/pytorch')
+    if not os.path.exists(pytorch_root):
+        pytorch_root = os.path.expanduser('~/issue_traige/pytorch')
+    
+    prompt = f"""You are analyzing PyTorch XPU issue root cause.
+
+Issue ID: {issue_id}
+Issue Title: {issue_title}
+Issue Summary: {issue_summary}
+Test File: {test_file}
+Test Class: {test_class}
+Test Case: {test_case}
+Error Message: {error_msg}
+Traceback: {traceback[:1000] if traceback else 'N/A'}
+Test Module: {test_module}
+
+Analyze the root cause based on the information above. Classify into ONE of these categories:
+1. Memory/Shared Memory Issue - OOM, allocation failures
+2. Dtype/Precision Issue - precision mismatch, dtype conversion, numerical inaccuracies
+3. Inductor/Compilation Issue - graph breaks, symbolic shape, compilation errors
+4. DNNL/OneDNN Issue - DNNL backend primitive failures
+5. Flash Attention/Specific Ops Issue - flash attention kernel failures
+6. Distributed/Gloo Issue - distributed training, NCCL/Gloo backend
+7. Skip/No Test Exists - missing tests, decorators preventing execution
+8. Backend/Device Issue - XPU device initialization, placement
+9. API/Template Mismatch - API signature mismatch, missing parameters
+10. Feature Not Supported - unimplemented features
+11. Import/Dependency Issue - module import failures, missing deps
+12. XGBoost/External Dependency - XGBoost or other external lib issues
+13. Timeout/Performance Issue - timeouts, slow execution
+14. Runtime Error - general runtime failures
+15. Assertion Failure - assert checks failing
+16. Type/Value Error - type/value mismatches
+17. Others - miscellaneous/unknown
+
+Provide your answer as JSON:
+{{
+    "root_cause": "Category Name - Brief Explanation",
+    "reasoning": "Why this classification"
+}}
+
+Only output the JSON, nothing else.
+"""
+    
+    try:
+        result = subprocess.run(
+            ['python3', '-c', f'''
+import json
+import sys
+sys.path.insert(0, "/home/daisydeng/ai_for_validation/opencode/issue_triage")
+try:
+    from openai import OpenAI
+    client = OpenAI()
+    response = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[
+            {{"role": "system", "content": "You are a PyTorch XPU issue analyst. Analyze root causes and classify into predefined categories. Output JSON only."}},
+            {{"role": "user", "content": {json.dumps(prompt)}}}
+        ],
+        max_tokens=200,
+        temperature=0
+    )
+    print(response.choices[0].message.content)
+except Exception as e:
+    print(f"Error: {{e}}")
+'''],
+            capture_output=True,
+            text=True,
+            timeout=120
+        )
+        
+        output = result.stdout.strip()
+        if output.startswith('Error:'):
+            return ""
+        
+        # Parse JSON response
+        import re
+        json_match = re.search(r'\{[^{}]+\}', output, re.DOTALL)
+        if json_match:
+            try:
+                response_data = json.loads(json_match.group())
+                return response_data.get('root_cause', '')
+            except:
+                pass
+        
+        return ""
+        
+    except Exception as e:
+        print(f"  LLM call failed for issue {issue_id}: {e}")
+        return ""
+
+
+def analyze_root_cause(issue_title, issue_summary, test_file, test_class, test_case, error_msg, traceback, test_module=None):
+    """
+    Analyze root cause of an issue based on available information.
+    Returns brief but specific root cause description.
+    """
+    if not any([error_msg, traceback, issue_summary]):
+        return ""
+    
+    text = ' '.join([
+        str(issue_title or ''),
+        str(issue_summary or ''),
+        str(error_msg or ''),
+        str(traceback or ''),
+        str(test_file or ''),
+        str(test_class or ''),
+        str(test_case or '')
+    ]).lower()
+    
+    if 'permanent kill' in text or 'xgboost' in text:
+        return "XGBoost/External Dependency"
+    
+    if 'out of memory' in text or 'cannot allocate memory' in text or 'allocation fails' in text:
+        return "Memory/Shared Memory Issue"
+    
+    if any(k in text for k in ['requires xccl', 'no xccl', 'xccl not found']):
+        return "XCCL/Dependency Issue"
+    
+    if any(k in text for k in ['inductor', 'compile', 'graph break', 'symbolic', 'fx']) and 'test/inductor' in str(test_file or '').lower():
+        return "Inductor / Compilation Issue"
+    
+    if any(k in text for k in ['dynamo']) and ('test/dynamo' in str(test_file or '').lower() or 'testinductor' in str(test_file or '').lower()):
+        return "Inductor / Compilation Issue"
+    
+    if 'dnnl' in text or 'onednn' in text or 'mkldnn' in text:
+        return "DNNL/OneDNN Issue"
+    
+    if any(k in text for k in ['flash attention', 'flash_attention', 'flashattn']) and 'attention' in text:
+        return "Flash Attention / Specific Ops Issue"
+    
+    if 'distributed' in text or 'gloo' in text or ' nccl' in text or 'nccl' in text:
+        if 'test/distributed' in str(test_file or '').lower():
+            return "Distributed / Gloo Issue"
+    
+    if 'dtype' in text or 'precision' in text or 'accuracy' in text or 'typepromotion' in text:
+        return "Dtype / Precision Issue"
+    
+    if 'float' in text and ('16' in text or '32' in text or 'bf' in text):
+        return "Dtype / Precision Issue"
+    
+    if 'skip' in text or 'decorator' in text or ('test' in text and 'not found' in text):
+        return "Skip / No Test Exists"
+    
+    if 'device' in text or 'xpu' in text and 'init' in text:
+        return "Backend / Device Issue"
+    
+    if 'api' in text or 'template' in text or 'signature' in text:
+        return "API / Template Mismatch"
+    
+    if 'not implemented' in text or 'not support' in text:
+        return "Feature Not Supported"
+    
+    if 'import error' in text or 'no module' in text:
+        return "Import / Dependency Issue"
+    
+    if 'assertionerror' in text or 'assert' in text:
+        if 'dtype' in text or 'precision' in text or 'float' in text:
+            return "Dtype / Precision Issue"
+        return "Assertion Failure"
+    
+    if 'runtimeerror' in text:
+        if 'memory' in text or 'allocate' in text:
+            return "Memory/Shared Memory Issue"
+        if 'dtype' in text or 'cast' in text or 'convert' in text:
+            return "Dtype / Precision Issue"
+        if 'inductor' in text or 'compile' in text:
+            return "Inductor / Compilation Issue"
+        return "Runtime Error"
+    
+    if 'typeerror' in text or 'valueerror' in text:
+        if 'dtype' in text or 'cast' in text:
+            return "Dtype / Precision Issue"
+        return "Type / Value Error"
+    
+    if 'timeout' in text:
+        return "Timeout / Performance Issue"
+    
+    if 'test/nn' in str(test_file or '').lower():
+        if 'conv' in str(test_case or '').lower() or 'linear' in str(test_case or '').lower():
+            return "DNNL / Specific Ops Issue"
+    
+    return "Others"
+
+
 def process_issues_sheet(wb):
     """Process Issues sheet to add owner_transfer, action_TBD, and duplicated_issue columns"""
     ws_issues = wb['Issues']
@@ -726,6 +1170,11 @@ def process_issues_sheet(wb):
     ws_issues.cell(1, 22, 'priority')
     ws_issues.cell(1, 23, 'priority_reason')
     ws_issues.cell(1, 24, 'Category')
+    ws_issues.cell(1, 25, 'Root Cause')
+    
+    MAX_LLM_ROOT_CAUSE = 500
+    llm_root_cause_count = 0
+    root_cause_cache = {}
     
     # Build index: Issue ID -> test case results
     issue_test_results = {}
@@ -976,6 +1425,56 @@ def process_issues_sheet(wb):
         if duplicated_issues:
             ws_issues.cell(row, 21, ','.join(sorted(duplicated_issues)))
         
+        # New Rule: Check case availability and information requirements
+        # IMPORTANT: Only apply if no action_tbd has been set yet and issue is on public branch
+        if not action_tbd:
+            labels_str = str(labels).lower() if labels else ''
+            title_raw = str(ws_issues.cell(row, 2).value) if ws_issues.cell(row, 2).value else ''
+            summary_raw = str(ws_issues.cell(row, 10).value) if ws_issues.cell(row, 10).value else ''
+
+            version_info = extract_version_info(title_raw + ' ' + summary_raw)
+            is_public = is_public_branch(version_info)
+
+            # Check test case and E2E status from both sheets
+            has_xpu_status = bool(xpu_statuses)
+            has_stock_status = bool(stock_statuses)
+            has_e2e_status = bool(test_info.get('e2e_statuses', set()))
+
+            all_statuses_empty = (
+                not has_xpu_status and
+                not has_stock_status and
+                not has_e2e_status
+            )
+
+            # Rule A: On public branch with no test case availability info
+            if is_public and all_statuses_empty:
+                action_tbd = 'Check case availability'
+                owner_transfer = reporter
+
+            # Rule B: Check if reproduce step or other information is missing
+            if not action_tbd:
+                issue_content = title_raw + ' ' + summary_raw
+
+                missing_info_type = None
+
+                if not check_reproduce_step(issue_content):
+                    missing_info_type = 'reproduce step'
+
+                if not check_info_requested_to_reporter(issue_content):
+                    if missing_info_type:
+                        missing_info_type += ' and more information'
+                    else:
+                        missing_info_type = 'more information'
+
+                if missing_info_type:
+                    # Check if this is info that was already requested
+                    has_already_requested = check_info_requested_to_reporter(issue_content)
+                    if has_already_requested:
+                        action_tbd = 'Awaiting response from reporter'
+                    else:
+                        action_tbd = f'Need {missing_info_type}'
+                    owner_transfer = reporter
+
         # Set owner_transfer, action_TBD, priority
         if owner_transfer:
             ws_issues.cell(row, 19, owner_transfer)
@@ -987,6 +1486,70 @@ def process_issues_sheet(wb):
         # Determine and set Category
         category = determine_category(title, summary, test_cases_str, traceback, test_module, labels)
         ws_issues.cell(row, 24, category)
+        
+        # Analyze root cause only if action_TBD is blank
+        current_action_tbd = ws_issues.cell(row, 20).value
+        if not current_action_tbd:
+            # Get test case info for this issue
+            issue_test_file = ''
+            issue_test_class = ''
+            issue_test_case = ''
+            issue_error_msg = ''
+            issue_traceback = ''
+            
+            for tr in range(2, ws_test.max_row + 1):
+                if ws_test.cell(tr, 1).value == issue_id:
+                    if not issue_test_file:
+                        issue_test_file = str(ws_test.cell(tr, 4).value) if ws_test.cell(tr, 4).value else ''
+                    if not issue_test_class:
+                        issue_test_class = str(ws_test.cell(tr, 6).value) if ws_test.cell(tr, 6).value else ''
+                    issue_test_case = str(ws_test.cell(tr, 7).value) if ws_test.cell(tr, 7).value else ''
+                    if not issue_error_msg:
+                        issue_error_msg = str(ws_test.cell(tr, 8).value) if ws_test.cell(tr, 8).value else ''
+                    if not issue_traceback:
+                        issue_traceback = str(ws_test.cell(tr, 9).value) if ws_test.cell(tr, 9).value else ''
+                    if issue_error_msg and issue_traceback:
+                        break
+            
+            issue_title_raw = str(ws_issues.cell(row, 2).value) if ws_issues.cell(row, 2).value else ''
+            
+            # Always get rule-based root cause first as fallback
+            root_cause = analyze_root_cause(
+                issue_title_raw,
+                summary,
+                issue_test_file,
+                issue_test_class,
+                issue_test_case,
+                issue_error_msg,
+                issue_traceback,
+                test_module
+            )
+
+            # Try LLM for first MAX_LLM_ROOT_CAUSE issues (always call for better results)
+            if llm_root_cause_count < MAX_LLM_ROOT_CAUSE:
+                print(f"  [LLM ROOT CAUSE #{llm_root_cause_count+1}] Issue {issue_id}: Calling LLM for root cause analysis...")
+                llm_start = time.time()
+                llm_root_cause = analyze_root_cause_llm(
+                    issue_id,
+                    issue_title_raw,
+                    summary,
+                    issue_test_file,
+                    issue_test_class,
+                    issue_test_case,
+                    issue_error_msg,
+                    issue_traceback,
+                    test_module
+                )
+                llm_elapsed = time.time() - llm_start
+                if llm_root_cause:
+                    root_cause = llm_root_cause
+                    llm_root_cause_count += 1
+                    print(f"  [LLM ROOT CAUSE #{llm_root_cause_count}] Issue {issue_id} -> '{llm_root_cause}' ({llm_elapsed:.2f}s)")
+                else:
+                    print(f"  [LLM ROOT CAUSE #{llm_root_cause_count+1}] Issue {issue_id}: LLM returned empty")
+            
+            if root_cause:
+                ws_issues.cell(row, 25, root_cause)
     
     print(f"Processed {ws_issues.max_row - 1} issues")
     return wb
