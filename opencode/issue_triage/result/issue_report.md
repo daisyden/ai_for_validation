@@ -8,39 +8,39 @@
 - Torch-XPU-OPS Nightly CI: XML files from `Inductor-XPU-UT-Data-*` + `Inductor-wheel-nightly-LTS2-XPU-E2E-Data-*` (commit: `a2d516a58c64f18b76880f3a77efbc02885d65af`)
 - Stock PyTorch XPU CI: XML files from `test-default-*-linux.idc.xpu_*.zip` (run IDs: 69741866812, 69741866834, 69741866862, 69741866911, etc.)
 
-Generated: 2026-04-08 23:01:09
+Generated: 2026-04-09 00:15:52
 
 ---
 
 ## Index
 
-1. [Summary](#1-summary)
-2. [Statistics](#2-statistics)
-   - [By Test Module](#by-test-module)
-   - [By Module](#by-module)
-   - [By Dependency](#by-dependency)
-   - [By Action TBD](#by-action-tbd)
-   - [By Category](#by-category-stats)
-   - [By Priority](#by-priority)
-3. [New Submitted Issues (Past Week)](#3-new-submitted-issues-past-week)
-4. [Action Required](#4-action-required)
-   - [Reporter Actions](#reporter-actions)
-     - [Information Required](#information-required)
-     - [Close Fixed Issue](#close-fixed-issue)
-     - [Enable Test](#enable-test)
-     - [Add to Skiplist](#add-to-skiplist)
-     - [Verify the Issue](#verify-the-issue)
-     - [Need Reproduce Steps](#need-reproduce-steps)
-   - [Engineer Actions](#engineer-actions)
-     - [Needs PyTorch Repo Changes (upstream)](#needs-pytorch-repo-changes-upstream)
-     - [Revisit the PR as Case Failed](#revisit-the-pr-as-case-failed)
-5. [By Category](#5-by-category)
-6. [Duplicated Issues](#6-duplicated-issues)
-7. [Issues with Dependency](#7-issues-with-dependency)
+1. [Summary](#user-content-1-summary)
+2. [Statistics](#user-content-2-statistics)
+   - [By Test Module](#user-content-by-test-module)
+   - [By Module](#user-content-by-module)
+   - [By Dependency](#user-content-by-dependency)
+   - [By Action TBD](#user-content-by-action-tbd)
+   - [By Category](#user-content-by-category-stats)
+   - [By Priority](#user-content-by-priority)
+3. [New Submitted Issues (Past Week)](#user-content-3-new-submitted-issues-past-week)
+4. [Action Required](#user-content-4-action-required)
+   - [Reporter Actions](#user-content-reporter-actions)
+     - [Information Required](#user-content-information-required)
+     - [Close Fixed Issue](#user-content-close-fixed-issue)
+     - [Enable Test](#user-content-enable-test)
+     - [Add to Skiplist](#user-content-add-to-skiplist)
+     - [Verify the Issue](#user-content-verify-the-issue)
+     - [Need Reproduce Steps](#user-content-need-reproduce-steps)
+   - [Engineer Actions](#user-content-engineer-actions)
+     - [Needs PyTorch Repo Changes (upstream)](#user-content-needs-pytorch-repo-changes-upstream)
+     - [Revisit the PR as Case Failed](#user-content-revisit-the-pr-as-case-failed)
+5. [By Category](#user-content-5-by-category)
+6. [Duplicated Issues](#user-content-6-duplicated-issues)
+7. [Issues with Dependency](#user-content-7-issues-with-dependency)
 
 ---
 
-## 1. Summary {#1-summary}
+## 1. Summary
 
 | Category | Count |
 |----------|-------|
@@ -53,9 +53,9 @@ Generated: 2026-04-08 23:01:09
 
 ---
 
-## 2. Statistics {#2-statistics}
+## 2. Statistics
 
-### By Test Module {#by-test-module}
+### By Test Module
 
 | Test Module | Count |
 |-------------|-------|
@@ -63,7 +63,7 @@ Generated: 2026-04-08 23:01:09
 | e2e | 39 |
 | build | 7 |
 
-### By Module {#by-module}
+### By Module
 
 | Module | Count |
 |--------|-------|
@@ -75,7 +75,7 @@ Generated: 2026-04-08 23:01:09
 | profiling | 5 |
 | low_precision | 3 |
 
-### By Dependency {#by-dependency}
+### By Dependency
 
 | Dependency | Count |
 |------------|-------|
@@ -85,7 +85,7 @@ Generated: 2026-04-08 23:01:09
 | Triton | 5 |
 | oneCCL | 1 |
 
-### By Action TBD {#by-action-tbd}
+### By Action TBD
 
 | Action TBD | Count |
 |------------|-------|
@@ -97,7 +97,7 @@ Generated: 2026-04-08 23:01:09
 | add to skiplist | 4 |
 | Verify the issue | 3 |
 
-### By Category (Statistics) {#by-category-stats}
+### By Category (Statistics)
 
 | Category | Count |
 |----------|-------|
@@ -110,7 +110,7 @@ Generated: 2026-04-08 23:01:09
 | Sparse Operations Related | 14 |
 | PT2E | 13 |
 
-### By Priority {#by-priority}
+### By Priority
 
 | Priority | Count |
 |----------|-------|
@@ -120,9 +120,9 @@ Generated: 2026-04-08 23:01:09
 
 ---
 
-## 3. New Submitted Issues (Past Week) {#3-new-submitted-issues-past-week}
+## 3. New Submitted Issues (Past Week)
 
-Issues created in the past 7 days (as of 2026-04-08).
+Issues created in the past 7 days (as of 2026-04-09).
 
 | ID | Title | Status | Owner | Priority | Reason | Category | Root Cause | Labels | Module | Test Module |
 |---|-------|--------|-------|---------|--------|----------|-----------|--------|--------|-------------|
@@ -133,11 +133,11 @@ Issues created in the past 7 days (as of 2026-04-08).
 
 ---
 
-## 4. Action Required {#4-action-required}
+## 4. Action Required
 
-### Reporter Actions {#reporter-actions}
+### Reporter Actions
 
-#### Information Required {#information-required}
+#### Information Required
 
 | ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |
 |---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|
@@ -352,7 +352,7 @@ Issues created in the past 7 days (as of 2026-04-08).
 | [3258](https://github.com/intel/torch-xpu-ops/issues/3258) | Error in op: torch.ops.aten._scaled | None | bjarzemb | P2 | Flash Attention / Transformer Related | 5 - Flash Attention/Specific Ops Issue - Error in _scaled_dot_product_fused_atte |  | ut |
 | [3259](https://github.com/intel/torch-xpu-ops/issues/3259) | New failed test cases 2026-04-02 | SlawomirLaba | Silv3S | P2 | Flash Attention / Transformer Related | Backend/Device Issue - XPU device initialization or compatibility failure |  | ut |
 
-#### Close Fixed Issue {#close-fixed-issue}
+#### Close Fixed Issue
 
 | ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |
 |---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|
@@ -373,12 +373,12 @@ Issues created in the past 7 days (as of 2026-04-08).
 | [3161](https://github.com/intel/torch-xpu-ops/issues/3161) | Exception: Tensor-likes are not clo | tadkrawiec | kdrozd-dev | P2 | Dtype / Precision Related |  |  | ut |
 | [3166](https://github.com/intel/torch-xpu-ops/issues/3166) | test_consistency_SparseCSR failures | yucai-intel | CuiYifeng | P2 | TorchAO |  |  | ut |
 
-#### Enable Test {#enable-test}
+#### Enable Test
 
 | ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |
 |---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|
 
-#### Add to Skiplist {#add-to-skiplist}
+#### Add to Skiplist
 
 | ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |
 |---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|
@@ -387,7 +387,7 @@ Issues created in the past 7 days (as of 2026-04-08).
 | [2472](https://github.com/intel/torch-xpu-ops/issues/2472) | [upstream_ut]  NotImplementedError: | Silv3S | daisyden | P2 | PT2E |  |  | ut |
 | [2508](https://github.com/intel/torch-xpu-ops/issues/2508) | TypedStorage / TypedTensors depreca | Silv3S | libohao1201 | P1 | TorchAO |  | [PR](https://github.com/intel/torch-xpu-ops/pull/3260) | ut |
 
-#### Verify the Issue {#verify-the-issue}
+#### Verify the Issue
 
 | ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |
 |---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|
@@ -395,14 +395,14 @@ Issues created in the past 7 days (as of 2026-04-08).
 | [2694](https://github.com/intel/torch-xpu-ops/issues/2694) | Title: [upstream_ut]  AssertionErro | daisyden | daisyden | P2 | Distributed |  | [PR](https://github.com/pytorch/pytorch/pull/171773) | ut |
 | [3007](https://github.com/intel/torch-xpu-ops/issues/3007) | AssertionError: Scalars are not equ | daisyden | daisyden | P2 | Flash Attention / Transformer Related |  | [PR](https://github.com/pytorch/pytorch/pull/178369) | e2e |
 
-#### Need Reproduce Steps {#need-reproduce-steps}
+#### Need Reproduce Steps
 
 | ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |
 |---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|
 
-### Engineer Actions {#engineer-actions}
+### Engineer Actions
 
-#### Needs PyTorch Repo Changes (upstream) {#needs-pytorch-repo-changes-upstream}
+#### Needs PyTorch Repo Changes (upstream)
 
 | ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |
 |---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|
@@ -522,7 +522,7 @@ Issues created in the past 7 days (as of 2026-04-08).
 | [3255](https://github.com/intel/torch-xpu-ops/issues/3255) | [Linux][PT2E][Regression] Some perf | None | None | P0 | TorchAO | Timeout/Performance Issue - performance tests failed due to regression in execut |  | e2e |
 | [3257](https://github.com/intel/torch-xpu-ops/issues/3257) | [Linux][E2E][Regression] Huggingfac | None | None | P0 | Others | Backend/Device Issue - Huggingface test models failed to run on XPU, indicating  |  | e2e |
 
-#### Revisit the PR as Case Failed {#revisit-the-pr-as-case-failed}
+#### Revisit the PR as Case Failed
 
 | ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |
 |---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|
@@ -530,9 +530,9 @@ Issues created in the past 7 days (as of 2026-04-08).
 
 ---
 
-## 5. By Category {#5-by-category}
+## 5. By Category
 
-#### Distributed (#distributed)
+#### Distributed
 
 | ID | Title | Status | Owner | Priority | Root Cause | PR | Labels | Module | Test Module |
 |---|-------|--------|-------|---------|-----------|-----|--------|--------|-------------|
@@ -642,7 +642,7 @@ Issues created in the past 7 days (as of 2026-04-08).
 | [3233](https://github.com/intel/torch-xpu-ops/issues/3233) | [distributed] RuntimeError: No | open | None | P2 | Distributed/Gloo Issue - No backend for the parent process group or its backend  |  | bug, module: distributed | distributed | ut |
 | [3246](https://github.com/intel/torch-xpu-ops/issues/3246) | AssertionError: Booleans misma | open | BartoszKokoszko | P2 |  | [PR](https://github.com/intel/torch-xpu-ops/pull/3249) | skipped | aten_ops | ut |
 
-#### Dtype / Precision Related (#dtype---precision-related)
+#### Dtype / Precision Related
 
 | ID | Title | Status | Owner | Priority | Root Cause | PR | Labels | Module | Test Module |
 |---|-------|--------|-------|---------|-----------|-----|--------|--------|-------------|
@@ -703,7 +703,7 @@ Issues created in the past 7 days (as of 2026-04-08).
 | [3238](https://github.com/intel/torch-xpu-ops/issues/3238) | The supported dtypes of _refs. | open | CuiYifeng | P2 |  |  | ut_upstream | aten_ops | ut |
 | [3243](https://github.com/intel/torch-xpu-ops/issues/3243) | AssertionError: False is not t | open | pponikox | P2 | Failure - assertion 'False is not true' failed in test |  | module: ut, skipped | aten_ops | ut |
 
-#### Flash Attention / Transformer Related (#flash-attention---transformer-related)
+#### Flash Attention / Transformer Related
 
 | ID | Title | Status | Owner | Priority | Root Cause | PR | Labels | Module | Test Module |
 |---|-------|--------|-------|---------|-----------|-----|--------|--------|-------------|
@@ -758,7 +758,7 @@ Issues created in the past 7 days (as of 2026-04-08).
 | [3258](https://github.com/intel/torch-xpu-ops/issues/3258) | Error in op: torch.ops.aten._s | open | None | P2 | 5 - Flash Attention/Specific Ops Issue - Error in _scaled_dot_product_fused_atte |  |  | aten_ops | ut |
 | [3259](https://github.com/intel/torch-xpu-ops/issues/3259) | New failed test cases 2026-04- | open | SlawomirLaba | P2 | Backend/Device Issue - XPU device initialization or compatibility failure |  | skipped | aten_ops | ut |
 
-#### Inductor / Compilation Related (#inductor---compilation-related)
+#### Inductor / Compilation Related
 
 | ID | Title | Status | Owner | Priority | Root Cause | PR | Labels | Module | Test Module |
 |---|-------|--------|-------|---------|-----------|-----|--------|--------|-------------|
@@ -789,7 +789,7 @@ Issues created in the past 7 days (as of 2026-04-08).
 | [3224](https://github.com/intel/torch-xpu-ops/issues/3224) | [Win][Build] Building SYCL (De | open | chunhuanMeng | P0 | Backend/Device Issue - SYCL kernel build failure on Windows for XPU |  |  | aten_ops | build |
 | [3242](https://github.com/intel/torch-xpu-ops/issues/3242) | AssertionError: Torch not comp | open | None | P2 |  |  | module: ut, skipped | aten_ops | ut |
 
-#### Others (#others)
+#### Others
 
 | ID | Title | Status | Owner | Priority | Root Cause | PR | Labels | Module | Test Module |
 |---|-------|--------|-------|---------|-----------|-----|--------|--------|-------------|
@@ -909,7 +909,7 @@ Issues created in the past 7 days (as of 2026-04-08).
 | [3247](https://github.com/intel/torch-xpu-ops/issues/3247) | NotImplementedError: "dot_xpu_ | open | Silv3S | P2 |  |  | ut_upstream | aten_ops | ut |
 | [3257](https://github.com/intel/torch-xpu-ops/issues/3257) | [Linux][E2E][Regression] Huggi | open | None | P0 | Backend/Device Issue - Huggingface test models failed to run on XPU, indicating  |  |  | aten_ops | e2e |
 
-#### PT2E (#pt2e)
+#### PT2E
 
 | ID | Title | Status | Owner | Priority | Root Cause | PR | Labels | Module | Test Module |
 |---|-------|--------|-------|---------|-----------|-----|--------|--------|-------------|
@@ -927,7 +927,7 @@ Issues created in the past 7 days (as of 2026-04-08).
 | [3006](https://github.com/intel/torch-xpu-ops/issues/3006) | AssertionError: '.to(tl.float1 | open | CuiYifeng | P2 |  |  | module: inductor, ut_upstream | inductor | e2e |
 | [3231](https://github.com/intel/torch-xpu-ops/issues/3231) | Dynamo failed to run FX node w | open | None | P2 | Inductor/Compilation Issue - Dynamo failed to compile FX node with fake tensors  |  | module: ut, skipped | aten_ops | ut |
 
-#### Sparse Operations Related (#sparse-operations-related)
+#### Sparse Operations Related
 
 | ID | Title | Status | Owner | Priority | Root Cause | PR | Labels | Module | Test Module |
 |---|-------|--------|-------|---------|-----------|-----|--------|--------|-------------|
@@ -946,7 +946,7 @@ Issues created in the past 7 days (as of 2026-04-08).
 | [3169](https://github.com/intel/torch-xpu-ops/issues/3169) | NotImplementedError: Could not | open | jkosnox | P2 |  |  | skipped, ut_upstream | aten_ops | ut |
 | [3175](https://github.com/intel/torch-xpu-ops/issues/3175) | [Bug Skip]: ValueError: sample | open | None | P2 | Backend/Device Issue - inputs are not on the same XPU device |  | skipped | aten_ops | ut |
 
-#### TorchAO (#torchao)
+#### TorchAO
 
 | ID | Title | Status | Owner | Priority | Root Cause | PR | Labels | Module | Test Module |
 |---|-------|--------|-------|---------|-----------|-----|--------|--------|-------------|
@@ -992,7 +992,7 @@ Issues created in the past 7 days (as of 2026-04-08).
 
 ---
 
-## 6. Duplicated Issues {#6-duplicated-issues}
+## 6. Duplicated Issues
 
 Issues that share test cases with other issues.
 
@@ -1043,7 +1043,7 @@ Issues that share test cases with other issues.
 
 ---
 
-## 7. Issues with Dependency {#7-issues-with-dependency}
+## 7. Issues with Dependency
 
 Issues that have dependencies on other components.
 

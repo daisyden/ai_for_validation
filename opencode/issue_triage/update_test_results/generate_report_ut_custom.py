@@ -162,33 +162,33 @@ def generate_report():
     
     # Index
     md += "## Index\n\n"
-    md += "1. [Summary](#1-summary)\n"
-    md += "2. [Statistics](#2-statistics)\n"
-    md += "   - [By Test Module](#by-test-module)\n"
-    md += "   - [By Module](#by-module)\n"
-    md += "   - [By Dependency](#by-dependency)\n"
-    md += "   - [By Action TBD](#by-action-tbd)\n"
-    md += "   - [By Category](#by-category-stats)\n"
-    md += "   - [By Priority](#by-priority)\n"
-    md += "3. [New Submitted Issues (Past Week)](#3-new-submitted-issues-past-week)\n"
-    md += "4. [Action Required](#4-action-required)\n"
-    md += "   - [Reporter Actions](#reporter-actions)\n"
-    md += "     - [Information Required](#information-required)\n"
-    md += "     - [Close Fixed Issue](#close-fixed-issue)\n"
-    md += "     - [Enable Test](#enable-test)\n"
-    md += "     - [Add to Skiplist](#add-to-skiplist)\n"
-    md += "     - [Verify the Issue](#verify-the-issue)\n"
-    md += "     - [Need Reproduce Steps](#need-reproduce-steps)\n"
-    md += "   - [Engineer Actions](#engineer-actions)\n"
-    md += "     - [Needs PyTorch Repo Changes (upstream)](#needs-pytorch-repo-changes-upstream)\n"
-    md += "     - [Revisit the PR as Case Failed](#revisit-the-pr-as-case-failed)\n"
-    md += "5. [By Category](#5-by-category)\n"
-    md += "6. [Duplicated Issues](#6-duplicated-issues)\n"
-    md += "7. [Issues with Dependency](#7-issues-with-dependency)\n\n"
+    md += "1. [Summary](#user-content-1-summary)\n"
+    md += "2. [Statistics](#user-content-2-statistics)\n"
+    md += "   - [By Test Module](#user-content-by-test-module)\n"
+    md += "   - [By Module](#user-content-by-module)\n"
+    md += "   - [By Dependency](#user-content-by-dependency)\n"
+    md += "   - [By Action TBD](#user-content-by-action-tbd)\n"
+    md += "   - [By Category](#user-content-by-category-stats)\n"
+    md += "   - [By Priority](#user-content-by-priority)\n"
+    md += "3. [New Submitted Issues (Past Week)](#user-content-3-new-submitted-issues-past-week)\n"
+    md += "4. [Action Required](#user-content-4-action-required)\n"
+    md += "   - [Reporter Actions](#user-content-reporter-actions)\n"
+    md += "     - [Information Required](#user-content-information-required)\n"
+    md += "     - [Close Fixed Issue](#user-content-close-fixed-issue)\n"
+    md += "     - [Enable Test](#user-content-enable-test)\n"
+    md += "     - [Add to Skiplist](#user-content-add-to-skiplist)\n"
+    md += "     - [Verify the Issue](#user-content-verify-the-issue)\n"
+    md += "     - [Need Reproduce Steps](#user-content-need-reproduce-steps)\n"
+    md += "   - [Engineer Actions](#user-content-engineer-actions)\n"
+    md += "     - [Needs PyTorch Repo Changes (upstream)](#user-content-needs-pytorch-repo-changes-upstream)\n"
+    md += "     - [Revisit the PR as Case Failed](#user-content-revisit-the-pr-as-case-failed)\n"
+    md += "5. [By Category](#user-content-5-by-category)\n"
+    md += "6. [Duplicated Issues](#user-content-6-duplicated-issues)\n"
+    md += "7. [Issues with Dependency](#user-content-7-issues-with-dependency)\n\n"
     md += "---\n\n"
     
     # 1. Summary
-    md += "## 1. Summary {#1-summary}\n\n"
+    md += "## 1. Summary\n\n"
     md += "| Category | Count |\n"
     md += "|----------|-------|\n"
     md += f"| Action Required | {action_required_count} |\n"
@@ -200,44 +200,44 @@ def generate_report():
     md += "---\n\n"
     
     # 2. Statistics
-    md += "## 2. Statistics {#2-statistics}\n\n"
+    md += "## 2. Statistics\n\n"
     
-    md += "### By Test Module {#by-test-module}\n\n"
+    md += "### By Test Module\n\n"
     md += "| Test Module | Count |\n"
     md += "|-------------|-------|\n"
     for tm, count in sorted(test_module_stats.items(), key=lambda x: -x[1]):
         md += f"| {tm} | {count} |\n"
     md += "\n"
     
-    md += "### By Module {#by-module}\n\n"
+    md += "### By Module\n\n"
     md += "| Module | Count |\n"
     md += "|--------|-------|\n"
     for m, count in sorted(module_stats.items(), key=lambda x: -x[1]):
         md += f"| {m} | {count} |\n"
     md += "\n"
     
-    md += "### By Dependency {#by-dependency}\n\n"
+    md += "### By Dependency\n\n"
     md += "| Dependency | Count |\n"
     md += "|------------|-------|\n"
     for dep, count in sorted(dep_stats.items(), key=lambda x: -x[1]):
         md += f"| {dep} | {count} |\n"
     md += "\n"
     
-    md += "### By Action TBD {#by-action-tbd}\n\n"
+    md += "### By Action TBD\n\n"
     md += "| Action TBD | Count |\n"
     md += "|------------|-------|\n"
     for action, count in sorted(action_tbd_stats.items(), key=lambda x: -x[1]):
         md += f"| {action} | {count} |\n"
     md += "\n"
     
-    md += "### By Category (Statistics) {#by-category-stats}\n\n"
+    md += "### By Category (Statistics)\n\n"
     md += "| Category | Count |\n"
     md += "|----------|-------|\n"
     for cat, count in sorted(category_stats.items(), key=lambda x: -x[1]):
         md += f"| {cat} | {count} |\n"
     md += "\n"
     
-    md += "### By Priority {#by-priority}\n\n"
+    md += "### By Priority\n\n"
     md += "| Priority | Count |\n"
     md += "|----------|-------|\n"
     for p, count in sorted(priority_stats.items()):
@@ -246,7 +246,7 @@ def generate_report():
     
     # 3. New submitted issues in past week
     md += f"---\n\n"
-    md += f"## 3. New Submitted Issues (Past Week) {{#3-new-submitted-issues-past-week}}\n\n"
+    md += f"## 3. New Submitted Issues (Past Week)\n\n"
     md += f"Issues created in the past 7 days (as of {datetime.now().strftime('%Y-%m-%d')}).\n\n"
     md += "| ID | Title | Status | Owner | Priority | Reason | Category | Root Cause | Labels | Module | Test Module |\n"
     md += "|---|-------|--------|-------|---------|--------|----------|-----------|--------|--------|-------------|\n"
@@ -310,12 +310,12 @@ def generate_report():
                 reporter_actions['need_reproduce'].append(iss)
     
     md += "\n---\n\n"
-    md += "## 4. Action Required {#4-action-required}\n\n"
+    md += "## 4. Action Required\n\n"
     
     # Reporter Actions
-    md += "### Reporter Actions {#reporter-actions}\n\n"
+    md += "### Reporter Actions\n\n"
     
-    md += "#### Information Required {#information-required}\n\n"
+    md += "#### Information Required\n\n"
     md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |\n"
     md += "|---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|\n"
     
@@ -331,7 +331,7 @@ def generate_report():
         test_module = issue['test_module'] or ''
         md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {root_cause} | {pr_link} | {test_module} |\n"
     
-    md += "\n#### Close Fixed Issue {#close-fixed-issue}\n\n"
+    md += "\n#### Close Fixed Issue\n\n"
     md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |\n"
     md += "|---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|\n"
     
@@ -347,7 +347,7 @@ def generate_report():
         test_module = issue['test_module'] or ''
         md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {root_cause} | {pr_link} | {test_module} |\n"
     
-    md += "\n#### Enable Test {#enable-test}\n\n"
+    md += "\n#### Enable Test\n\n"
     md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |\n"
     md += "|---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|\n"
     
@@ -363,7 +363,7 @@ def generate_report():
         test_module = issue['test_module'] or ''
         md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {root_cause} | {pr_link} | {test_module} |\n"
     
-    md += "\n#### Add to Skiplist {#add-to-skiplist}\n\n"
+    md += "\n#### Add to Skiplist\n\n"
     md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |\n"
     md += "|---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|\n"
     
@@ -379,7 +379,7 @@ def generate_report():
         test_module = issue['test_module'] or ''
         md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {root_cause} | {pr_link} | {test_module} |\n"
     
-    md += "\n#### Verify the Issue {#verify-the-issue}\n\n"
+    md += "\n#### Verify the Issue\n\n"
     md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |\n"
     md += "|---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|\n"
     
@@ -395,7 +395,7 @@ def generate_report():
         test_module = issue['test_module'] or ''
         md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {root_cause} | {pr_link} | {test_module} |\n"
     
-    md += "\n#### Need Reproduce Steps {#need-reproduce-steps}\n\n"
+    md += "\n#### Need Reproduce Steps\n\n"
     md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |\n"
     md += "|---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|\n"
     
@@ -412,9 +412,9 @@ def generate_report():
         md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {root_cause} | {pr_link} | {test_module} |\n"
     
     # Engineer Actions
-    md += "\n### Engineer Actions {#engineer-actions}\n\n"
+    md += "\n### Engineer Actions\n\n"
     
-    md += "#### Needs PyTorch Repo Changes (upstream) {#needs-pytorch-repo-changes-upstream}\n\n"
+    md += "#### Needs PyTorch Repo Changes (upstream)\n\n"
     md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |\n"
     md += "|---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|\n"
     
@@ -430,7 +430,7 @@ def generate_report():
         test_module = issue['test_module'] or ''
         md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {root_cause} | {pr_link} | {test_module} |\n"
     
-    md += "\n#### Revisit the PR as Case Failed {#revisit-the-pr-as-case-failed}\n\n"
+    md += "\n#### Revisit the PR as Case Failed\n\n"
     md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |\n"
     md += "|---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|\n"
     
@@ -448,14 +448,13 @@ def generate_report():
     
     # 5. By Category
     md += "\n---\n\n"
-    md += "## 5. By Category {#5-by-category}\n\n"
+    md += "## 5. By Category\n\n"
     
     for cat in sorted(category_groups.keys()):
         issues_list = category_groups[cat]
         issues_list.sort(key=lambda x: x['id'])
         cat_count = len(issues_list)
-        cat_anchor = "#" + cat.lower().replace(" ", "-").replace("/", "-")
-        md += "#### " + cat + " (" + cat_anchor + ")\n\n"
+        md += "#### " + cat + "\n\n"
         md += "| ID | Title | Status | Owner | Priority | Root Cause | PR | Labels | Module | Test Module |\n"
         md += "|---|-------|--------|-------|---------|-----------|-----|--------|--------|-------------|\n"
         for issue in issues_list:
@@ -474,7 +473,7 @@ def generate_report():
     
     # 6. Duplicated Issues
     md += "\n---\n\n"
-    md += "## 6. Duplicated Issues {#6-duplicated-issues}\n\n"
+    md += "## 6. Duplicated Issues\n\n"
     md += "Issues that share test cases with other issues.\n\n"
     md += "| ID | Title | Owner | Reporter | Duplicated With | Priority | Root Cause | PR | Labels | Module | Test Module |\n"
     md += "|---|-------|-------|----------|-----------------|---------|-----------|-----|--------|--------|-------------|\n"
@@ -495,7 +494,7 @@ def generate_report():
     
     # 7. Issues with Dependency
     md += "\n---\n\n"
-    md += "## 7. Issues with Dependency {#7-issues-with-dependency}\n\n"
+    md += "## 7. Issues with Dependency\n\n"
     md += "Issues that have dependencies on other components.\n\n"
     md += "| ID | Title | Owner | Priority | Root Cause | Dependency | Category | PR | Labels | Test Module |\n"
     md += "|---|-------|-------|---------|-----------|------------|----------|-----|--------|-------------|\n"
