@@ -1297,7 +1297,9 @@ ws_issues.title = "Issues"
 
 headers = ["Issue ID", "Title", "Status", "Assignee", "Reporter", "Labels",
            "Created Time", "Updated Time", "Milestone", "Summary", "Type",
-           "Module", "Test Module", "Dependency", "PR", "PR Owner", "PR Status", "PR Description", "Category", "Root Cause"]
+           "Module", "Test Module", "Dependency", "PR", "PR Owner", "PR Status", "PR Description",
+           "owner_transfer", "action_TBD", "action_TBD_reason", "duplicated_issue", 
+           "priority", "priority_reason", "Category", "category_reason", "Root Cause"]
 
 for col, header in enumerate(headers, 1):
     cell = ws_issues.cell(row=1, column=col, value=header)
@@ -1309,7 +1311,10 @@ ws_cases = wb.create_sheet("Test Cases")
 
 case_headers = ["Issue ID", "Test Reproducer", "Test Type", "Test File", 
                   "Origin Test File", "Test Class", "Test Case", 
-                  "Error Message", "Traceback", "torch-ops", "dependency"]
+                  "Error Message", "Traceback", "torch-ops", "dependency",
+                  "XPU Status", "Stock Status", "Is SKIP", "Is CUDA Skip",
+                  "CUDA Case Exist", "XPU Case Exist", "case_existence_comments",
+                  "can_enable_on_xpu", "duplicated_issue"]
 
 for col, header in enumerate(case_headers, 1):
     cell = ws_cases.cell(row=1, column=col, value=header)
@@ -1331,7 +1336,7 @@ issue_row = 2
 case_row = 2
 e2e_row = 2
 
-MAX_ISSUES_FOR_TEST = 5
+MAX_ISSUES_FOR_TEST = 10
 TESTING_MODE = True
 
 for issue in issues[:MAX_ISSUES_FOR_TEST] if TESTING_MODE else issues:

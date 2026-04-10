@@ -612,8 +612,19 @@ Test Case: {test_case}
 
 Base test is the actual test function in the test file,NOT just removing '_xpu' suffix.
 
+IMPORTANT: Determine if this test case can be enabled on XPU (can_enable_on_xpu):
+- can_enable_on_xpu = True if: 
+  * Test has hardcoded 'cuda' device but can be adapted for XPU
+  * Test has skip decorators like onlyCUDA, unittest.skip(TEST_CUDA) - these are just skips, test itself IS applicable to XPU
+  * Test is for a feature that works on XPU with proper implementation
+- can_enable_on_xpu = False if:
+  * Test is for HIPDNN/rocBlas/ROCm-specific features (hipdnn backend)
+  * Test uses @onlyCUDA, @skipIfNoXpu or similar that explicitly excludes XPU
+  * Test is for CUDA-specific features not applicable to XPU (CUDA memory management, CUDA streams, etc.)
+  * Feature is in "Not applicable" list from will-not-fix issues
+
 IMPORTANT: Explain WHY XPU test does not exist if cuda_exists is "No" or xpu_exists is "No":
-1. SKIP DECORators: @onlyCUDA, @skipCUDAIfNoHipdnn, @skipIfXpu, @requires_xccl
+1. SKIP DECORATORS: @onlyCUDA, @skipCUDAIfNoHipdnn, @skipIfXpu, @requires_xccl
 2. PARAMETERIZATION: @dtypes, @parametrize_test generating tests
 3. REMOVED/RENAMED: Test removed/renamed in newer versions
 4. NOT APPLICABLE: CUDA/ROCm specific (hipdnn backend)
@@ -624,6 +635,7 @@ Return ONLY valid JSON:
     "explanation": "detailed explanation why XPU test exists or not"
     "cuda_exists": "Yes/No",
     "xpu_exists": "Yes/No/N/A",
+    "can_enable_on_xpu": "True/False",
     "cuda_decorators": ["decorator1"],
     "xpu_decorators": ["decorator1"],
     "base_test_name": "original_test_function_name",
@@ -800,7 +812,7 @@ YOUR ANSWER (must include detailed reason after the pipe symbol):"""
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.0,
-        "max_tokens": 100
+        "max_tokens": 400
     }
 
     start_time = time.time()
@@ -1587,19 +1599,243 @@ def analyze_root_cause(issue_title, issue_summary, test_file, test_class, test_c
     return "Others"
 
 
-def process_issues_sheet(wb):
+def extract_dependency_llm(issue_title, issue_body, labels, test_module, traceback):
+    """Use LLM to extract dependency information when labels don't indicate it."""
+    import requests
+    import json
+    import re
+    
+    LLM_ENDPOINT = "http://10.239.15.43/v1/chat/completions"
+    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-xxxxxxxxxx")
+    LLM_MODEL = "Qwen3-32B"
+    
+    prompt = f"""Analyze this PyTorch XPU issue and identify the dependency component that needs to be fixed upstream.
+Reply with ONE of these dependency names or 'None':
+- oneDNN (for CPU kernel ops like convolution, linear, matmul)
+- oneMKL (for math library ops)
+- Triton (for inductor/triton kernels)
+- AO / TorchAO (for torch.ao quantization ops)
+- transformers / HuggingFace (for model-specific issues)
+- oneAPI / SYCL (for runtime/device issues)
+- oneCCL / CCL (for distributed ops)
+- driver (for hardware/driver issues)
+- PyTorch Core (for core memory, dtype, runtime issues)
+- None (if dependency is already clear or not applicable)
+
+Issue Title: {issue_title}
+Issue Body: {issue_body[:1500]}
+Test Module: {test_module}
+Traceback: {traceback[:500] if traceback else 'None'}
+
+Examples:
+- "cuDNN manager" memory errors -> oneDNN
+- FlashAttention implementation -> Triton or oneDNN
+- NCCL collective hangs -> oneCCL
+- Device init failures -> oneAPI/SYCL
+- Dtype promotion errors -> PyTorch Core
+- Quantization ops failures -> AO/TorchAO
+
+YOUR ANSWER:"""
+
+    headers = {
+        "Authorization": f"Bearer {LLM_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": LLM_MODEL,
+        "messages": [
+            {"role": "system", "content": "Output ONLY one dependency name. No markdown. No JSON. No thinking tags."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.0,
+        "max_tokens": 20
+    }
+    
+    try:
+        response = requests.post(LLM_ENDPOINT, headers=headers, json=payload, timeout=60)
+        if response.status_code == 200:
+            result = response.json()
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            content = re.sub(r'<[^>]*>', '', content)
+            content = re.sub(r'\[TO\]|\[/TO\]|\[RESULT\]|\[/RESULT\]', '', content)
+            content = content.strip()
+            if content and content != 'None':
+                return content
+        return None
+    except Exception as e:
+        return None
+
+
+def extract_not_applicable_features_llm(issue_title, issue_body, issue_id):
+    """Use LLM to extract feature names from issue content for 'Not applicable' sheet."""
+    import requests
+    import json
+    import time
+    import re
+    
+    LLM_ENDPOINT = "http://10.239.15.43/v1/chat/completions"
+    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-xxxxxxxxxx")
+    LLM_MODEL = "Qwen3-32B"
+    
+    prompt = f"""Extract the PyTorch feature/operation this issue is about from the issue title and body.
+If the issue has been marked as 'won't fix' or 'not_target', identify what feature or operation it relates to that is not applicable to XPU.
+
+Issue Title: {issue_title}
+Issue Body: {issue_body[:2000]}
+
+Examples of features to extract:
+- aten::conv2d, aten::linear, aten::matmul
+- torch.nn.functional.relu, torch.nn.functional.dropout
+- torch.cuda.empty_cache, torch.backends.xpu.is_available
+- specific test files or test names
+
+Return ONLY the feature/operation name, or 'Unknown' if not clear.
+YOUR ANSWER:"""
+
+    headers = {
+        "Authorization": f"Bearer {LLM_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": LLM_MODEL,
+        "messages": [
+            {"role": "system", "content": "Output ONLY the feature name. No markdown. No JSON. No thinking tags."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.0,
+        "max_tokens": 50
+    }
+    
+    try:
+        response = requests.post(LLM_ENDPOINT, headers=headers, json=payload, timeout=60)
+        if response.status_code == 200:
+            result = response.json()
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            content = re.sub(r'<[^>]*>', '', content)
+            content = re.sub(r'\[TO\]|\[/TO\]|\[RESULT\]|\[/RESULT\]', '', content)
+            content = content.strip()
+            return content if content else "Unknown"
+        return "Unknown"
+    except Exception as e:
+        return "Unknown"
+
+
+def create_not_applicable_sheet(wb):
+    """Create 'Not applicable' sheet with features from won't fix/not_target issues using LLM."""
+    ws_issues = wb['Issues']
+    
+    not_applicable_features = {}
+    wont_fix_issues = []
+    
+    # First pass: collect all issues with 'wont fix' or 'not_target' labels
+    for row in range(2, ws_issues.max_row + 1):
+        issue_id = ws_issues.cell(row, 1).value
+        labels = ws_issues.cell(row, 6).value
+        title = ws_issues.cell(row, 2).value or ''
+        body = ws_issues.cell(row, 10).value or ''
+        
+        if not issue_id:
+            continue
+            
+        # Check if issue has 'won't fix' or 'not_target' label
+        if labels:
+            labels_lower = labels.lower()
+            if "won't fix" in labels_lower or "not_target" in labels_lower or "not target" in labels_lower:
+                wont_fix_issues.append({
+                    'issue_id': issue_id,
+                    'title': title,
+                    'body': body
+                })
+    
+    # Use LLM to extract features from each wont_fix/not_target issue
+    for issue in wont_fix_issues:
+        issue_id = issue['issue_id']
+        feature = extract_not_applicable_features_llm(issue['title'], issue['body'], issue_id)
+        
+        # Also try regex patterns as fallback
+        if feature == "Unknown" or len(feature) < 5:
+            feature_patterns = [
+                r'(aten\:\:\w+)',
+                r'(torch\.\w+\.\w+)',
+                r'(torch\.ops\.\w+\.\w+)',
+                r'(test\.\w+\.\w+)',
+            ]
+            combined_text = issue['title'] + ' ' + issue['body']
+            for pattern in feature_patterns:
+                match = re.search(pattern, combined_text)
+                if match:
+                    feature = match.group(1)
+                    break
+        
+        if feature not in not_applicable_features:
+            not_applicable_features[feature] = []
+        if issue_id not in not_applicable_features[feature]:
+            not_applicable_features[feature].append(issue_id)
+    
+    # Create or get Not applicable sheet
+    if 'Not applicable' in wb.sheetnames:
+        ws_not = wb['Not applicable']
+        # Clear existing data
+        for row in range(ws_not.max_row, 1, -1):
+            ws_not.delete_rows(row)
+    else:
+        ws_not = wb.create_sheet('Not applicable')
+    
+    # Add headers
+    ws_not.cell(1, 1, 'feature')
+    ws_not.cell(1, 2, 'issues')
+    
+    # Write data
+    row_num = 2
+    for feature in sorted(not_applicable_features.keys()):
+        ws_not.cell(row_num, 1, feature)
+        ws_not.cell(row_num, 2, ','.join(str(i) for i in not_applicable_features[feature]))
+        row_num += 1
+    
+    return not_applicable_features
+    
+    # Create or get Not applicable sheet
+    if 'Not applicable' in wb.sheetnames:
+        ws_not = wb['Not applicable']
+        # Clear existing data
+        for row in range(ws_not.max_row, 1, -1):
+            ws_not.delete_rows(row)
+    else:
+        ws_not = wb.create_sheet('Not applicable')
+    
+    # Add headers
+    ws_not.cell(1, 1, 'feature')
+    ws_not.cell(1, 2, 'issues')
+    
+    # Write data
+    row_num = 2
+    for feature in sorted(not_applicable_features.keys()):
+        ws_not.cell(row_num, 1, feature)
+        ws_not.cell(row_num, 2, ','.join(str(i) for i in not_applicable_features[feature]))
+        row_num += 1
+    
+    return not_applicable_features
+
+
+def process_issues_sheet(wb, issue_duplicated_map=None):
     """Process Issues sheet to add owner_transfer, action_TBD, and duplicated_issue columns"""
     ws_issues = wb['Issues']
     ws_test = wb['Test Cases']
+    
+    if issue_duplicated_map is None:
+        issue_duplicated_map = {}
 
     ws_issues.cell(1, 19, 'owner_transfer')
     ws_issues.cell(1, 20, 'action_TBD')
-    ws_issues.cell(1, 21, 'duplicated_issue')
-    ws_issues.cell(1, 22, 'priority')
-    ws_issues.cell(1, 23, 'priority_reason')
-    ws_issues.cell(1, 24, 'Category')
-    ws_issues.cell(1, 25, 'category_reason')
-    ws_issues.cell(1, 26, 'Root Cause')
+    ws_issues.cell(1, 21, 'action_TBD_reason')
+    ws_issues.cell(1, 22, 'duplicated_issue')
+    ws_issues.cell(1, 23, 'priority')
+    ws_issues.cell(1, 24, 'priority_reason')
+    ws_issues.cell(1, 25, 'Category')
+    ws_issues.cell(1, 26, 'category_reason')
+    ws_issues.cell(1, 27, 'Root Cause')
 
     MAX_LLM_ROOT_CAUSE = 500
     MAX_LLM_CATEGORY = 500
@@ -1615,7 +1851,7 @@ def process_issues_sheet(wb):
         xpu_status = ws_test.cell(row, 11).value
         stock_status = ws_test.cell(row, 16).value
         cuda_case_exist = ws_test.cell(row, 18).value
-        dup_issue = ws_test.cell(row, 21).value
+        dup_issue = ws_test.cell(row, 22).value  # Correct col for duplicated_issue
         
         if issue_id not in issue_test_results:
             issue_test_results[issue_id] = {
@@ -1633,12 +1869,32 @@ def process_issues_sheet(wb):
             issue_test_results[issue_id]['cuda_case_not_exist'] = True
         if dup_issue:
             for dup_id in str(dup_issue).split(','):
-                issue_test_results[issue_id]['duplicated_issues'].add(dup_id.strip())
+                dup_id = dup_id.strip()
+                if dup_id and dup_id != str(issue_id):
+                    issue_test_results[issue_id]['duplicated_issues'].add(dup_id)
     
     ws_e2e = wb['E2E Test Cases']
     for row in range(2, ws_e2e.max_row + 1):
         issue_id = ws_e2e.cell(row, 1).value
         e2e_status = ws_e2e.cell(row, 13).value
+        can_enable_on_xpu = ws_e2e.cell(row, 21).value  # Check E2E cases too
+    
+    # Collect can_enable_on_xpu info for each issue from Test Cases sheet
+    issue_can_enable = {}
+    for row in range(2, ws_test.max_row + 1):
+        issue_id = ws_test.cell(row, 1).value
+        can_enable = ws_test.cell(row, 21).value
+        case_exist_comment = ws_test.cell(row, 20).value
+        
+        if issue_id not in issue_can_enable:
+            issue_can_enable[issue_id] = {
+                'can_enable_list': [],
+                'comments_list': []
+            }
+        if can_enable:
+            issue_can_enable[issue_id]['can_enable_list'].append(can_enable)
+        if case_exist_comment:
+            issue_can_enable[issue_id]['comments_list'].append(case_exist_comment)
         
         if issue_id not in issue_test_results:
             issue_test_results[issue_id] = {
@@ -1710,10 +1966,12 @@ def process_issues_sheet(wb):
         summary_lower = summary_raw.lower() if summary_raw else ''
         
         is_not_target = ('not target' in labels_str or 'wont' in labels_str or "won't" in labels_str)
+        action_tbd_reason = ''
         
         if is_not_target:
             owner_transfer = reporter
             action_tbd = 'add to skiplist'
+            action_tbd_reason = 'Issue marked as not_target/wontfix - should be skipped for XPU enablement'
         
         is_random = 'random' in labels_str
         ut_passed = False
@@ -1724,12 +1982,34 @@ def process_issues_sheet(wb):
             if xpu_all_passed or stock_all_passed:
                 owner_transfer = reporter
                 action_tbd = 'Close fixed issue'
+                action_tbd_reason = 'All test cases passed on XPU/stock - issue is resolved'
                 ut_passed = True
         
         e2e_all_passed = all(s == 'pass' for s in e2e_statuses) if e2e_statuses else False
         if not ut_passed and e2e_all_passed:
             owner_transfer = reporter
             action_tbd = 'Close fixed issue'
+            action_tbd_reason = 'All E2E test cases passed - issue is resolved'
+        
+        # Check if test cases can be enabled on XPU - this takes priority over other actions
+        if issue_id in issue_can_enable:
+            can_enable_info = issue_can_enable[issue_id]
+            can_enable_list = can_enable_info['can_enable_list']
+            comments_list = can_enable_info['comments_list']
+            
+            # If any test case has can_enable_on_xpu = True, mark action_TBD as 'Enable test'
+            can_enable_true = any(val == 'True' for val in can_enable_list)
+            # If any test case has can_enable_on_xpu = False (and no True exist), mark as not applicable
+            can_enable_false = any(val == 'False' for val in can_enable_list)
+            
+            if can_enable_true:
+                owner_transfer = reporter
+                action_tbd = 'Enable test'
+                action_tbd_reason = 'Case existence comments: ' + ' | '.join([str(c) for c in comments_list if c])
+            elif can_enable_false:
+                owner_transfer = reporter
+                action_tbd = 'add to skiplist'
+                action_tbd_reason = 'Case existence comments: ' + ' | '.join([str(c) for c in comments_list if c])
         
         pr_status = ws_issues.cell(row, 17).value
         pr_closed = pr_status in ['closed', 'merged']
@@ -1740,9 +2020,11 @@ def process_issues_sheet(wb):
             if not has_failed:
                 owner_transfer = reporter
                 action_tbd = 'Verify the issue'
+                action_tbd_reason = 'PR closed but no failed tests - verify if issue still reproduces'
             else:
                 owner_transfer = assignee
                 action_tbd = 'Revisit the PR as case failed'
+                action_tbd_reason = 'PR closed but tests still failing - revisit PR for fix'
         
         is_upstream = 'ut_upstream' in labels_str or 'inductor' in labels_str
         is_wontfix = 'wont ' in labels_str or ' wont ' in labels_str or 'wontfix' in labels_str or 'not target' in labels_str.replace('nottarget', '')
@@ -1751,12 +2033,15 @@ def process_issues_sheet(wb):
         if not action_tbd:
             if is_not_target_upstream:
                 action_tbd = 'Needs Upstream Skip PR (not_target + ut_upstream)'
+                action_tbd_reason = 'Issue has not_target label and is upstream - needs skip PR upstream'
                 owner_transfer = assignee
             elif is_wontfix:
                 action_tbd = 'Needs Skip PR (wontfix / not_target)'
+                action_tbd_reason = 'Issue marked as wontfix or not_target - needs skip PR'
                 owner_transfer = assignee
             elif is_upstream:
                 action_tbd = ''
+                action_tbd_reason = 'Upstream issue - owner should investigate upstream fix'
                 owner_transfer = assignee
         
         priority = 'P2'
@@ -1828,8 +2113,13 @@ def process_issues_sheet(wb):
                 llm_priority_count += 1
                 print(f"  [LLM PRIORITY #{llm_priority_count}] Issue {issue_id}: {priority} - {priority_reason}")
         
-        if duplicated_issues:
-            ws_issues.cell(row, 21, ','.join(sorted(duplicated_issues)))
+        # Merge duplicated issues from test cases and duplicate detection
+        all_dups = set(duplicated_issues)
+        if issue_duplicated_map and issue_id in issue_duplicated_map:
+            all_dups.update(issue_duplicated_map[issue_id])
+        
+        if all_dups:
+            ws_issues.cell(row, 22, ','.join(sorted(all_dups)))
         
         if not action_tbd:
             version_info = extract_version_info(title_raw + ' ' + summary_raw)
@@ -1859,21 +2149,21 @@ def process_issues_sheet(wb):
                 if is_e2e_issue and has_e2e_status and e2e_all_passed:
                     owner_transfer = reporter
                     action_tbd = 'Close fixed issue'
+                    action_tbd_reason = 'All E2E test cases passed - issue is resolved'
                 else:
                     # E2E issue needs upstream investigation
                     action_tbd = ''
+                    action_tbd_reason = 'E2E issue pending - needs upstream investigation'
                     owner_transfer = assignee
             elif is_public and all_statuses_empty and not is_feature_request:
                 if e2e_all_passed:
                     owner_transfer = reporter
                     action_tbd = 'Close fixed issue'
+                    action_tbd_reason = 'All tests passed - issue is resolved'
                 else:
                     action_tbd = ''
+                    action_tbd_reason = 'Issue needs investigation - no test status available'
                     owner_transfer = assignee
-            elif is_public and all_statuses_empty and not is_feature_request and not is_e2e_issue:
-                action_tbd = 'Check case availability'
-                owner_transfer = reporter
-            
             if not action_tbd and not is_feature_request and not is_e2e_issue:
                 issue_content = title_raw + ' ' + summary_raw
                 
@@ -1902,8 +2192,10 @@ def process_issues_sheet(wb):
                     has_already_requested = True
                     if 'reproduce' in llm_info_action.lower():
                         action_tbd = 'Need reproduce steps'
+                        action_tbd_reason = f'LLM suggests: {llm_info_action} - reporter needs to provide reproduce steps'
                     else:
                         action_tbd = f'LLM Suggestion: {llm_info_action}'
+                        action_tbd_reason = f'LLM analysis suggests: {llm_info_action}'
                     owner_transfer = reporter
 
                 has_test_info = bool(test_file and test_case)
@@ -1916,14 +2208,18 @@ def process_issues_sheet(wb):
                     elif has_test_info:
                         # Test info provided, can proceed with upstream changes
                         action_tbd = ''
+                        action_tbd_reason = 'Test info provided - ready for upstream fix analysis'
                     elif has_already_requested:
                         action_tbd = 'Awaiting response from reporter'
+                        action_tbd_reason = 'Information requested from reporter - pending response'
                         owner_transfer = reporter
                     else:
                         action_tbd = ''
+                        action_tbd_reason = 'Bug/Perf issue - needs upstream fix investigation'
                 else:
                     if has_already_requested:
                         action_tbd = 'Awaiting response from reporter'
+                        action_tbd_reason = 'Information requested from reporter - pending response'
                         owner_transfer = reporter
                     else:
                         info_needed = []
@@ -1937,20 +2233,22 @@ def process_issues_sheet(wb):
                         if info_needed:
                             info_str = ', '.join(info_needed)
                             action_tbd = f'Need more information - {info_str}'
+                            action_tbd_reason = f'Reporter needs to provide: {info_str}'
                             owner_transfer = reporter
         
         if owner_transfer:
             ws_issues.cell(row, 19, owner_transfer)
         if action_tbd:
             ws_issues.cell(row, 20, action_tbd)
+        ws_issues.cell(row, 21, action_tbd_reason if action_tbd_reason else '')
         # Remove old format entries that should be replaced
         old_format = 'Need reproduce step and more information'
         current_cell_value = ws_issues.cell(row, 20).value
         if current_cell_value == old_format:
             ws_issues.cell(row, 20, action_tbd if action_tbd else '')
         
-        ws_issues.cell(row, 22, priority)
-        ws_issues.cell(row, 23, priority_reason)
+        ws_issues.cell(row, 23, priority)
+        ws_issues.cell(row, 24, priority_reason)
         
         category = determine_category(title_raw, summary_raw, test_cases_str, traceback, test_module, labels)
         category_reason = ''
@@ -1972,32 +2270,45 @@ def process_issues_sheet(wb):
                 category = category_llm
                 llm_category_count += 1
                 print(f"  [LLM CATEGORY #{llm_category_count}] Issue {issue_id}: {category}")
-        ws_issues.cell(row, 24, category)
-        ws_issues.cell(row, 25, category_reason or '')
+        ws_issues.cell(row, 25, category)
+        ws_issues.cell(row, 26, category_reason or '')
         
-        current_action_tbd = ws_issues.cell(row, 20).value
-        if not current_action_tbd:
-            issue_test_file = ''
-            issue_test_class = ''
-            issue_test_case = ''
-            issue_error_msg = ''
-            issue_traceback = ''
-            
-            for tr in range(2, ws_test.max_row + 1):
-                if ws_test.cell(tr, 1).value == issue_id:
-                    if not issue_test_file:
-                        issue_test_file = str(ws_test.cell(tr, 4).value) if ws_test.cell(tr, 4).value else ''
-                    if not issue_test_class:
-                        issue_test_class = str(ws_test.cell(tr, 6).value) if ws_test.cell(tr, 6).value else ''
-                    issue_test_case = str(ws_test.cell(tr, 7).value) if ws_test.cell(tr, 7).value else ''
-                    if not issue_error_msg:
-                        issue_error_msg = str(ws_test.cell(tr, 8).value) if ws_test.cell(tr, 8).value else ''
-                    if not issue_traceback:
-                        issue_traceback = str(ws_test.cell(tr, 9).value) if ws_test.cell(tr, 9).value else ''
-                    if issue_error_msg and issue_traceback:
-                        break
-            
-            root_cause = analyze_root_cause(
+        issue_test_file = ''
+        issue_test_class = ''
+        issue_test_case = ''
+        issue_error_msg = ''
+        issue_traceback = ''
+        
+        for tr in range(2, ws_test.max_row + 1):
+            if ws_test.cell(tr, 1).value == issue_id:
+                if not issue_test_file:
+                    issue_test_file = str(ws_test.cell(tr, 4).value) if ws_test.cell(tr, 4).value else ''
+                if not issue_test_class:
+                    issue_test_class = str(ws_test.cell(tr, 6).value) if ws_test.cell(tr, 6).value else ''
+                issue_test_case = str(ws_test.cell(tr, 7).value) if ws_test.cell(tr, 7).value else ''
+                if not issue_error_msg:
+                    issue_error_msg = str(ws_test.cell(tr, 8).value) if ws_test.cell(tr, 8).value else ''
+                if not issue_traceback:
+                    issue_traceback = str(ws_test.cell(tr, 9).value) if ws_test.cell(tr, 9).value else ''
+                if issue_error_msg and issue_traceback:
+                    break
+        
+        root_cause = analyze_root_cause(
+            title_raw,
+            summary_raw,
+            issue_test_file,
+            issue_test_class,
+            issue_test_case,
+            issue_error_msg,
+            issue_traceback,
+            test_module
+        )
+        
+        if llm_root_cause_count < MAX_LLM_ROOT_CAUSE:
+            print(f"  [LLM ROOT CAUSE #{llm_root_cause_count+1}] Issue {issue_id}: Calling LLM for root cause analysis...")
+            llm_start = time.time()
+            llm_root_cause = analyze_root_cause_llm(
+                issue_id,
                 title_raw,
                 summary_raw,
                 issue_test_file,
@@ -2007,31 +2318,30 @@ def process_issues_sheet(wb):
                 issue_traceback,
                 test_module
             )
-            
-            if llm_root_cause_count < MAX_LLM_ROOT_CAUSE:
-                print(f"  [LLM ROOT CAUSE #{llm_root_cause_count+1}] Issue {issue_id}: Calling LLM for root cause analysis...")
-                llm_start = time.time()
-                llm_root_cause = analyze_root_cause_llm(
-                    issue_id,
-                    title_raw,
-                    summary_raw,
-                    issue_test_file,
-                    issue_test_class,
-                    issue_test_case,
-                    issue_error_msg,
-                    issue_traceback,
-                    test_module
+            llm_elapsed = time.time() - llm_start
+            if llm_root_cause:
+                root_cause = llm_root_cause
+                llm_root_cause_count += 1
+                print(f"  [LLM ROOT CAUSE #{llm_root_cause_count}] Issue {issue_id} -> '{llm_root_cause}' ({llm_elapsed:.2f}s)")
+            else:
+                print(f"  [LLM ROOT CAUSE #{llm_root_cause_count+1}] Issue {issue_id}: LLM returned empty")
+        
+        if root_cause:
+            ws_issues.cell(row, 27, root_cause)
+        
+# Extract dependency using LLM for all issues without existing dependency
+        existing_dependency = ws_issues.cell(row, 14).value
+        if not existing_dependency or existing_dependency in ['None', None, '']:
+            # Use LLM to determine dependency for ALL issues without one
+            try:
+                dependency_from_llm = extract_dependency_llm(
+                    title_raw, summary_raw, labels, test_module, traceback
                 )
-                llm_elapsed = time.time() - llm_start
-                if llm_root_cause:
-                    root_cause = llm_root_cause
-                    llm_root_cause_count += 1
-                    print(f"  [LLM ROOT CAUSE #{llm_root_cause_count}] Issue {issue_id} -> '{llm_root_cause}' ({llm_elapsed:.2f}s)")
-                else:
-                    print(f"  [LLM ROOT CAUSE #{llm_root_cause_count+1}] Issue {issue_id}: LLM returned empty")
-            
-            if root_cause:
-                ws_issues.cell(row, 26, root_cause)
+                if dependency_from_llm:
+                    ws_issues.cell(row, 14, dependency_from_llm)
+                    print(f"  [LLM DEPENDENCY] Issue {issue_id}: {dependency_from_llm}")
+            except Exception:
+                pass  # Silently skip LLM errors
     
     print(f"Processed {ws_issues.max_row - 1} issues")
     return wb
@@ -2142,6 +2452,20 @@ def main():
     # Load workbook
     wb = openpyxl.load_workbook(os.path.join(RESULT_DIR, 'torch_xpu_ops_issues.xlsx'))
     ws = wb['Test Cases']
+    ws_issues = wb['Issues']
+    
+    # Clean up old values from duplicated_issue and owner_transfer columns
+    log("  [CLEANUP] Cleaning up old values...")
+    for row in range(2, ws_issues.max_row + 1):
+        # Clear old boolean values in duplicated_issue
+        dup_val = ws_issues.cell(row, 22).value
+        if dup_val in ['True', 'False', 'None']:
+            ws_issues.cell(row, 22, '')
+        # Clear old placeholders in owner_transfer
+        ot_val = ws_issues.cell(row, 19).value
+        if ot_val in ['REPLACE_ME', '<transfer>', 'TBD']:
+            ws_issues.cell(row, 19, '')
+    log("  Cleanup complete")
     
     # Add new columns
     ws.cell(1, 11, 'status in torch-xpu-ops nightly')
@@ -2154,7 +2478,8 @@ def main():
     ws.cell(1, 18, 'cuda_case_exist')
     ws.cell(1, 19, 'xpu_case_exist')
     ws.cell(1, 20, 'case_existence_comments')
-    ws.cell(1, 21, 'duplicated_issue')
+    ws.cell(1, 21, 'can_enable_on_xpu')
+    ws.cell(1, 22, 'duplicated_issue')
     
     # Get XML files
     log("\n" + "=" * 60)
@@ -2291,6 +2616,7 @@ def main():
                 ws.cell(row, 18, cuda_exists)
                 ws.cell(row, 19, xpu_exists)
                 ws.cell(row, 20, comment)
+                ws.cell(row, 21, result.get('can_enable_on_xpu', 'Unknown'))
                 applied += 1
             else:
                 skipped += 1
@@ -2299,6 +2625,74 @@ def main():
     
     log(f"  Applied LLM results to {applied} test cases")
     log(f"  Skipped (no LLM analysis): {skipped} test cases")
+    
+    # Build mapping: (test_class, test_case) -> [issue_ids] (multiple rows, potentially different issues)
+    log("  [DUPLICATE CHECK] Finding cross-issue duplicated test cases...")
+    from collections import defaultdict
+    test_case_to_issues = defaultdict(list)
+    
+    # Clean up old values (True/False/None strings) in duplicated_issue
+    log("  [CLEANUP] Cleaning up old values in duplicated_issue (Test Cases sheet)...")
+    old_values_fixed = 0
+    for row in range(2, ws.max_row + 1):
+        dup_issue = ws.cell(row, 22).value
+        if dup_issue in ['True', 'False']:
+            ws.cell(row, 22, '')  # Clear old boolean values
+            old_values_fixed += 1
+    if old_values_fixed > 0:
+        log(f"  Cleared {old_values_fixed} old boolean values in Test Cases sheet")
+    
+    wb.save(os.path.join(RESULT_DIR, 'torch_xpu_ops_issues.xlsx'))
+    
+    # Also clean up Issues sheet at start of process_issues_sheet
+    ws_issues = wb['Issues']
+    for row in range(2, ws_issues.max_row + 1):
+        dup_issue = ws_issues.cell(row, 22).value
+        if dup_issue in ['True', 'False', 'None']:
+            ws_issues.cell(row, 22, '')  # Clear old boolean values
+    
+    for row in range(2, ws.max_row + 1):
+        issue_id = ws.cell(row, 1).value
+        test_class = ws.cell(row, 6).value
+        test_case = ws.cell(row, 7).value
+        if test_class and test_case:
+            key = (test_class, test_case)
+            test_case_to_issues[key].append(str(issue_id).strip())
+    
+    # For each test case, find which OTHER issues have the same test case
+    # Build: issue_id -> set of duplicated issue_ids (from OTHER issues)
+    issue_duplicated_map = {}  # issue_id -> set of duplicate issue_ids
+    
+    for key, issue_ids in test_case_to_issues.items():
+        # Get unique issue ids for this test case
+        unique_issues = list(set(issue_ids))
+        if len(unique_issues) > 1:
+            # Cross-issue duplicates found!
+            for issue_id in unique_issues:
+                other_issues = [i for i in unique_issues if i != issue_id]
+                if issue_id not in issue_duplicated_map:
+                    issue_duplicated_map[issue_id] = set()
+                issue_duplicated_map[issue_id].update(other_issues)
+    
+    # Write duplicated_issue to Test Cases sheet AND Issues sheet
+    dup_count_in_test_cases = 0
+    for row in range(2, ws.max_row + 1):
+        issue_id = ws.cell(row, 1).value
+        test_class = ws.cell(row, 6).value
+        test_case = ws.cell(row, 7).value
+        if test_class and test_case:
+            key = (test_class, test_case)
+            other_issues = [i for i in test_case_to_issues[key] if i != str(issue_id).strip()]
+            if other_issues:
+                other_unique = sorted(list(set(other_issues)))
+                ws.cell(row, 22, ','.join(other_unique))
+                dup_count_in_test_cases += 1
+    
+    log(f"  Marked {dup_count_in_test_cases} test cases with cross-issue duplicates")
+    log(f"  Found {len(issue_duplicated_map)} issues with duplicates")
+    
+    # Convert sets to sorted lists for the Issues sheet
+    issue_duplicated_map = {k: sorted(list(v)) for k, v in issue_duplicated_map.items()}
     
     wb.save(os.path.join(RESULT_DIR, 'torch_xpu_ops_issues.xlsx'))
     log("Saved Test Cases sheet!")
@@ -2311,10 +2705,16 @@ def main():
     e2e_elapsed = time_module.time() - e2e_start
     log(f"  E2E processing completed ({e2e_elapsed:.1f}s)")
     
+    # Create Not applicable sheet
+    log("\n" + "=" * 60)
+    log("[STEP 3.5/5] Creating Not applicable sheet...")
+    not_applicable_features = create_not_applicable_sheet(wb)
+    log(f"  Found {len(not_applicable_features)} not applicable features")
+    
     log("\n" + "=" * 60)
     log("[STEP 4/5] Processing Issues sheet...")
     issues_start = time_module.time()
-    process_issues_sheet(wb)
+    process_issues_sheet(wb, issue_duplicated_map)
     issues_elapsed = time_module.time() - issues_start
     log(f"  Issues processing completed ({issues_elapsed:.1f}s)")
     wb.save(os.path.join(RESULT_DIR, 'torch_xpu_ops_issues.xlsx'))

@@ -48,12 +48,13 @@ def generate_report():
             'pr': ws_issues.cell(row, 15).value,
             'owner_transfer': ws_issues.cell(row, 19).value,
             'action_TBD': ws_issues.cell(row, 20).value,
-            'duplicated_issue': ws_issues.cell(row, 21).value,
-            'priority': ws_issues.cell(row, 22).value,
-            'priority_reason': ws_issues.cell(row, 23).value,
-            'category': ws_issues.cell(row, 24).value,
-            'root_cause': ws_issues.cell(row, 25).value,
+            'action_TBD_reason': ws_issues.cell(row, 21).value,
+            'duplicated_issue': ws_issues.cell(row, 22).value,
+            'priority': ws_issues.cell(row, 23).value,
+            'priority_reason': ws_issues.cell(row, 24).value,
+            'category': ws_issues.cell(row, 25).value,
             'category_reason': ws_issues.cell(row, 26).value,
+            'root_cause': ws_issues.cell(row, 27).value,
         }
         issues.append(issue)
     
