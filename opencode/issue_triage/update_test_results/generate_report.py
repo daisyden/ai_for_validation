@@ -31,6 +31,9 @@ def generate_report():
             'test_module': ws_issues.cell(row, 13).value,
             'dependency': ws_issues.cell(row, 14).value,
             'pr': ws_issues.cell(row, 15).value,
+            'pr_owner': ws_issues.cell(row, 16).value,
+            'pr_status': ws_issues.cell(row, 17).value,
+            'pr_desc': ws_issues.cell(row, 18).value,
             'owner_transfer': ws_issues.cell(row, 19).value,
             'action_TBD': ws_issues.cell(row, 20).value,
             'duplicated_issue': ws_issues.cell(row, 21).value,
@@ -38,6 +41,7 @@ def generate_report():
             'priority_reason': ws_issues.cell(row, 23).value,
             'category': ws_issues.cell(row, 24).value,
             'root_cause': ws_issues.cell(row, 25).value,
+            'category_reason': ws_issues.cell(row, 26).value,
         }
         issues.append(issue)
     
@@ -243,8 +247,8 @@ def generate_report():
     md += f"---\n\n"
     md += f"## 3. New Submitted Issues (Past Week)\n\n"
     md += f"Issues created in the past 7 days (as of {datetime.now().strftime('%Y-%m-%d')}).\n\n"
-    md += "| ID | Title | Status | Owner | Priority | Reason | Category | Root Cause | Labels | Module | Test Module |\n"
-    md += "|---|-------|--------|-------|---------|--------|----------|-----------|--------|--------|-------------|\n"
+    md += "| ID | Title | Status | Owner | Priority | Reason | Category | Root Cause | Dependency | PR | PR Owner | PR Status | Labels | Module | Test Module |\n"
+    md += "|---|-------|--------|-------|---------|--------|----------|-----------|-----------|-------|----------|----------|--------|--------|-------------|\n"
     
     for issue in recent_issues:
         title = (issue['title'] or '')[:40]
@@ -257,7 +261,11 @@ def generate_report():
         reason = issue['priority_reason'] or ''
         category = issue['category'] or ''
         root_cause = issue['root_cause'] or ''
-        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {status} | {owner} | {priority} | {reason} | {category} | {root_cause} | {labels} | {module} | {test_module} |\n"
+        dependency = issue['dependency'] or ''
+        pr = issue['pr'] or ''
+        pr_owner = issue['pr_owner'] or ''
+        pr_status = issue['pr_status'] or ''
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {status} | {owner} | {priority} | {reason} | {category} | {root_cause} | {dependency} | {pr} | {pr_owner} | {pr_status} | {labels} | {module} | {test_module} |\n"
     
     # 4. Action Required
     reporter_actions = {
@@ -311,203 +319,242 @@ def generate_report():
     md += "### Reporter Actions\n\n"
     
     md += "#### Information Required\n\n"
-    md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |\n"
-    md += "|---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|\n"
-    
+    md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Category Reason | Root Cause | Dependency | PR | PR Owner | PR Status | Test Module |\n"
+    md += "|---|-------|-------|-------------------|---------|----------|----------------|-----------|-----------|-------|----------|----------|-------------|\n"
+
     for issue in reporter_actions['information_required']:
         title = (issue['title'] or '')[:35]
         owner = issue['assignee'] or ''
         owner_transfer = issue['owner_transfer'] or ''
         priority = issue['priority'] or ''
         category = issue['category'] or ''
+        category_reason = issue['category_reason'] or ''
         root_cause = issue['root_cause'] or ''
+        dependency = issue['dependency'] or ''
         pr = issue['pr'] or ''
-        pr_link = f"[PR]({pr})" if pr else ''
+        pr_owner = issue['pr_owner'] or ''
+        pr_status = issue['pr_status'] or ''
         test_module = issue['test_module'] or ''
-        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {root_cause} | {pr_link} | {test_module} |\n"
-    
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {category_reason} | {root_cause} | {dependency} | {pr} | {pr_owner} | {pr_status} | {test_module} |\n"
+
     md += "\n#### Close Fixed Issue\n\n"
-    md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |\n"
-    md += "|---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|\n"
-    
+    md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Category Reason | Root Cause | Dependency | PR | PR Owner | PR Status | Test Module |\n"
+    md += "|---|-------|-------|-------------------|---------|----------|----------------|-----------|-----------|-------|----------|----------|-------------|\n"
+
     for issue in reporter_actions['close_fixed']:
         title = (issue['title'] or '')[:35]
         owner = issue['assignee'] or ''
         owner_transfer = issue['owner_transfer'] or ''
         priority = issue['priority'] or ''
         category = issue['category'] or ''
+        category_reason = issue['category_reason'] or ''
         root_cause = issue['root_cause'] or ''
+        dependency = issue['dependency'] or ''
         pr = issue['pr'] or ''
-        pr_link = f"[PR]({pr})" if pr else ''
+        pr_owner = issue['pr_owner'] or ''
+        pr_status = issue['pr_status'] or ''
         test_module = issue['test_module'] or ''
-        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {root_cause} | {pr_link} | {test_module} |\n"
-    
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {category_reason} | {root_cause} | {dependency} | {pr} | {pr_owner} | {pr_status} | {test_module} |\n"
+
     md += "\n#### Enable Test\n\n"
-    md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |\n"
-    md += "|---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|\n"
-    
+    md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Category Reason | Root Cause | Dependency | PR | PR Owner | PR Status | Test Module |\n"
+    md += "|---|-------|-------|-------------------|---------|----------|----------------|-----------|-----------|-------|----------|----------|-------------|\n"
+
     for issue in reporter_actions['enable_test']:
         title = (issue['title'] or '')[:35]
         owner = issue['assignee'] or ''
         owner_transfer = issue['owner_transfer'] or ''
         priority = issue['priority'] or ''
         category = issue['category'] or ''
+        category_reason = issue['category_reason'] or ''
         root_cause = issue['root_cause'] or ''
+        dependency = issue['dependency'] or ''
         pr = issue['pr'] or ''
-        pr_link = f"[PR]({pr})" if pr else ''
+        pr_owner = issue['pr_owner'] or ''
+        pr_status = issue['pr_status'] or ''
         test_module = issue['test_module'] or ''
-        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {root_cause} | {pr_link} | {test_module} |\n"
-    
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {category_reason} | {root_cause} | {dependency} | {pr} | {pr_owner} | {pr_status} | {test_module} |\n"
+
     md += "\n#### Add to Skiplist\n\n"
-    md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |\n"
-    md += "|---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|\n"
-    
+    md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Category Reason | Root Cause | Dependency | PR | PR Owner | PR Status | Test Module |\n"
+    md += "|---|-------|-------|-------------------|---------|----------|----------------|-----------|-----------|-------|----------|----------|-------------|\n"
+
     for issue in reporter_actions['add_skiplist']:
         title = (issue['title'] or '')[:35]
         owner = issue['assignee'] or ''
         owner_transfer = issue['owner_transfer'] or ''
         priority = issue['priority'] or ''
         category = issue['category'] or ''
+        category_reason = issue['category_reason'] or ''
         root_cause = issue['root_cause'] or ''
+        dependency = issue['dependency'] or ''
         pr = issue['pr'] or ''
-        pr_link = f"[PR]({pr})" if pr else ''
+        pr_owner = issue['pr_owner'] or ''
+        pr_status = issue['pr_status'] or ''
         test_module = issue['test_module'] or ''
-        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {root_cause} | {pr_link} | {test_module} |\n"
-    
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {category_reason} | {root_cause} | {dependency} | {pr} | {pr_owner} | {pr_status} | {test_module} |\n"
+
     md += "\n#### Verify the Issue\n\n"
-    md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |\n"
-    md += "|---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|\n"
-    
+    md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Category Reason | Root Cause | Dependency | PR | PR Owner | PR Status | Test Module |\n"
+    md += "|---|-------|-------|-------------------|---------|----------|----------------|-----------|-----------|-------|----------|----------|-------------|\n"
+
     for issue in reporter_actions['verify_issue']:
         title = (issue['title'] or '')[:35]
         owner = issue['assignee'] or ''
         owner_transfer = issue['owner_transfer'] or ''
         priority = issue['priority'] or ''
         category = issue['category'] or ''
+        category_reason = issue['category_reason'] or ''
         root_cause = issue['root_cause'] or ''
+        dependency = issue['dependency'] or ''
         pr = issue['pr'] or ''
-        pr_link = f"[PR]({pr})" if pr else ''
+        pr_owner = issue['pr_owner'] or ''
+        pr_status = issue['pr_status'] or ''
         test_module = issue['test_module'] or ''
-        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {root_cause} | {pr_link} | {test_module} |\n"
-    
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {category_reason} | {root_cause} | {dependency} | {pr} | {pr_owner} | {pr_status} | {test_module} |\n"
+
     md += "\n#### Need Reproduce Steps\n\n"
-    md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |\n"
-    md += "|---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|\n"
-    
+    md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Category Reason | Root Cause | Dependency | PR | PR Owner | PR Status | Test Module |\n"
+    md += "|---|-------|-------|-------------------|---------|----------|----------------|-----------|-----------|-------|----------|----------|-------------|\n"
+
     for issue in reporter_actions['need_reproduce']:
         title = (issue['title'] or '')[:35]
         owner = issue['assignee'] or ''
         owner_transfer = issue['owner_transfer'] or ''
         priority = issue['priority'] or ''
         category = issue['category'] or ''
+        category_reason = issue['category_reason'] or ''
         root_cause = issue['root_cause'] or ''
+        dependency = issue['dependency'] or ''
         pr = issue['pr'] or ''
-        pr_link = f"[PR]({pr})" if pr else ''
+        pr_owner = issue['pr_owner'] or ''
+        pr_status = issue['pr_status'] or ''
         test_module = issue['test_module'] or ''
-        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {root_cause} | {pr_link} | {test_module} |\n"
-    
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {category_reason} | {root_cause} | {dependency} | {pr} | {pr_owner} | {pr_status} | {test_module} |\n"
+
     # Engineer Actions
     md += "\n### Engineer Actions\n\n"
-    
+
     md += "#### Needs PyTorch Repo Changes (upstream)\n\n"
-    md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |\n"
-    md += "|---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|\n"
-    
+    md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Category Reason | Root Cause | Dependency | PR | PR Owner | PR Status | Test Module |\n"
+    md += "|---|-------|-------|-------------------|---------|----------|----------------|-----------|-----------|-------|----------|----------|-------------|\n"
+
     for issue in engineer_actions['upstream']:
         title = (issue['title'] or '')[:35]
         owner = issue['assignee'] or ''
         owner_transfer = issue['owner_transfer'] or ''
         priority = issue['priority'] or ''
         category = issue['category'] or ''
+        category_reason = issue['category_reason'] or ''
         root_cause = issue['root_cause'] or ''
+        dependency = issue['dependency'] or ''
         pr = issue['pr'] or ''
-        pr_link = f"[PR]({pr})" if pr else ''
+        pr_owner = issue['pr_owner'] or ''
+        pr_status = issue['pr_status'] or ''
         test_module = issue['test_module'] or ''
-        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {root_cause} | {pr_link} | {test_module} |\n"
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {category_reason} | {root_cause} | {dependency} | {pr} | {pr_owner} | {pr_status} | {test_module} |\n"
     
     md += "\n#### Revisit the PR as Case Failed\n\n"
-    md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Root Cause | PR | Test Module |\n"
-    md += "|---|-------|-------|-------------------|---------|----------|-----------|-----|-------------|\n"
-    
+    md += "| ID | Title | Owner | Owner Transferred | Priority | Category | Category Reason | Root Cause | Dependency | PR | PR Owner | PR Status | Test Module |\n"
+    md += "|---|-------|-------|-------------------|---------|----------|----------------|-----------|-----------|-------|----------|----------|-------------|\n"
+
     for issue in engineer_actions['revisit_pr']:
         title = (issue['title'] or '')[:35]
         owner = issue['assignee'] or ''
         owner_transfer = issue['owner_transfer'] or ''
         priority = issue['priority'] or ''
         category = issue['category'] or ''
+        category_reason = issue['category_reason'] or ''
         root_cause = issue['root_cause'] or ''
+        dependency = issue['dependency'] or ''
         pr = issue['pr'] or ''
-        pr_link = f"[PR]({pr})" if pr else ''
+        pr_owner = issue['pr_owner'] or ''
+        pr_status = issue['pr_status'] or ''
         test_module = issue['test_module'] or ''
-        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {root_cause} | {pr_link} | {test_module} |\n"
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {owner_transfer} | {priority} | {category} | {category_reason} | {root_cause} | {dependency} | {pr} | {pr_owner} | {pr_status} | {test_module} |\n"
     
     # 5. By Category
     md += "\n---\n\n"
     md += "## 5. By Category\n\n"
-    
+
     for cat in sorted(category_groups.keys()):
         issues_list = category_groups[cat]
         issues_list.sort(key=lambda x: x['id'])
         cat_count = len(issues_list)
         md += "#### " + cat + "\n\n"
-        md += "| ID | Title | Status | Owner | Priority | Root Cause | PR | Labels | Module | Test Module |\n"
-        md += "|---|-------|--------|-------|---------|-----------|-----|--------|--------|-------------|\n"
+        md += "| ID | Title | Status | Owner | Priority | Category Reason | Root Cause | Dependency | PR | PR Owner | PR Status | Labels | Module | Test Module |\n"
+        md += "|---|-------|--------|-------|---------|-----------------|-----------|-----------|-------|----------|----------|--------|--------|-------------|\n"
+
+        category_reason = issue['category_reason'] or ''
+        root_cause = issue['root_cause'] or ''
+        dependency = issue['dependency'] or ''
+        pr = issue['pr'] or ''
+        pr_owner = issue['pr_owner'] or ''
+        pr_status = issue['pr_status'] or ''
         for issue in issues_list:
             title = (issue['title'] or '')[:30]
             status = issue['status'] or ''
             owner = issue['assignee'] or ''
             priority = issue['priority'] or ''
+            category_reason = issue['category_reason'] or ''
             root_cause = issue['root_cause'] or ''
+            dependency = issue['dependency'] or ''
             pr = issue['pr'] or ''
-            pr_link = f"[PR]({pr})" if pr else ''
+            pr_owner = issue['pr_owner'] or ''
+            pr_status = issue['pr_status'] or ''
             labels = issue['labels'] or ''
             module = issue['module'] or ''
             test_module = issue['test_module'] or ''
-            md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {status} | {owner} | {priority} | {root_cause} | {pr_link} | {labels} | {module} | {test_module} |\n"
+            md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {status} | {owner} | {priority} | {category_reason} | {root_cause} | {dependency} | {pr} | {pr_owner} | {pr_status} | {labels} | {module} | {test_module} |\n"
         md += "\n"
-    
+
     # 6. Duplicated Issues
     md += "\n---\n\n"
     md += "## 6. Duplicated Issues\n\n"
     md += "Issues that share test cases with other issues.\n\n"
-    md += "| ID | Title | Owner | Reporter | Duplicated With | Priority | Root Cause | PR | Labels | Module | Test Module |\n"
-    md += "|---|-------|-------|----------|-----------------|---------|-----------|-----|--------|--------|-------------|\n"
-    
+    md += "| ID | Title | Owner | Reporter | Duplicated With | Priority | Category Reason | Root Cause | Dependency | PR | PR Owner | PR Status | Labels | Module | Test Module |\n"
+    md += "|---|-------|-------|----------|-----------------|---------|-----------------|-----------|-----------|-------|----------|----------|--------|--------|-------------|\n"
+
     for issue in duplicated:
         title = (issue['title'] or '')[:30]
         owner = issue['assignee'] or ''
         reporter = issue['reporter'] or ''
         dup = issue['duplicated_issue'] or ''
         priority = issue['priority'] or ''
+        category_reason = issue['category_reason'] or ''
         root_cause = issue['root_cause'] or ''
+        dependency = issue['dependency'] or ''
         pr = issue['pr'] or ''
-        pr_link = f"[PR]({pr})" if pr else ''
+        pr_owner = issue['pr_owner'] or ''
+        pr_status = issue['pr_status'] or ''
         labels = issue['labels'] or ''
         module = issue['module'] or ''
         test_module = issue['test_module'] or ''
-        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {reporter} | {dup} | {priority} | {root_cause} | {pr_link} | {labels} | {module} | {test_module} |\n"
-    
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {reporter} | {dup} | {priority} | {category_reason} | {root_cause} | {dependency} | {pr} | {pr_owner} | {pr_status} | {labels} | {module} | {test_module} |\n"
+
     # 7. Issues with Dependency
     md += "\n---\n\n"
     md += "## 7. Issues with Dependency\n\n"
     md += "Issues that have dependencies on other components.\n\n"
-    md += "| ID | Title | Owner | Priority | Root Cause | Dependency | Category | PR | Labels | Test Module |\n"
-    md += "|---|-------|-------|---------|-----------|------------|----------|-----|--------|-------------|\n"
-    
+    md += "| ID | Title | Owner | Priority | Category Reason | Root Cause | Dependency | Category | PR | PR Owner | PR Status | Labels | Test Module |\n"
+    md += "|---|-------|---------|---------|-----------------|-----------|------------|----------|-------|----------|----------|--------|-------------|\n"
+
     with_dependency = [i for i in with_dependency if i['dependency']]
     with_dependency.sort(key=lambda x: x['id'])
     for issue in with_dependency:
         title = (issue['title'] or '')[:25]
         owner = issue['assignee'] or ''
         priority = issue['priority'] or ''
+        category_reason = issue['category_reason'] or ''
         root_cause = issue['root_cause'] or ''
         dep = issue['dependency'] or ''
         category = issue['category'] or ''
         pr = issue['pr'] or ''
-        pr_link = f"[PR]({pr})" if pr else ''
+        pr_owner = issue['pr_owner'] or ''
+        pr_status = issue['pr_status'] or ''
         labels = issue['labels'] or ''
         test_module = issue['test_module'] or ''
-        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {priority} | {root_cause} | {dep} | {category} | {pr_link} | {labels} | {test_module} |\n"
+        md += f"| [{issue['id']}](https://github.com/intel/torch-xpu-ops/issues/{issue['id']}) | {title} | {owner} | {priority} | {category_reason} | {root_cause} | {dep} | {category} | {pr} | {pr_owner} | {pr_status} | {labels} | {test_module} |\n"
     
     # Save to file
     output_path = os.path.join(RESULT_DIR, 'issue_report.md')

@@ -700,30 +700,30 @@ def determine_category_llm(title, summary, test_cases_info, test_module, labels)
     """
     Use Qwen3-32B via internal API to determine the category of an issue.
     Categories: Distributed, TorchAO, PT2E, Flash Attention/Transformer, Sparse, Inductor/Compilation, Dtype/Precision, Backend/Device, Others
-    
-    Returns: category string
+
+    Returns: tuple of (category string, reason string)
     """
     import requests
     import json
     import time
     import re
-    
+
     LLM_ENDPOINT = "http://10.239.15.43/v1/chat/completions"
     LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-xxxxxxxxxx")
     LLM_MODEL = "Qwen3-32B"
-    
+
     if not title and not summary:
-        return "Others"
-    
+        return "Others", ''
+
     tc_info_str = ""
     if test_cases_info:
         for tc in test_cases_info:
             error_val = tc.get('error_msg') or ''
             tc_info_str += f"- Test: {tc.get('test_case', '')}, Error: {str(error_val)[:100]}\n"
-    
+
     test_module_str = test_module or "Unknown"
     labels_str = labels or "None"
-    
+
     prompt = f"""You are analyzing PyTorch XPU issue to determine its category.
 
 Issue Title: {title}
@@ -735,59 +735,121 @@ Test Cases Info:
 {tc_info_str}
 
 Categorize this issue into ONE of:
-1. Distributed - distributed training, NCCL/Gloo, ProcessGroup, FSDP, DDP
-2. TorchAO - quantization, int8/int4/fp8, optimizer, Adam
-3. PT2E - torch.export, dynamo, fake_tensor, ExportedProgram
-4. Flash Attention/Transformer - flash_attention, sdpa, attention kernel, transformer
-5. Sparse - sparse operations, csr/csc/coo
-6. Inductor/Compilation - inductor, compile, codegen, triton
-7. Dtype/Precision - dtype conversion, precision mismatch, bf16/fp16
-8. Backend/Device - XPU device, kernel implementation
-9. Feature Not Supported - unimplemented operator/feature
-10. Skip/No Test Exists - missing tests, decorators
-11. Others - miscellaneous
 
-Return ONLY the category number and name (no JSON, no explanation):
-Example: "5 - Inductor/Compilation"
+Analyze the provided PyTorch runtime error and classify it into exactly ONE category from the list below.
 
-YOUR ANSWER:"""
+Categories:
+
+    1. Distributed - Keywords: distributed, XCCL, NCCL, Gloo, ProcessGroup, DDP, FSDP, torch.distributed, collective communication, multi-node, timeout, rendezvous, init_method, reduce_scatter, all_gather
+
+    2. TorchAO - Keywords: torchao, quantize_, int4_weight_only, int8_dynamic_activation, fp8, nf4, autoquant, quantization_config, Adam8bit, AdamW4bit, Lion8bit, PagedAdam, OptimizerWithQuantization, quantized_optimizer, ao/sparsity, apply_dynamic_quant, change_linear_weights_to_int8_packed, QuantizedLinear, from_float (AO context), packed weight, dequantization, int4, int8 (when paired with torchao)
+
+    3. PT2E - Keywords: torch.export(), Dynamo, fake_tensor, ExportedProgram, AOT, torch._export, graph break, tracing, exported_program.run_decompositions
+
+    4. Flash Attention/Transformer - Keywords: flash_attention, scaled_dot_product_attention, SDPA, attention mask, transformer layer, F.scaled_dot_product_attention, memory-efficient attention, FlexAttention
+
+    5. Sparse - Keywords: sparse tensor, CSR, CSC, COO, torch.sparse, sparse matrix multiplication, sparse_mask, to_sparse(), sparse_coo_tensor
+
+    6. Inductor/Compilation - Keywords: torch.compile(), Inductor, Triton, codegen, AOT Autograd, FX graph, torch._inductor, compilation cache, torch._dynamo
+
+    7. Torch Runtime - Keywords: CUDA runtime, cudaMalloc, cudaMemcpy, out of memory (OOM), device kernel launch, stream synchronization, cudaStreamSynchronize, device-side assert, cudaError, illegal memory access, context management, cudaSetDevice, device initialization, cudaGetDevice, driver error, CUDA_VISIBLE_DEVICES, memory leak, allocation failure, device reset
+
+    8. Torch Operations - Keywords: operator implementation, aten::, native::, custom op, register_operator, operator overloading, tensor operation dispatch, kernel selection, op signature mismatch, unsupported op on device, op not implemented for device, device-specific op behavior, backward pass operation, autograd op
+
+    9. Dtype/Precision - Keywords: dtype mismatch, float16, bfloat16, float32, mixed precision, autocast, GradScaler, precision loss, NaN/inf due to dtype, to(dtype=...), torch.int8 (without torchao), legacy torch.quantization
+
+    10. Feature Not Supported - Keywords: unimplemented operator, missing kernel, feature not available in this build, unsupported combination, "not implemented for"
+
+    11. Skip/No Test Exists - Keywords: test skipped, @unittest.skip, missing test decorator, CI test gap, skipIfNoTorchAO
+
+    12. Others - None of the above (only if truly uncategorizable)
+
+    Classification Rules:
+        - Select exactly ONE category
+        - For int4/int8/fp8 errors: TorchAO takes precedence over Dtype/Precision
+        - For quantized optimizers (Adam8bit, Lion8bit): TorchAO takes precedence
+        - For CUDA runtime errors (memory, sync, context): Choose Torch Runtime
+        - For operator dispatch/kernel errors: Choose Torch Operations
+        - For device-specific op implementation issues: Choose Torch Operations
+        - Use Others only as a last resort
+
+        Distinction between Torch Runtime and Torch Operations:
+            - Torch Runtime = Errors related to device management, memory allocation, synchronization, driver/runtime API calls
+            - Torch Operations = Errors related to specific operator execution, kernel selection, op dispatch, custom op registration
+
+Return the category AND a brief reason for your classification:
+- The reason is REQUIRED, not optional
+- Keep it concise (max 80 characters)
+- Explain why you chose this category based on the issue details
+
+Format: "Category Name | reason"
+Example: "Inductor/Compilation | compilation error in torch.compile"
+
+YOUR ANSWER (must include reason after the pipe symbol):"""
 
     headers = {
         "Authorization": f"Bearer {LLM_API_KEY}",
         "Content-Type": "application/json"
     }
-    
+
     payload = {
         "model": LLM_MODEL,
         "messages": [
-            {"role": "system", "content": "Output ONLY 'Category Number - Category Name'. No markdown. No JSON. No thinking tags."},
+            {"role": "system", "content": "Output ONLY 'X - Category Name | brief_reason'. No markdown. No JSON. No thinking tags."},
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.0,
-        "max_tokens": 50
+        "max_tokens": 100
     }
-    
+
     start_time = time.time()
-    
+
     try:
         response = requests.post(LLM_ENDPOINT, headers=headers, json=payload, timeout=180)
         elapsed = time.time() - start_time
-        
+
         if response.status_code == 200:
             result = response.json()
             content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
-            content = content.replace("[TO]", "").replace("[/TO]", "").replace("<think>", "").replace("]", "").strip()
             
-            match = re.search(r'(\d+)\s*[-–]\s*[\w\s/]+', content)
-            if match:
-                return f"{match.group(1)} - " + content[match.start():match.end()].split('-')[-1].strip()
+            # Remove all thinking/markdown tags patterns
+            content = re.sub(r'\[TO\]', '', content)
+            content = re.sub(r'\[/TO\]', '', content)
+            content = re.sub(r'\[RESULT\]', '', content)
+            content = re.sub(r'\[/RESULT\]', '', content)
+            content = re.sub(r'\[/TD\]', '', content)
+            
+            # Remove all bracket patterns and their content (but not cause issues with escape)
+            # Using a more careful approach
+            content = content.replace('[', ' <').replace(']', '> ')
+            
+            # Clean up markers
+            content = re.sub(r'<[^>]*>', '', content)
+            
+            # Remove common thinking tag leftovers
+            content = re.sub(r'has ATTR\b', '', content)
+            
+            # Clean up whitespace
+            content = re.sub(r'\s+', ' ', content).strip()
+
+            # Parse category and reason - format: "X - Category Name | reason"
+            if '|' in content:
+                parts = content.split('|', 1)
+                category_part = parts[0].strip()
+                reason = parts[1].strip() if len(parts) > 1 else ''
+                return category_part, reason
             else:
-                return content.strip()[:50]
-        
-        return f"API Error: {response.status_code}"
-        
+                match = re.search(r'(\d+)\s*[-–]\s*[\w\s/]+', content)
+                if match:
+                    category = f"{match.group(1)} - " + content[match.start():match.end()].split('-')[-1].strip()
+                    return category, ''
+                else:
+                    return content.strip()[:50], ''
+
+        return f"API Error: {response.status_code}", ''
+
     except Exception as e:
-        return f"Error: {str(e)[:30]}"
+        return f"Error: {str(e)[:30]}", ''
 
 
 def check_info_requested_to_reporter_llm(issue_title, issue_summary, error_msg, traceback):
@@ -1294,7 +1356,7 @@ Classify into ONE category:
 14. Type/Value Error
 15. Others
 
-Answer format: "CATEGORY - brief_reason" (e.g., "Dtype/Precision Issue - bf16 precision mismatch")
+Answer format: "CATEGORY - brief_reason" (e.g., "Dtype/Precision Issue - bf16 precision mismatch on aten ops addcmul on xpu")
 
 YOUR ANSWER (no JSON, no thinking tags, just the answer):"""
 
@@ -1308,7 +1370,7 @@ YOUR ANSWER (no JSON, no thinking tags, just the answer):"""
             {"role": "system", "content": "Output ONLY 'Category - reason'. No markdown. No JSON. No thinking tags."},
             {"role": "user", "content": prompt}
         ],
-        "max_tokens": 100,
+        "max_tokens": 200,
         "temperature": 0.0
     }
     
@@ -1512,7 +1574,7 @@ def process_issues_sheet(wb):
     """Process Issues sheet to add owner_transfer, action_TBD, and duplicated_issue columns"""
     ws_issues = wb['Issues']
     ws_test = wb['Test Cases']
-    
+
     ws_issues.cell(1, 19, 'owner_transfer')
     ws_issues.cell(1, 20, 'action_TBD')
     ws_issues.cell(1, 21, 'duplicated_issue')
@@ -1520,10 +1582,11 @@ def process_issues_sheet(wb):
     ws_issues.cell(1, 23, 'priority_reason')
     ws_issues.cell(1, 24, 'Category')
     ws_issues.cell(1, 25, 'Root Cause')
-    
-    MAX_LLM_ROOT_CAUSE = 500
-    MAX_LLM_CATEGORY = 500
-    MAX_LLM_PRIORITY = 500 
+    ws_issues.cell(1, 26, 'category_reason')
+
+    MAX_LLM_ROOT_CAUSE = 5
+    MAX_LLM_CATEGORY = 5
+    MAX_LLM_PRIORITY = 5 
     llm_root_cause_count = 0
     llm_category_count = 0
     llm_priority_count = 0
@@ -1676,7 +1739,7 @@ def process_issues_sheet(wb):
                 action_tbd = 'Needs Skip PR (wontfix / not_target)'
                 owner_transfer = assignee
             elif is_upstream:
-                action_tbd = 'Needs PyTorch Repo Changes (upstream)'
+                action_tbd = ''
                 owner_transfer = assignee
         
         priority = 'P2'
@@ -1781,14 +1844,14 @@ def process_issues_sheet(wb):
                     action_tbd = 'Close fixed issue'
                 else:
                     # E2E issue needs upstream investigation
-                    action_tbd = 'Needs PyTorch Repo Changes (upstream)'
+                    action_tbd = ''
                     owner_transfer = assignee
             elif is_public and all_statuses_empty and not is_feature_request:
                 if e2e_all_passed:
                     owner_transfer = reporter
                     action_tbd = 'Close fixed issue'
                 else:
-                    action_tbd = 'Needs PyTorch Repo Changes (upstream)'
+                    action_tbd = ''
                     owner_transfer = assignee
             elif is_public and all_statuses_empty and not is_feature_request and not is_e2e_issue:
                 action_tbd = 'Check case availability'
@@ -1806,10 +1869,14 @@ def process_issues_sheet(wb):
                 has_already_requested = check_info_requested_to_reporter(issue_content)
                 llm_error_msg = ''
                 llm_traceback = ''
+                test_file = ''
+                test_case = ''
                 for tr in range(2, ws_test.max_row + 1):
                     if ws_test.cell(tr, 1).value == issue_id:
                         llm_error_msg = str(ws_test.cell(tr, 8).value) if ws_test.cell(tr, 8).value else ''
                         llm_traceback = str(ws_test.cell(tr, 9).value) if ws_test.cell(tr, 9).value else ''
+                        test_file = str(ws_test.cell(tr, 4).value) if ws_test.cell(tr, 4).value else ''
+                        test_case = str(ws_test.cell(tr, 7).value) if ws_test.cell(tr, 7).value else ''
                         break
                 llm_info_action = check_info_requested_to_reporter_llm(
                     title_raw, summary_raw, llm_error_msg, llm_traceback
@@ -1821,16 +1888,22 @@ def process_issues_sheet(wb):
                     else:
                         action_tbd = f'LLM Suggestion: {llm_info_action}'
                     owner_transfer = reporter
+
+                has_test_info = bool(test_file and test_case)
                 
                 if is_bug_or_perf:
-                    if not check_reproduce_step(issue_content):
+                    
+                    if has_already_requested and 'reproduce' in llm_info_action.lower():
                         action_tbd = 'Need reproduce steps'
                         owner_transfer = reporter
+                    elif has_test_info:
+                        # Test info provided, can proceed with upstream changes
+                        action_tbd = ''
                     elif has_already_requested:
                         action_tbd = 'Awaiting response from reporter'
                         owner_transfer = reporter
                     else:
-                        action_tbd = 'Needs PyTorch Repo Changes (upstream)'
+                        action_tbd = ''
                 else:
                     if has_already_requested:
                         action_tbd = 'Awaiting response from reporter'
@@ -1843,12 +1916,11 @@ def process_issues_sheet(wb):
                             info_needed.append('performance numbers/baseline')
                         if 'regression' in title_lower or 'regression' in summary_lower:
                             info_needed.append('previous good version info')
-                        if not info_needed:
-                            info_needed.append('error logs and reproduction steps')
                         
-                        info_str = ', '.join(info_needed) if info_needed else 'additional details'
-                        action_tbd = f'Need more information - {info_str}'
-                        owner_transfer = reporter
+                        if info_needed:
+                            info_str = ', '.join(info_needed)
+                            action_tbd = f'Need more information - {info_str}'
+                            owner_transfer = reporter
         
         if owner_transfer:
             ws_issues.cell(row, 19, owner_transfer)
@@ -1864,6 +1936,7 @@ def process_issues_sheet(wb):
         ws_issues.cell(row, 23, priority_reason)
         
         category = determine_category(title_raw, summary_raw, test_cases_str, traceback, test_module, labels)
+        category_reason = ''
         if llm_category_count < MAX_LLM_CATEGORY:
             test_cases_for_llm = []
             for tr in range(2, ws_test.max_row + 1):
@@ -1875,7 +1948,7 @@ def process_issues_sheet(wb):
                         'torch_ops': ws_test.cell(tr, 10).value
                     }
                     test_cases_for_llm.append(tc_info)
-            category_llm = determine_category_llm(
+            category_llm, category_reason = determine_category_llm(
                 title_raw, summary_raw, test_cases_for_llm, test_module, labels
             )
             if category_llm and not category_llm.startswith('API') and not category_llm.startswith('Error'):
@@ -1883,6 +1956,7 @@ def process_issues_sheet(wb):
                 llm_category_count += 1
                 print(f"  [LLM CATEGORY #{llm_category_count}] Issue {issue_id}: {category}")
         ws_issues.cell(row, 24, category)
+        ws_issues.cell(row, 26, category_reason or '')
         
         current_action_tbd = ws_issues.cell(row, 20).value
         if not current_action_tbd:
@@ -2226,7 +2300,9 @@ def main():
     process_issues_sheet(wb)
     issues_elapsed = time_module.time() - issues_start
     log(f"  Issues processing completed ({issues_elapsed:.1f}s)")
-    
+    wb.save(os.path.join(RESULT_DIR, 'torch_xpu_ops_issues.xlsx'))
+    log("Saved Issues sheet!")
+
     # Generate markdown report
     log("\n" + "=" * 60)
     log("[STEP 5/5] Generating markdown report...")

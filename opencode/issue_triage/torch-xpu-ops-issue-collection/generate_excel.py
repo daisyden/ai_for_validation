@@ -1330,6 +1330,8 @@ for col, header in enumerate(e2e_headers, 1):
 issue_row = 2
 case_row = 2
 e2e_row = 2
+MAX_ISSUES_LIMIT = 5
+count_limit = 0
 
 for issue in issues:
     num = issue['number']
@@ -1457,6 +1459,10 @@ for issue in issues:
         e2e_row += 1
     
     issue_row += 1
+    count_limit += 1
+    if count_limit >= MAX_ISSUES_LIMIT:
+        print(f"\n[TEST MODE] Limited to {MAX_ISSUES_LIMIT} issues for testing")
+        break
     
     if issue_row % 50 == 0:
         print(f"Processed {issue_row-1} issues...")
