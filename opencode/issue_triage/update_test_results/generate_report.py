@@ -40,8 +40,8 @@ def generate_report():
             'priority': ws_issues.cell(row, 22).value,
             'priority_reason': ws_issues.cell(row, 23).value,
             'category': ws_issues.cell(row, 24).value,
-            'root_cause': ws_issues.cell(row, 25).value,
-            'category_reason': ws_issues.cell(row, 26).value,
+            'category_reason': ws_issues.cell(row, 25).value,
+            'root_cause': ws_issues.cell(row, 26).value,
         }
         issues.append(issue)
     

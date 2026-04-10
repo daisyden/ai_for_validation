@@ -777,15 +777,16 @@ Categories:
             - Torch Runtime = Errors related to device management, memory allocation, synchronization, driver/runtime API calls
             - Torch Operations = Errors related to specific operator execution, kernel selection, op dispatch, custom op registration
 
-Return the category AND a brief reason for your classification:
+Return the category AND a detailed reason for your classification:
 - The reason is REQUIRED, not optional
-- Keep it concise (max 80 characters)
-- Explain why you chose this category based on the issue details
+- Make it detailed and specific (full sentences, 150-300 characters)
+- Include: specific ops/functions mentioned, dtypes (float16, bf16, int8, Long, etc.), arguments, or patterns that led to this categorization
+- Explain clearly WHY you chose this category based on the issue details
 
-Format: "Category Name | reason"
-Example: "Inductor/Compilation | compilation error in torch.compile"
+Format: "Category Name | detailed_reason"
+Example: "Dtype/Precision Issue | The aten.memory_efficient_attention kernel encounters dtype mismatch when processing fp32 input tensors with bfloat16 scaling factor on XPU device. The dot_xpu_mkl operation is not implemented for Long dtype, causing NotImplementedError."
 
-YOUR ANSWER (must include reason after the pipe symbol):"""
+YOUR ANSWER (must include detailed reason after the pipe symbol):"""
 
     headers = {
         "Authorization": f"Bearer {LLM_API_KEY}",
@@ -969,7 +970,13 @@ Determine priority (P0=critical, P1=high, P2=medium, P3=low):
 - P2: Few UT failures, feature gaps, minor issues
 - P3: Minor, cosmetic, documentation
 
-Return ONLY format: "PRIORITY - reason" (e.g., "P1 - Regression in performance")
+Return ONLY format: "P# - detailed_reason" (full sentences, 150-300 characters)
+
+Example: "P0 - Build crash during aten.neg kernel compilation for XPU backend due to undefined reference to device-specific Triton template implementation"
+Example: "P1 - E2E regression in HuggingFace models involving torch.nn.functional.scaled_dot_product_attention failing with precision mismatch on fp16 input for XPU device"
+Example: "P2 - aten.dot_xpu_mkl kernel NotImplementedError when called with Long tensors, indicating dtype support gap for aten.matmul operation on XPU"
+
+Include specific details about: ops/functions involved, dtype transitions, arguments/parameters, failure patterns, severity indicators.
 
 YOUR ANSWER:"""
 
@@ -1339,7 +1346,7 @@ Test: {test_class}.{test_case}
 Error: {error_msg}
 Traceback: {traceback[:500] if traceback else 'N/A'}
 
-Classify into ONE category:
+Classify into ONE category (internal classification):
 1. Memory/Shared Memory Issue
 2. Dtype/Precision Issue
 3. Inductor/Compilation Issue
@@ -1356,7 +1363,17 @@ Classify into ONE category:
 14. Type/Value Error
 15. Others
 
-Answer format: "CATEGORY - brief_reason" (e.g., "Dtype/Precision Issue - bf16 precision mismatch on aten ops addcmul on xpu")
+Answer format: "CATEGORY - detailed_reason" (full sentences, 150-300 characters)
+
+Include in your reason:
+- Specific PyTorch ops (aten.xxx), functions (torch.nn.functional.xxx), or APIs involved
+- Dtypes that caused issues (float32, bf16, fp16, int8, Long, etc.)
+- Arguments or parameters that triggered the failure
+- Error patterns or signature mismatches
+- Device-specific context (XPU, Inductor, Triton)
+
+Example: "Dtype/Precision Issue - aten.memory_efficient_attention kernel fails when invoked with fp32 input tensors combined with bfloat16 scaling factor on XPU device. The torch.ops.scaled_dot_product_attention call encounters dtype promotion mismatch between query (float32), key (float32), and value (bfloat16 tensors) during kernel selection phase"
+Example: "Backend/Device Issue - XPU device initialization fails during kernel compilation stage with sycl::queue creation error. The test case involves torch.nn.functional.conv2d with input tensor of ndarry type requiring device placement from CPU to XPU"
 
 YOUR ANSWER (no JSON, no thinking tags, just the answer):"""
 
@@ -1370,7 +1387,7 @@ YOUR ANSWER (no JSON, no thinking tags, just the answer):"""
             {"role": "system", "content": "Output ONLY 'Category - reason'. No markdown. No JSON. No thinking tags."},
             {"role": "user", "content": prompt}
         ],
-        "max_tokens": 200,
+        "max_tokens": 400,
         "temperature": 0.0
     }
     
@@ -1404,13 +1421,13 @@ YOUR ANSWER (no JSON, no thinking tags, just the answer):"""
         content = content.replace("<think>", "").replace("]", "")
         content = content.replace("</think>", "").strip()
         
-        match = re.search(r'(Memory|Dtype|Precision|Inductor|Compilation|DNNL|OneDNN|Flash|Attention|Distributed|Gloo|Backend|Device|API|Template|Mismatch|Feature|Not|Supported|Timeout|Performance|Runtime|Error|Assertion|Failure|Type|Value|Others)\s*[-_\-\u2013]\s*[^\n]+', content, re.IGNORECASE)
+        match = re.search(r'(Memory|Dtype|Precision|Inductor|Compilation|DNNL|OneDNN|Flash|Attention|Distributed|Gloo|Backend|Device|API|Template|Mismatch|Feature|Not|Supported|Timeout|Performance|Runtime|Error|Assertion|Failure|Type|Value|Others)\s*[-_\-\u2013]\s*.{50,}', content, re.IGNORECASE)
         
         if match:
             root_cause = match.group(0).strip()
         else:
-            lines = [l.strip() for l in content.split("\n") if l.strip() and len(l.strip()) > 5]
-            root_cause = lines[-1][:80] if lines else content.strip()[:80]
+            lines = [l.strip() for l in content.split("\n") if l.strip() and len(l.strip()) > 20]
+            root_cause = lines[-1][:300] if lines else content.strip()[:300]
         
         log_result(issue_id, root_cause, elapsed)
         return root_cause
@@ -1581,8 +1598,8 @@ def process_issues_sheet(wb):
     ws_issues.cell(1, 22, 'priority')
     ws_issues.cell(1, 23, 'priority_reason')
     ws_issues.cell(1, 24, 'Category')
-    ws_issues.cell(1, 25, 'Root Cause')
-    ws_issues.cell(1, 26, 'category_reason')
+    ws_issues.cell(1, 25, 'category_reason')
+    ws_issues.cell(1, 26, 'Root Cause')
 
     MAX_LLM_ROOT_CAUSE = 500
     MAX_LLM_CATEGORY = 500
@@ -1956,7 +1973,7 @@ def process_issues_sheet(wb):
                 llm_category_count += 1
                 print(f"  [LLM CATEGORY #{llm_category_count}] Issue {issue_id}: {category}")
         ws_issues.cell(row, 24, category)
-        ws_issues.cell(row, 26, category_reason or '')
+        ws_issues.cell(row, 25, category_reason or '')
         
         current_action_tbd = ws_issues.cell(row, 20).value
         if not current_action_tbd:
@@ -2014,7 +2031,7 @@ def process_issues_sheet(wb):
                     print(f"  [LLM ROOT CAUSE #{llm_root_cause_count+1}] Issue {issue_id}: LLM returned empty")
             
             if root_cause:
-                ws_issues.cell(row, 25, root_cause)
+                ws_issues.cell(row, 26, root_cause)
     
     print(f"Processed {ws_issues.max_row - 1} issues")
     return wb

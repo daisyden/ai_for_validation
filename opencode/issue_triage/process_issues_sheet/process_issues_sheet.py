@@ -503,15 +503,24 @@ Identify the root cause category (choose ONE):
 9. **Performance Issue** - Slow execution, memory inefficiency, missing optimizations
 10. **Input/Parameter Issue** - Incorrect input shape, invalid parameters, type mismatches
 
-Provide a concise root cause analysis (max 150 characters):
-- "Operator not implemented: aten::xxx not supported for dtype X on XPU"
-- "Backend error: XPU driver out of memory during kernel launch"
-- "Compilation error: torch.compile failed with FusionGroup issue"
-- "Dtype mismatch: float32 expected but bfloat16 provided"
+Provide a detailed root cause analysis:
+- Use full sentences (150-300 characters)
+- Include specific PyTorch ops (aten.xxx), functions, dtypes involved
+- Explain WHY this root cause was identified
+- Be specific about what triggered the issue
+
+Example: "Backend error: XPU device initialization fails during kernel compilation stage when invoking torch.nn.functional.linear with fp32 input tensors on a system with incompatible SYCL driver version. The sycl::queue creation error occurs at runtime, causing the test case to abort before kernel execution"
+Example: "Dtype/Precision Issue: aten.memory_efficient_attention kernel fails when processing bfloat16 scaled query tensors with float32 key/value tensors during Flash Attention computation. The dtype promotion mismatch between query (bfloat16), key (float32), and value (float32) triggers incorrect kernel selection on XPU backend"
 
 IMPORTANT: If the issue lacks specific error information (no error_msg or traceback), return an empty string.
 
-YOUR ANSWER (root cause only, no explanation):"""
+Provide a detailed root cause analysis:
+- Use full sentences (150-300 characters)
+- Include specific PyTorch ops (aten.xxx), functions, dtypes involved
+- Explain WHY this root cause was identified
+- Be specific about what triggered the issue
+
+YOUR ANSWER:"""
 
     headers = {
         "Authorization": f"Bearer {LLM_API_KEY}",
@@ -524,7 +533,7 @@ YOUR ANSWER (root cause only, no explanation):"""
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.0,
-        "max_tokens": 80
+        "max_tokens": 400
     }
 
     try:
@@ -557,7 +566,7 @@ YOUR ANSWER (root cause only, no explanation):"""
             
             # Return first line only
             content = content.split('\n')[0].strip()
-            return content[:150]
+            return content[:350]
         else:
             return ""
 
@@ -610,8 +619,8 @@ def process_issues_sheet(wb):
     ws_issues.cell(1, 22, 'priority')
     ws_issues.cell(1, 23, 'priority_reason')
     ws_issues.cell(1, 24, 'Category')
-    ws_issues.cell(1, 25, 'Root Cause')
-    ws_issues.cell(1, 26, 'category_reason')
+    ws_issues.cell(1, 25, 'category_reason')
+    ws_issues.cell(1, 26, 'Root Cause')
 
     MAX_LLM_ROOT_CAUSE = 500
     MAX_LLM_CATEGORY = 500
@@ -979,7 +988,7 @@ def process_issues_sheet(wb):
                 llm_category_count += 1
                 print(f"  [LLM CATEGORY #{llm_category_count}] Issue {issue_id}: {category}")
         ws_issues.cell(row, 24, category)
-        ws_issues.cell(row, 26, category_reason or '')
+        ws_issues.cell(row, 25, category_reason or '')
 
         current_action_tbd = ws_issues.cell(row, 20).value
         if not current_action_tbd:
@@ -1037,7 +1046,7 @@ def process_issues_sheet(wb):
                     print(f"  [LLM ROOT CAUSE #{llm_root_cause_count+1}] Issue {issue_id}: LLM returned empty")
 
             if root_cause:
-                ws_issues.cell(row, 25, root_cause)
+                ws_issues.cell(row, 26, root_cause)
 
     print(f"Processed {ws_issues.max_row - 1} issues")
     return wb
