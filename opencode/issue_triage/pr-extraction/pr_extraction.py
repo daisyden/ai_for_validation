@@ -16,21 +16,49 @@ import re
 import json
 import sys
 import os
+import time
 
 GITHUB_API = "https://api.github.com"
 REPO = "intel/torch-xpu-ops"
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 
 FIX_KEYWORDS = ['fix', 'fixes', 'fixed', 'close', 'closes', 'closed', 'resolve', 'resolved', 'pr #', 'pr:', 'pull request']
+
+HEADERS = {
+    "Accept": "application/vnd.github.v3+json",
+    "User-Agent": "PyTorch-Issue-Triage-Bot"
+}
+if GITHUB_TOKEN:
+    HEADERS["Authorization"] = f"token {GITHUB_TOKEN}"
+
+
+def make_request_with_retry(url, max_retries=3):
+    """Make request with retry on 403/429 errors"""
+    for attempt in range(max_retries):
+        resp = requests.get(url, headers=HEADERS, timeout=30)
+        if resp.status_code == 200:
+            return resp.json()
+        elif resp.status_code in (403, 429):
+            # Rate limited - wait and retry
+            wait_time = 60  # 1 minute for unauthenticated
+            if 'X-RateLimit-Remaining' in resp.headers:
+                remaining = int(resp.headers.get('X-RateLimit-Remaining', 0))
+                if remaining < 10:
+                    wait_time = 120
+            print(f"  [Rate Limit] Waiting {wait_time}s before retry (attempt {attempt+1}/{max_retries})...")
+            time.sleep(wait_time)
+        else:
+            print(f"  [API Error] {resp.status_code}")
+            break
+    return None
 
 
 def get_issue_comments(issue_num):
     """Fetch comments for a specific issue"""
     url = f"{GITHUB_API}/repos/{REPO}/issues/{issue_num}/comments"
     try:
-        resp = requests.get(url, timeout=30)
-        if resp.status_code == 200:
-            return resp.json()
-        return []
+        result = make_request_with_retry(url)
+        return result if result else []
     except Exception as e:
         print(f"Error fetching comments for issue {issue_num}: {e}")
         return []
@@ -70,35 +98,35 @@ def get_pr_info(pr_key):
     
     url = f"https://api.github.com/repos/{repo}/pulls/{pr_num}"
     try:
-        resp = requests.get(url, timeout=30)
-        if resp.status_code == 200:
-            pr = resp.json()
-            
-            # Different status logic based on repo
-            if repo == 'pytorch/pytorch':
-                labels = [l.get('name', '') for l in pr.get('labels', [])]
-                if 'Merged' in labels:
-                    status = 'merged'
-                else:
-                    status = pr.get('state', 'unknown')
+        result = make_request_with_retry(url)
+        if not result:
+            return {'error': 'API failed'}
+        
+        pr = result
+        # Different status logic based on repo
+        if repo == 'pytorch/pytorch':
+            labels = [l.get('name', '') for l in pr.get('labels', [])]
+            if 'Merged' in labels:
+                status = 'merged'
             else:
-                # intel/torch-xpu-ops: use merged/merged_at field
-                merged = pr.get('merged', False)
-                merged_at = pr.get('merged_at')
-                if merged or merged_at:
-                    status = 'merged'
-                else:
-                    status = pr.get('state', 'unknown')
-            
-            return {
-                'url': pr.get('html_url'),
-                'owner': pr.get('user', {}).get('login'),
-                'state': status
-            }
+                status = pr.get('state', 'unknown')
+        else:
+            # intel/torch-xpu-ops: use merged/merged_at field
+            merged = pr.get('merged', False)
+            merged_at = pr.get('merged_at')
+            if merged or merged_at:
+                status = 'merged'
+            else:
+                status = pr.get('state', 'unknown')
+        
+        return {
+            'url': pr.get('html_url'),
+            'owner': pr.get('user', {}).get('login'),
+            'state': status
+        }
     except Exception as e:
         print(f"Error fetching PR {pr_key}: {e}")
-    
-    return {'error': 'failed'}
+        return {'error': str(e)}
 
 
 def extract_prs_from_excel(excel_file):

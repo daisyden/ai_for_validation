@@ -30,9 +30,23 @@ import os
 import re
 import glob
 import time
+import sys
 
 ROOT_DIR = "/home/daisydeng"
 RESULT_DIR = os.environ.get("RESULT_DIR", "/home/daisydeng/ai_for_validation/opencode/issue_triage/result")
+LOG_FILE = os.path.join(RESULT_DIR, "pipeline.log")
+
+def log(msg, print_also=True):
+    """Log message to file and optionally print to console."""
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    log_msg = f"[{timestamp}] {msg}"
+    try:
+        with open(LOG_FILE, "a") as f:
+            f.write(log_msg + "\n")
+    except Exception:
+        pass
+    if print_also:
+        print(log_msg)
 
 
 def get_torch_xpu_ops_xml_files():
@@ -658,26 +672,26 @@ Return ONLY valid JSON:
                 return data
         
         return {
+            'explanation': f'API response parsing failed: {str(result)[:200]}',
             'cuda_exists': 'Unknown',
             'xpu_exists': 'Unknown',
-            'explanation': f'API response parsing failed: {str(result)[:200]}',
             'elapsed_time': elapsed
         }
         
     except requests.exceptions.Timeout:
         elapsed = time.time() - start_time
         return {
+            'explanation': 'Request timed out after 180s',
             'cuda_exists': 'Timeout',
             'xpu_exists': 'Timeout',
-            'explanation': 'Request timed out after 180s',
             'elapsed_time': elapsed
         }
     except Exception as e:
         elapsed = time.time() - start_time
         return {
+            'explanation': f'API error: {str(e)}',
             'cuda_exists': 'Error',
             'xpu_exists': 'Error',
-            'explanation': f'API error: {str(e)}',
             'elapsed_time': elapsed
         }
 
@@ -1235,28 +1249,20 @@ def analyze_root_cause_llm(issue_id, issue_title, issue_summary, test_file, test
     Returns brief but specific root cause description.
     Logs to ~/ai_for_validation/opencode/issue_triage/result/root_cause.txt
     """
-    import subprocess
-    import json
     import time
     import requests
     import os
+    import re
     
     ROOT_CAUSE_LOG = os.path.expanduser('~/ai_for_validation/opencode/issue_triage/result/root_cause.txt')
     LLM_ENDPOINT = "http://10.239.15.43/v1/chat/completions"
-    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-xxxxxxxxxx")
+    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-xxxx")
     LLM_MODEL = "Qwen3-32B"
     
     if not issue_title and not issue_summary and not error_msg and not traceback:
         return ""
     
-    # Clear/create log file for this session
-    with open(ROOT_CAUSE_LOG, 'a') as log:
-        log.write(f"\n{'='*80}\n")
-        log.write(f"LLM Root Cause Analysis Session\n")
-        log.write(f"{'='*80}\n")
-    
     def log_result(issue_id, root_cause, elapsed):
-        """Log to file and print"""
         msg = f"Issue {issue_id}: {root_cause} ({elapsed:.2f}s)"
         print(f"  {msg}")
         with open(ROOT_CAUSE_LOG, 'a') as log:
@@ -1307,134 +1313,106 @@ YOUR ANSWER (no JSON, no thinking tags, just the answer):"""
     }
     
     start = time.time()
+    response = None
     try:
-        response = requests.post(LLM_ENDPOINT, headers=headers, json=data, timeout=180)
-        elapsed = time.time() - start
-        
-        if response.status_code == 200:
-            resp_data = response.json()
-            content = resp_data.get("choices", [{}])[0].get("message", {}).get("content", "")
-            
-            # Clean thinking tags if present
-            content = content.replace("<think>", "").replace("</think>", "").strip()
-            
-            # Extract CATEGORY - reason pattern
-            import re
-            match = re.search(r'(Memory|Dtype|Precision|Inductor|Compilation|DNNL|OneDNN|Flash|Attention|Distributed|Gloo|Backend|Device|API|Template|Mismatch|Feature|Not|Supported|Timeout|Performance|Runtime|Error|Assertion|Failure|Type|Value|Others)\s*[-–]\s*[^\n]+', content, re.IGNORECASE)
-            
-            if match:
-                root_cause = match.group(0).strip()
-            else:
-                # Fallback: clean content and take first meaningful line
-                lines = [l.strip() for l in content.split("\n") if l.strip() and len(l.strip()) > 5]
-                root_cause = lines[-1][:80] if lines else content.strip()[:80]
-            
-            log_result(issue_id, root_cause, elapsed)
-            return root_cause
-        else:
+        max_retries = 3
+        for attempt in range(max_retries):
+            response = requests.post(LLM_ENDPOINT, headers=headers, json=data, timeout=180)
             elapsed = time.time() - start
-            error_msg = f"API Error: {response.status_code}"
-            log_result(issue_id, error_msg, elapsed)
+            
+            if response.status_code == 200:
+                break
+            elif response.status_code in (403, 429):
+                wait_time = 60
+                print(f"    [Rate Limit] Waiting {wait_time}s (attempt {attempt+1}/{max_retries})...")
+                time.sleep(wait_time)
+            else:
+                elapsed = time.time() - start
+                log_result(issue_id, f"API Error: {response.status_code}", elapsed)
+                return ""
+        
+        if response is None or response.status_code != 200:
+            elapsed = time.time() - start
+            log_result(issue_id, f"API Error: {response.status_code if response else 'No response'}", elapsed)
             return ""
+        
+        resp_data = response.json()
+        content = resp_data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        
+        content = content.replace("<think>", "").replace("]", "")
+        content = content.replace("</think>", "").strip()
+        
+        match = re.search(r'(Memory|Dtype|Precision|Inductor|Compilation|DNNL|OneDNN|Flash|Attention|Distributed|Gloo|Backend|Device|API|Template|Mismatch|Feature|Not|Supported|Timeout|Performance|Runtime|Error|Assertion|Failure|Type|Value|Others)\s*[-_\-\u2013]\s*[^\n]+', content, re.IGNORECASE)
+        
+        if match:
+            root_cause = match.group(0).strip()
+        else:
+            lines = [l.strip() for l in content.split("\n") if l.strip() and len(l.strip()) > 5]
+            root_cause = lines[-1][:80] if lines else content.strip()[:80]
+        
+        log_result(issue_id, root_cause, elapsed)
+        return root_cause
             
     except Exception as e:
         elapsed = time.time() - start
-        error_msg = f"Exception: {str(e)[:50]}"
-        log_result(issue_id, error_msg, elapsed)
+        log_result(issue_id, f"Exception: {str(e)[:50]}", elapsed)
         return ""
+
+
+def analyze_root_cause(issue_title, issue_summary, test_file, test_class, test_case, error_msg, traceback, test_module=None):
+    """
+    Determine root cause category based on issue information using keyword matching.
+    Returns root cause description.
+    """
+    import re
+    
+    text = f"{issue_title} {issue_summary} {error_msg or ''} {traceback or ''}".lower()
+    
+    if any(k in text for k in ['out of memory', 'oom', 'alloc', 'memory', 'cuda out of memory']):
+        if 'shared' in text:
+            return "Memory/Shared Memory Issue - shared memory allocation failed"
+        return "Memory/Shared Memory Issue"
+    
+    if any(k in text for k in ['precision', 'dtype', 'accuracy', 'numerical', 'fp16', 'bf16', 'float16']):
+        return "Dtype/Precision Issue"
+    
+    if any(k in text for k in ['graph break', 'inductor', 'compile', 'symbolic', 'fx pass']):
+        return "Inductor/Compilation Issue"
+    
+    if 'dnnl' in text or 'onednn' in text:
+        return "DNNL/OneDNN Issue"
+    
+    if 'flash attention' in text or 'flash_attn' in text or 'fused_attention' in text:
+        return "Flash Attention/Specific Ops Issue"
+    
+    if any(k in text for k in ['distributed', 'gloo', 'nccl', 'all_reduce', 'all_gather']):
+        return "Distributed/Gloo Issue"
+    
+    if any(k in text for k in ['skip', 'decorator', 'xfail', 'expected failure']):
+        return "Skip/No Test Exists"
+    
+    if any(k in text for k in ['device', 'xpu', 'placement', 'cuda']) and ('init' in text or 'set' in text or 'empty_cache' in text):
+        return "Backend/Device Issue"
+    
+    if any(k in text for k in ['api', 'template', 'signature', 'missing parameter']):
+        return "API/Template Mismatch"
+    
+    if any(k in text for k in ['not supported', 'unimplemented', 'not implement']):
+        return "Feature Not Supported"
+    
+    if any(k in text for k in ['timeout', 'slow', 'performance', 'hang']):
+        return "Timeout/Performance Issue"
+    
+    if 'runtime error' in text or 'runtimewarning' in text:
+        return "Runtime Error"
+    
+    if 'assertion' in text:
+        return "Assertion Failure"
+    
+    if any(k in text for k in ['typeerror', 'valueerror', 'type error', 'value error']):
+        return "Type/Value Error"
     
     return ""
-    
-    pytorch_root = os.path.expanduser('~/pytorch')
-    if not os.path.exists(pytorch_root):
-        pytorch_root = os.path.expanduser('~/issue_traige/pytorch')
-    
-    prompt = f"""You are analyzing PyTorch XPU issue root cause.
-
-Issue ID: {issue_id}
-Issue Title: {issue_title}
-Issue Summary: {issue_summary}
-Test File: {test_file}
-Test Class: {test_class}
-Test Case: {test_case}
-Error Message: {error_msg}
-Traceback: {traceback[:1000] if traceback else 'N/A'}
-Test Module: {test_module}
-
-Analyze the root cause based on the information above. Classify into ONE of these categories:
-1. Memory/Shared Memory Issue - OOM, allocation failures
-2. Dtype/Precision Issue - precision mismatch, dtype conversion, numerical inaccuracies
-3. Inductor/Compilation Issue - graph breaks, symbolic shape, compilation errors
-4. DNNL/OneDNN Issue - DNNL backend primitive failures
-5. Flash Attention/Specific Ops Issue - flash attention kernel failures
-6. Distributed/Gloo Issue - distributed training, NCCL/Gloo backend
-7. Skip/No Test Exists - missing tests, decorators preventing execution
-8. Backend/Device Issue - XPU device initialization, placement
-9. API/Template Mismatch - API signature mismatch, missing parameters
-10. Feature Not Supported - unimplemented features
-11. Import/Dependency Issue - module import failures, missing deps
-12. XGBoost/External Dependency - XGBoost or other external lib issues
-13. Timeout/Performance Issue - timeouts, slow execution
-14. Runtime Error - general runtime failures
-15. Assertion Failure - assert checks failing
-16. Type/Value Error - type/value mismatches
-17. Others - miscellaneous/unknown
-
-Provide your answer as JSON:
-{{
-    "root_cause": "Category Name - Brief Explanation",
-    "reasoning": "Why this classification"
-}}
-
-Only output the JSON, nothing else.
-"""
-    
-    try:
-        result = subprocess.run(
-            ['python3', '-c', f'''
-import json
-import sys
-sys.path.insert(0, "/home/daisydeng/ai_for_validation/opencode/issue_triage")
-try:
-    from openai import OpenAI
-    client = OpenAI()
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {{"role": "system", "content": "You are a PyTorch XPU issue analyst. Analyze root causes and classify into predefined categories. Output JSON only."}},
-            {{"role": "user", "content": {json.dumps(prompt)}}}
-        ],
-        max_tokens=200,
-        temperature=0
-    )
-    print(response.choices[0].message.content)
-except Exception as e:
-    print(f"Error: {{e}}")
-'''],
-            capture_output=True,
-            text=True,
-            timeout=120
-        )
-        
-        output = result.stdout.strip()
-        if output.startswith('Error:'):
-            return ""
-        
-        # Parse JSON response
-        import re
-        json_match = re.search(r'\{[^{}]+\}', output, re.DOTALL)
-        if json_match:
-            try:
-                response_data = json.loads(json_match.group())
-                return response_data.get('root_cause', '')
-            except:
-                pass
-        
-        return ""
-        
-    except Exception as e:
-        print(f"  LLM call failed for issue {issue_id}: {e}")
-        return ""
 
 
 def analyze_root_cause(issue_title, issue_summary, test_file, test_class, test_case, error_msg, traceback, test_module=None):
@@ -2066,11 +2044,10 @@ def process_e2e_cases(wb):
                     ws_e2e.cell(row, 13, e2e_model_status[key])
                     matched += 1
     
-    print(f"  Matched {matched} E2E cases with status")
-    return wb
-
-
 def main():
+    import time as time_module
+    pipeline_start = time_module.time()
+    
     # Load workbook
     wb = openpyxl.load_workbook(os.path.join(RESULT_DIR, 'torch_xpu_ops_issues.xlsx'))
     ws = wb['Test Cases']
@@ -2089,19 +2066,29 @@ def main():
     ws.cell(1, 21, 'duplicated_issue')
     
     # Get XML files
-    print("Loading XML files...")
+    log("\n" + "=" * 60)
+    log("[STEP 1/5] Loading XML files...")
+    xpu_start = time_module.time()
     xpu_xml_files = get_torch_xpu_ops_xml_files()
-    print(f"  Found {len(xpu_xml_files)} torch-xpu-ops XML files")
+    xpu_elapsed = time_module.time() - xpu_start
+    log(f"  Found {len(xpu_xml_files)} torch-xpu-ops XML files ({xpu_elapsed:.1f}s)")
     
     stock_xml_files = get_stock_xml_files()
-    print(f"  Found {len(stock_xml_files)} stock XML files")
+    log(f"  Found {len(stock_xml_files)} stock XML files")
     
-    # Process all rows
+    # TWO-PASS APPROACH for case existence
+    # Pass 1: Process CI results and collect unique issues needing LLM
+    # Pass 2: Run LLM ONCE per unique issue, then apply to all test cases
+    
     total = ws.max_row - 1
-    MAX_LLM_CASES = 500  # Process up to 3 unique issues with LLM
-    llm_processed = 0
-    llm_cache = {}  # Cache LLM results by issue id
+    log("\n" + "=" * 60)
+    log(f"[STEP 2/5] Processing {total} test cases (two-pass approach)...")
+    log(f"  [START TIME] {time_module.strftime('%Y-%m-%d %H:%M:%S')}")
     
+    pass1_start = time_module.time()
+    issues_needing_llm = {}
+    
+    log("  [PASS 1/2] Processing CI results and collecting unique issues...")
     for i, row in enumerate(range(2, ws.max_row + 1), 1):
         test_file = ws.cell(row, 4).value
         test_class = ws.cell(row, 6).value
@@ -2109,7 +2096,6 @@ def main():
         issue_id = ws.cell(row, 1).value
         origin_test_file = ws.cell(row, 5).value
         
-        # Get torch-xpu-ops nightly result from XML
         xml_prefix, reason = convert_test_file_to_xml_prefix(test_file)
         if xml_prefix:
             matched = find_best_xml_match(xml_prefix, xpu_xml_files)
@@ -2130,7 +2116,6 @@ def main():
             ws.cell(row, 11, 'not found')
             ws.cell(row, 12, reason)
 
-        # Get stock CI result from XML
         stock_prefix = convert_to_stock_prefix(test_file)
         if stock_prefix and stock_prefix in stock_xml_files:
             stock_xml = stock_xml_files[stock_prefix]
@@ -2143,135 +2128,115 @@ def main():
             ws.cell(row, 16, 'not found')
             ws.cell(row, 17, 'Not in stock CI')
         
-        # Get case existence info - use LLM only for first N issues with "not found" in CI status
-        
-        # Initialize variables
-        cuda_exists = 'No'
-        xpu_exists = 'No'
-        comment = ''
-        
-        # Check if CI status indicates not found
         xpu_status = ws.cell(row, 11).value
         stock_status = ws.cell(row, 16).value
-        
-        # Check if either CI result was not found or is empty (no test results)
         ci_not_found = (xpu_status == 'not found' or not xpu_status) and (stock_status == 'not found' or not stock_status)
         
-        # Only run LLM for the first "not found" case of each issue
-        if ci_not_found:
-            if issue_id in llm_cache:
-                # Use cached result
-                cached = llm_cache[issue_id]
-                cuda_exists = cached.get('cuda_exists', 'Unknown')
-                xpu_exists = cached.get('xpu_exists', 'Unknown')
-                comment = cached.get('comment', 'Cached result')
-            elif llm_processed < MAX_LLM_CASES:
-                try:
-                    use_qwen = True  # Enable Qwen3-32B for double not found cases
-                    llm_result = analyze_test_case_with_llm_qwen(test_file, test_class, test_case, origin_test_file)
-                    cuda_exists = llm_result.get('cuda_exists', 'Unknown')
-                    xpu_exists = llm_result.get('xpu_exists', 'Unknown')
-                    elapsed_time = llm_result.get('elapsed_time', 0)
-                    print(f"  [LLM Qwen3-32B] {test_class}.{test_case}: CUDA={cuda_exists}, XPU={xpu_exists} ({elapsed_time:.2f}s)")
-                    
-                    llm_comment = llm_result.get('explanation', '')
-                    cuda_decorators = ', '.join(llm_result.get('cuda_decorators', []))
-                    xpu_decorators = ', '.join(llm_result.get('xpu_decorators', []))
-                    
-                    # Build comprehensive comment
-                    base_test = llm_result.get('base_test_name', '')
-                    cuda_test_file = llm_result.get('cuda_test_file', '')
-                    xpu_test_file = llm_result.get('xpu_test_file', '')
-                    cuda_test_name = llm_result.get('cuda_test_name', '')
-                    xpu_test_name = llm_result.get('xpu_test_name', '')
-                    
-                    comment_parts = []
-                    if base_test:
-                        comment_parts.append(f"Base test: {base_test}")
-                    if cuda_test_file:
-                        comment_parts.append(f"CUDA file: {cuda_test_file}")
-                    if xpu_test_file:
-                        comment_parts.append(f"XPU file: {xpu_test_file}")
-                    if cuda_test_name:
-                        comment_parts.append(f"CUDA test: {cuda_test_name}")
-                    if xpu_test_name:
-                        comment_parts.append(f"XPU test: {xpu_test_name}")
-                    if llm_comment:
-                        comment_parts.append(llm_comment)
-                    if cuda_decorators:
-                        comment_parts.append(f"CUDA decorators: {cuda_decorators}")
-                    if xpu_decorators:
-                        comment_parts.append(f"XPU decorators: {xpu_decorators}")
-                    
-                    comment = ' | '.join(comment_parts) if comment_parts else 'Double not found - LLM analysis'
-                    
-                    # Cache the result
-                    llm_cache[issue_id] = {
-                        'cuda_exists': cuda_exists,
-                        'xpu_exists': xpu_exists,
-                        'comment': comment
-                    }
-                    llm_processed += 1
-                except Exception as e:
-                    comment = f"LLM error: {str(e)[:100]}"
-                    cuda_exists = 'Error'
-                    xpu_exists = 'Error'
-                    llm_cache[issue_id] = {
-                        'cuda_exists': cuda_exists,
-                        'xpu_exists': xpu_exists,
-                        'comment': comment
-                    }
+        if ci_not_found and issue_id not in issues_needing_llm:
+            issues_needing_llm[issue_id] = {
+                'test_file': test_file,
+                'test_class': test_class,
+                'test_case': test_case,
+                'origin_test_file': origin_test_file
+            }
+        
+        if i % 500 == 0:
+            log(f"    Progress: {i}/{total} cases, {len(issues_needing_llm)} unique issues needing LLM")
+    
+    pass1_elapsed = time_module.time() - pass1_start
+    issue_count = len(issues_needing_llm)
+    log(f"  PASS 1 complete: {issue_count} unique issues ({pass1_elapsed:.1f}s)")
+    
+    pass2_start = time_module.time()
+    log(f"  [PASS 2/2] Running LLM for {issue_count} unique issues...")
+    llm_results = {}
+    
+    for idx, (issue_id, info) in enumerate(issues_needing_llm.items(), 1):
+        try:
+            test_file = info['test_file']
+            test_class = info['test_class']
+            test_case = info['test_case']
+            origin_test_file = info['origin_test_file']
+            
+            result = analyze_test_case_with_llm_qwen(test_file, test_class, test_case, origin_test_file)
+            elapsed = result.get('elapsed_time', 0)
+            llm_results[issue_id] = result
+            log(f"    [LLM {idx}/{issue_count}] Issue {issue_id}: {elapsed:.1f}s")
+        except Exception as e:
+            log(f"    [LLM ERROR] Issue {issue_id}: {e}")
+            llm_results[issue_id] = {'error': str(e)}
+    
+    pass2_elapsed = time_module.time() - pass2_start
+    log(f"  PASS 2 complete: {len(llm_results)} LLM results ({pass2_elapsed:.1f}s)")
+    
+    log("  [APPLY] Writing LLM results to all test cases...")
+    applied = 0
+    skipped = 0
+    for row in range(2, ws.max_row + 1):
+        issue_id = ws.cell(row, 1).value
+        xpu_status = ws.cell(row, 11).value
+        stock_status = ws.cell(row, 16).value
+        ci_not_found = (xpu_status == 'not found' or not xpu_status) and (stock_status == 'not found' or not stock_status)
+        
+        # Only fill case_existence when LLM was actually called for this issue
+        if ci_not_found and issue_id in llm_results:
+            result = llm_results[issue_id]
+            cuda_exists = result.get('cuda_exists', 'Unknown')
+            xpu_exists = result.get('xpu_exists', 'Unknown')
+            
+            parts = []
+            explanation = result.get('explanation', '')
+            if explanation:
+                parts.append('explanation: ' + explanation + '\n')
+ 
+            for key in ['base_test_name', 'cuda_test_file', 'xpu_test_file', 'cuda_test_name', 'xpu_test_name']:
+                val = result.get(key)
+                if val:
+                    parts.append(key + ':' + val)
+            comment = '\n'.join(parts) if parts else 'Double not found - LLM analysis'
+            
+            # Only write if we have meaningful LLM results
+            if result.get('cuda_exists') or result.get('xpu_exists'):
+                ws.cell(row, 18, cuda_exists)
+                ws.cell(row, 19, xpu_exists)
+                ws.cell(row, 20, comment)
+                applied += 1
             else:
-                # Max LLM cases reached, leave blank
-                cuda_exists = ''
-                xpu_exists = ''
-                comment = ''
+                skipped += 1
         else:
-            # Use basic file analysis for other cases
-            result = analyze_test_case(test_file, test_case)
-            cuda_exists = result['cuda_exists']
-            xpu_exists = result['xpu_exists']
-            comment = f"CUDA file: {result.get('cuda_file', 'N/A')}. XPU file: {result.get('xpu_file', 'N/A')}. {result['explanation']}"
-        
-        ws.cell(row, 18, cuda_exists)
-        ws.cell(row, 19, xpu_exists)
-        ws.cell(row, 20, comment[:500])
-        
-        # Mark LLM analyzed cases with blue background
-        if 'Base test:' in comment or 'CUDA decorators:' in comment or 'XPU decorators:' in comment:
-            blue_fill = PatternFill(start_color='ADD8E6', end_color='ADD8E6', fill_type='solid')
-            ws.cell(row, 18).fill = blue_fill
-            ws.cell(row, 19).fill = blue_fill
-            ws.cell(row, 20).fill = blue_fill
-        
-        if i % 100 == 0:
-            print(f"Processed {i}/{total} (LLM: {llm_processed}/{MAX_LLM_CASES})")
-        
-        if i % 200 == 0:
-            print(f"Processed {i}/{total}")
+            skipped += 1
     
-    print(f"Processed {total}/{total}")
+    log(f"  Applied LLM results to {applied} test cases")
+    log(f"  Skipped (no LLM analysis): {skipped} test cases")
     
-    # Find and populate duplicated issues
-    print("Finding duplicated issues...")
-    duplicated = find_duplicated_issues(ws)
-    for row, issue_ids in duplicated.items():
-        ws.cell(row, 21, ','.join(str(i) for i in issue_ids))
-    print(f"  Found {len(duplicated)} rows with duplicates")
-    
-    # Process E2E Test Cases sheet first (so Issues sheet can use E2E status)
-    process_e2e_cases(wb)
-    
-    # Process Issues sheet (uses E2E status)
-    process_issues_sheet(wb)
-    
-    # Save workbook
     wb.save(os.path.join(RESULT_DIR, 'torch_xpu_ops_issues.xlsx'))
-    print("Saved!")
+    log("Saved Test Cases sheet!")
+    
+    # Process E2E and Issues sheets
+    log("\n" + "=" * 60)
+    log("[STEP 3/5] Processing E2E Test Cases sheet...")
+    e2e_start = time_module.time()
+    process_e2e_cases(wb)
+    e2e_elapsed = time_module.time() - e2e_start
+    log(f"  E2E processing completed ({e2e_elapsed:.1f}s)")
+    
+    log("\n" + "=" * 60)
+    log("[STEP 4/5] Processing Issues sheet...")
+    issues_start = time_module.time()
+    process_issues_sheet(wb)
+    issues_elapsed = time_module.time() - issues_start
+    log(f"  Issues processing completed ({issues_elapsed:.1f}s)")
     
     # Generate markdown report
+    log("\n" + "=" * 60)
+    log("[STEP 5/5] Generating markdown report...")
     from generate_report import generate_report
     generate_report()
+    
+    total_elapsed = time_module.time() - pipeline_start
+    log(f"\n{'=' * 60}")
+    log(f"[COMPLETE] Total time: {total_elapsed:.0f}s")
+    log(f"  [END TIME] {time_module.strftime('%Y-%m-%d %H:%M:%S')}")
 
 
 if __name__ == '__main__':
