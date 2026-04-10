@@ -1584,9 +1584,9 @@ def process_issues_sheet(wb):
     ws_issues.cell(1, 25, 'Root Cause')
     ws_issues.cell(1, 26, 'category_reason')
 
-    MAX_LLM_ROOT_CAUSE = 5
-    MAX_LLM_CATEGORY = 5
-    MAX_LLM_PRIORITY = 5 
+    MAX_LLM_ROOT_CAUSE = 500
+    MAX_LLM_CATEGORY = 500
+    MAX_LLM_PRIORITY = 500
     llm_root_cause_count = 0
     llm_category_count = 0
     llm_priority_count = 0

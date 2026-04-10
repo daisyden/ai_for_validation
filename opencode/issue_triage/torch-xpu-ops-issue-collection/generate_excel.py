@@ -1330,10 +1330,11 @@ for col, header in enumerate(e2e_headers, 1):
 issue_row = 2
 case_row = 2
 e2e_row = 2
-MAX_ISSUES_LIMIT = 5
-count_limit = 0
 
-for issue in issues:
+MAX_ISSUES_FOR_TEST = 5
+TESTING_MODE = True
+
+for issue in issues[:MAX_ISSUES_FOR_TEST] if TESTING_MODE else issues:
     num = issue['number']
     title = issue['title']
     body = issue.get('body', '') or ''
@@ -1457,13 +1458,9 @@ for issue in issues:
         ws_e2e.cell(row=e2e_row, column=11, value=error_msg)
         ws_e2e.cell(row=e2e_row, column=12, value=traceback)
         e2e_row += 1
-    
+
     issue_row += 1
-    count_limit += 1
-    if count_limit >= MAX_ISSUES_LIMIT:
-        print(f"\n[TEST MODE] Limited to {MAX_ISSUES_LIMIT} issues for testing")
-        break
-    
+
     if issue_row % 50 == 0:
         print(f"Processed {issue_row-1} issues...")
 

@@ -115,6 +115,41 @@ python3 generate_report.py
 
 ---
 
+### Step 5: Process Issues Sheet
+**Location**: `process_issues_sheet/`
+
+Processes Issues sheet to add priority, category, root cause, and category_reason analysis.
+
+**Scripts**:
+- `process_issues_sheet.py` - Main script for issue analysis (extracted from update_test_results.py)
+
+**When to use**:
+- After Step 4 to perform LLM-based priority, category, and root cause analysis
+- When need to categorize all issues with action_TBD
+- When need to prioritize issues (P0-P4) based on severity
+
+**LLM Analysis**:
+- `analyze_priority()` - Determines priority (P0-P4) based on issue severity and impact
+- `analyze_category()` - Classifies issue into categories (Memory, Dtype/Precision, Inductor, DNNL, Flash Attention, Distributed, Skip, API Mismatch, Backend, Others)
+- `analyze_root_cause()` - Identifies root cause and fills category_reason
+
+**Usage**:
+```bash
+cd ~/ai_for_validation/opencode/issue_triage/process_issues_sheet
+python3 process_issues_sheet.py
+```
+
+**Configuration**:
+- `MAX_LLM_ROOT_CAUSE = 500` - Max issues for root cause analysis
+- `MAX_LLM_CATEGORY = 500` - Max issues for category analysis
+- `MAX_LLM_PRIORITY = 500` - Max issues for priority analysis
+
+**Output**:
+- Updates Priority (col 22), Category (col 24), Root Cause (col 25), Category Reason (col 26) columns
+- Persists changes to Excel file
+
+---
+
 ## Excel File Structure
 
 Input/Output: `$RESULT_DIR/torch_xpu_ops_issues.xlsx` (default: `~/ai_for_validation/opencode/issue_triage/result/`)
@@ -190,4 +225,8 @@ python3 pr_extraction.py $RESULT_DIR/torch_xpu_ops_issues.xlsx
 # Step 4: Update test results
 cd ~/ai_for_validation/opencode/issue_triage/update_test_results
 python3 update_test_results.py
+
+# Step 5: Process issues sheet (priority, category, root cause analysis)
+cd ~/ai_for_validation/opencode/issue_triage/process_issues_sheet
+python3 process_issues_sheet.py
 ```

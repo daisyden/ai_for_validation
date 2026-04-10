@@ -8,7 +8,7 @@
 - Torch-XPU-OPS Nightly CI: XML files from `Inductor-XPU-UT-Data-*` + `Inductor-wheel-nightly-LTS2-XPU-E2E-Data-*` (commit: `a2d516a58c64f18b76880f3a77efbc02885d65af`)
 - Stock PyTorch XPU CI: XML files from `test-default-*-linux.idc.xpu_*.zip` (run IDs: 69741866812, 69741866834, 69741866862, 69741866911, etc.)
 
-Generated: 2026-04-10 00:18:40
+Generated: 2026-04-10 01:14:38
 
 ---
 
@@ -83,11 +83,11 @@ Generated: 2026-04-10 00:18:40
 
 | Category | Count |
 |----------|-------|
-| 11 - Skip/No Test Exists | 1 |
-| 4 - Flash Attention/Transformer | 1 |
-| 12 - Others | 1 |
-| 3 - PT2E | 1 |
-| 8 - Torch Operations | 1 |
+| Skip/No Test Exists | 1 |
+| Flash Attention/Transformer | 1 |
+| Others | 1 |
+| PT2E | 1 |
+| Torch Operations | 1 |
 
 ### By Priority
 
@@ -116,7 +116,7 @@ Issues created in the past 7 days (as of 2026-04-10).
 
 | ID | Title | Owner | Owner Transferred | Priority | Category | Category Reason | Root Cause | Dependency | PR | PR Owner | PR Status | Test Module |
 |---|-------|-------|-------------------|---------|----------|----------------|-----------|-----------|-------|----------|----------|-------------|
-| [3258](https://github.com/intel/torch-xpu-ops/issues/3258) | Error in op: torch.ops.aten._scaled | None | bjarzemb | P2 | 4 - Flash Attention/Transformer | error involves scaled_dot_product_attention operator |  | None |  |  |  | ut |
+| [3258](https://github.com/intel/torch-xpu-ops/issues/3258) | Error in op: torch.ops.aten._scaled |  | bjarzemb | P2 | Flash Attention/Transformer | error involves scaled_dot_product_attention operator |  |  | https://github.com/pytorch/pytorch/pull/178986;https://github.com/pytorch/pytorch/pull/179239 | guangyey;etaf | merged;merged | ut |
 
 #### Close Fixed Issue
 
@@ -159,35 +159,35 @@ Issues created in the past 7 days (as of 2026-04-10).
 
 ## 5. By Category
 
-#### 11 - Skip/No Test Exists
+#### Flash Attention/Transformer
 
 | ID | Title | Status | Owner | Priority | Category Reason | Root Cause | Dependency | PR | PR Owner | PR Status | Labels | Module | Test Module |
 |---|-------|--------|-------|---------|-----------------|-----------|-----------|-------|----------|----------|--------|--------|-------------|
-| [3259](https://github.com/intel/torch-xpu-ops/issues/3259) | New failed test cases 2026-04- | open | SlawomirLaba | P2 | test cases labeled as skipped with no specific error details provided | Backend/Device Issue - XPU device initialization or compatibility failure indica | None |  |  |  | skipped | aten_ops | ut |
+| [3258](https://github.com/intel/torch-xpu-ops/issues/3258) | Error in op: torch.ops.aten._s | open |  | P2 | error involves scaled_dot_product_attention operator |  |  | https://github.com/pytorch/pytorch/pull/178986;https://github.com/pytorch/pytorch/pull/179239 | guangyey;etaf | merged;merged |  | aten_ops | ut |
 
-#### 12 - Others
-
-| ID | Title | Status | Owner | Priority | Category Reason | Root Cause | Dependency | PR | PR Owner | PR Status | Labels | Module | Test Module |
-|---|-------|--------|-------|---------|-----------------|-----------|-----------|-------|----------|----------|--------|--------|-------------|
-| [3257](https://github.com/intel/torch-xpu-ops/issues/3257) | [Linux][E2E][Regression] Huggi | open | None | P0 | issue lacks specific keywords for other categories | device-specific execution issues. | None |  |  |  |  | aten_ops | e2e |
-
-#### 3 - PT2E
+#### Others
 
 | ID | Title | Status | Owner | Priority | Category Reason | Root Cause | Dependency | PR | PR Owner | PR Status | Labels | Module | Test Module |
 |---|-------|--------|-------|---------|-----------------|-----------|-----------|-------|----------|----------|--------|--------|-------------|
-| [3255](https://github.com/intel/torch-xpu-ops/issues/3255) | [Linux][PT2E][Regression] Some | open | None | P1 | performance test failure involving torch.export and quantization modes | Dtype/Precision Issue - performance test failures related to fp32, int8 ASYMM, a | None |  |  |  |  | aten_ops | e2e |
+| [3257](https://github.com/intel/torch-xpu-ops/issues/3257) | [Linux][E2E][Regression] Huggi | open |  | P0 | issue lacks specific keywords for any category and is too generic | device-specific execution issues. |  |  |  |  |  | aten_ops | e2e |
 
-#### 4 - Flash Attention/Transformer
-
-| ID | Title | Status | Owner | Priority | Category Reason | Root Cause | Dependency | PR | PR Owner | PR Status | Labels | Module | Test Module |
-|---|-------|--------|-------|---------|-----------------|-----------|-----------|-------|----------|----------|--------|--------|-------------|
-| [3258](https://github.com/intel/torch-xpu-ops/issues/3258) | Error in op: torch.ops.aten._s | open | None | P2 | error involves scaled_dot_product_attention operator |  | None |  |  |  |  | aten_ops | ut |
-
-#### 8 - Torch Operations
+#### PT2E
 
 | ID | Title | Status | Owner | Priority | Category Reason | Root Cause | Dependency | PR | PR Owner | PR Status | Labels | Module | Test Module |
 |---|-------|--------|-------|---------|-----------------|-----------|-----------|-------|----------|----------|--------|--------|-------------|
-| [3247](https://github.com/intel/torch-xpu-ops/issues/3247) | NotImplementedError: "dot_xpu_ | open | Silv3S | P2 | operator not implemented for Long dtype on XPU | Dtype/Precision Issue - "dot_xpu_mkl" not implemented for 'Long' dtype on XPU | None |  |  |  | ut_upstream | aten_ops | ut |
+| [3255](https://github.com/intel/torch-xpu-ops/issues/3255) | [Linux][PT2E][Regression] Some | open |  | P1 | performance test failure related to torch.export and data types | Dtype/Precision Issue - performance test failures related to fp32, int8 ASYMM, a |  |  |  |  |  | aten_ops | e2e |
+
+#### Skip/No Test Exists
+
+| ID | Title | Status | Owner | Priority | Category Reason | Root Cause | Dependency | PR | PR Owner | PR Status | Labels | Module | Test Module |
+|---|-------|--------|-------|---------|-----------------|-----------|-----------|-------|----------|----------|--------|--------|-------------|
+| [3259](https://github.com/intel/torch-xpu-ops/issues/3259) | New failed test cases 2026-04- | open | SlawomirLaba | P2 | test cases are skipped or not implemented for XPU | Backend/Device Issue - XPU device initialization or compatibility failure indica |  |  |  |  | skipped | aten_ops | ut |
+
+#### Torch Operations
+
+| ID | Title | Status | Owner | Priority | Category Reason | Root Cause | Dependency | PR | PR Owner | PR Status | Labels | Module | Test Module |
+|---|-------|--------|-------|---------|-----------------|-----------|-----------|-------|----------|----------|--------|--------|-------------|
+| [3247](https://github.com/intel/torch-xpu-ops/issues/3247) | NotImplementedError: "dot_xpu_ | open | Silv3S | P2 | operator not implemented for Long dtype on XPU | Dtype/Precision Issue - "dot_xpu_mkl" not implemented for 'Long' dtype on XPU |  |  |  |  | ut_upstream | aten_ops | ut |
 
 
 ---
