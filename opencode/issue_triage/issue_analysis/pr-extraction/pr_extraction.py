@@ -8,7 +8,18 @@ Extracts PR information from GitHub issue comments and updates Excel file.
 - For pytorch/pytorch PRs: checks "Merged" label for status
 - For intel/torch-xpu-ops PRs: checks merged/merged_at field for status
 - Multiple PRs per issue are separated by ';'
+- Adds columns: PR (O), PR Owner (P), PR Status (Q), PR Description (R)
 """
+
+import openpyxl
+from openpyxl.styles import Font, PatternFill
+import requests
+import re
+import json
+import sys
+import os
+import time
+import argparse
 
 import openpyxl
 import requests
@@ -96,13 +107,13 @@ def get_pr_info(pr_key):
     parts = pr_key.split('/')
     repo = '/'.join(parts[:-1])
     pr_num = parts[-1]
-    
+
     url = f"https://api.github.com/repos/{repo}/pulls/{pr_num}"
     try:
         result = make_request_with_retry(url)
         if not result:
             return {'error': 'API failed'}
-        
+
         pr = result
         # Different status logic based on repo
         if repo == 'pytorch/pytorch':
@@ -119,11 +130,13 @@ def get_pr_info(pr_key):
                 status = 'merged'
             else:
                 status = pr.get('state', 'unknown')
-        
+
         return {
             'url': pr.get('html_url'),
             'owner': pr.get('user', {}).get('login'),
-            'state': status
+            'state': status,
+            'title': pr.get('title', ''),
+            'body': pr.get('body', '')[:500] if pr.get('body') else ''
         }
     except Exception as e:
         print(f"Error fetching PR {pr_key}: {e}")
@@ -184,23 +197,36 @@ def update_excel(excel_file, all_pr_refs, pr_info):
     """Update Excel with PR information"""
     wb = openpyxl.load_workbook(excel_file)
     ws = wb['Issues']
-    
+
+    # Check if PR columns already exist (column 15 onwards)
+    max_col = ws.max_column
+    has_pr_headers = max_col >= 17
+
+    # Add PR headers if not exist
+    if not has_pr_headers:
+        pr_headers = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "PR", "PR Owner", "PR Status", "PR Description"]
+        for col, header in enumerate(pr_headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+
     # Build issue to row mapping
     row_by_issue = {}
     for row_idx in range(2, ws.max_row + 1):
         issue_id = ws.cell(row=row_idx, column=1).value
         if issue_id is not None:
             row_by_issue[issue_id] = row_idx
-    
+
     # Update PR columns
     for issue_num, pr_list in all_pr_refs.items():
         if issue_num in row_by_issue:
             row = row_by_issue[issue_num]
-            
+
             pr_urls = []
             pr_owners = []
             pr_states = []
-            
+            pr_descs = []
+
             for pr_key in pr_list:
                 if pr_key in pr_info:
                     info = pr_info[pr_key]
@@ -208,12 +234,22 @@ def update_excel(excel_file, all_pr_refs, pr_info):
                         pr_urls.append(info.get('url', ''))
                         pr_owners.append(info.get('owner', ''))
                         pr_states.append(info.get('state', ''))
-            
+                        # Add PR title/body as description
+                        title = info.get('title', '')
+                        body = info.get('body', '')
+                        if title:
+                            pr_descs.append(title[:100] + ('...' if body else ''))
+
             # Write semicolon-separated values
-            ws.cell(row=row, column=15).value = ';'.join(pr_urls)
-            ws.cell(row=row, column=16).value = ';'.join(pr_owners)
-            ws.cell(row=row, column=17).value = ';'.join(pr_states)
-    
+            # Column O (15): PR
+            ws.cell(row=row, column=15).value = ';'.join(pr_urls) if pr_urls else ''
+            # Column P (16): PR Owner
+            ws.cell(row=row, column=16).value = ';'.join(pr_owners) if pr_owners else ''
+            # Column Q (17): PR Status
+            ws.cell(row=row, column=17).value = ';'.join(pr_states) if pr_states else ''
+            # Column R (18): PR Description
+            ws.cell(row=row, column=18).value = ' | '.join(pr_descs) if pr_descs else ''
+
     wb.save(excel_file)
     print(f"Updated {len(all_pr_refs)} issues in {excel_file}")
 
