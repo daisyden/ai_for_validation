@@ -294,23 +294,10 @@ def get_test_result(xml_path, test_case):
 
 
 def load_ops_dependency():
-    """Load ops_dependency.csv into a dict mapping torch_op -> dependency"""
-    ops_dep_file = os.path.expanduser('~/issue_traige/doc/ops_dependency.csv')
-    ops_dep = {}
-    if os.path.exists(ops_dep_file):
-        with open(ops_dep_file, 'r') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                torch_op = row.get('torch_op', '').strip()
-                dependency = row.get('dependency', '').strip() if row.get('dependency') else ''
-                if torch_op and dependency and dependency.lower() != 'none':
-                    ops_dep[torch_op] = dependency
-    return ops_dep
-
-
-def load_ops_dependency_rag():
-    """Load ops_dependency.csv into a list for RAG fuzzy matching"""
-    ops_dep_file = os.path.expanduser('~/issue_traige/doc/ops_dependency.csv')
+    """Load ops_dependency.csv into a list for RAG matching"""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    rag_dir = os.path.join(script_dir, '..', '..', 'rag')
+    ops_dep_file = os.path.join(rag_dir, 'ops_dependency.csv')
     ops_dep_list = []
     if os.path.exists(ops_dep_file):
         with open(ops_dep_file, 'r') as f:
@@ -323,58 +310,61 @@ def load_ops_dependency_rag():
     return ops_dep_list
 
 
-def score_match(op, csv_op):
-    """Score how well op matches csv_op (higher is better)"""
-    op_lower = op.lower()
-    csv_lower = csv_op.lower()
-    
-    if op_lower == csv_lower:
-        return 100
-    
-    op_clean = re.sub(r'^aten\.?', '', op_lower).strip()
-    csv_clean = re.sub(r'^aten\.?', '', csv_lower).strip()
-    
-    if op_clean == csv_clean:
-        return 95
-    
-    if op_clean in csv_clean or csv_clean in op_clean:
-        return 80
-    
-    op_words = set(re.split(r'[_\.\-]', op_clean))
-    csv_words = set(re.split(r'[_\.\-]', csv_clean))
-    
-    common = op_words & csv_words
-    if common:
-        overlap_ratio = len(common) / max(len(op_words), len(csv_words))
-        if overlap_ratio > 0.5:
-            return 60 + overlap_ratio * 20
-    
-    ratio = SequenceMatcher(None, op_clean, csv_clean).ratio()
-    if ratio > 0.7:
-        return int(ratio * 50)
-    
-    return 0
+def get_dependency_from_ops_rag(ops_list, ops_dep_list):
+    """
+    RAG-based dependency matching using ops_dependency.csv as knowledge base.
+    Score each op against the dependency mapping with multiple strategies.
+    Returns unique dependencies matched with high confidence.
+    """
+    if not ops_list or len(ops_list) == 0:
+        return []
 
+    from difflib import SequenceMatcher
 
-def get_dependency_from_ops_fuzzy(ops_list, ops_dep_list):
-    """RAG-based fuzzy matching to find best dependency from ops list"""
+    SCORE_EXACT = 100
+    SCORE_ATEN_PREFIX = 95
+    SCORE_CONTAIN = 80
+    SCORE_WORD_OVERLAP = 70
+    SCORE_SEQMATCH = 50
+    THRESHOLD = 50
+
+    def score_op_match(op, csv_op):
+        """Score how well op matches csv_op (higher is better)"""
+        op_clean = op.lower().replace('aten::', '').replace('aten.', '').strip()
+        csv_clean = csv_op.lower().replace('aten::', '').replace('aten.', '').strip()
+
+        if op_clean == csv_clean:
+            return SCORE_EXACT
+        if op_clean in csv_clean or csv_clean in op_clean:
+            return SCORE_CONTAIN
+
+        op_words = set(re.split(r'[_\.\-]', op_clean))
+        csv_words = set(re.split(r'[_\.\-]', csv_clean))
+        common = op_words & csv_words
+        if common:
+            overlap = len(common) / max(len(op_words), len(csv_words))
+            if overlap > 0.5:
+                return SCORE_WORD_OVERLAP
+
+        ratio = SequenceMatcher(None, op_clean, csv_clean).ratio()
+        if ratio > 0.7:
+            return int(ratio * SCORE_SEQMATCH)
+
+        return 0
+
     matches = []
     for op in ops_list:
         op_stripped = op.strip()
         for csv_op, dependency in ops_dep_list:
-            score = score_match(op_stripped, csv_op)
-            if score >= 50:
-                matches.append((op_stripped, csv_op, dependency, score))
-    
-    matches.sort(key=lambda x: -x[3])
-    
+            score = score_op_match(op_stripped, csv_op)
+            if score >= THRESHOLD:
+                matches.append((op_stripped, dependency, score))
+
+    matches.sort(key=lambda x: -x[2])
     deps = set()
-    used_ops = set()
-    for op, csv_op, dependency, score in matches:
-        if op not in used_ops:
-            deps.add(dependency)
-            used_ops.add(op)
-    
+    for op, dependency, score in matches:
+        deps.add(dependency)
+
     return sorted(list(deps))
 
 
@@ -861,10 +851,10 @@ def process_test_cases_sheet(wb):
     ws.cell(1, 21, 'can_enable_on_xpu')
     ws.cell(1, 22, 'duplicated_issue')
     ws.cell(1, 23, 'dependency_lib')
-    
-    ops_dep_dict = load_ops_dependency()
-    log(f"  Loaded {len(ops_dep_dict)} ops -> dependency mappings")
-    
+
+    ops_dep_list = load_ops_dependency_rag()
+    log(f"  Loaded {len(ops_dep_list)} ops for LLM RAG dependency lookup")
+
     xpu_xml_files = get_torch_xpu_ops_xml_files()
     log(f"  Found {len(xpu_xml_files)} torch-xpu-ops XML files")
     
@@ -997,18 +987,18 @@ def process_test_cases_sheet(wb):
     
     log(f"  Applied LLM results to {applied} test cases")
     log(f"  Skipped (no LLM analysis): {skipped} test cases")
-    
-    log("  [DEPENDENCY] Populating dependency_lib from ops_dependency.csv (RAG fuzzy matching)...")
-    ops_dep_list = load_ops_dependency_rag()
+
+    log("  [DEPENDENCY] Populating dependency_lib using RAG from ops_dependency.csv...")
+    ops_dep_list = load_ops_dependency()
     log(f"  Loaded {len(ops_dep_list)} ops for RAG dependency lookup")
-    
+
     dep_count = 0
     for row in range(2, ws.max_row + 1):
         torch_ops_raw = ws.cell(row, 10).value
         if not torch_ops_raw:
             continue
         ops_list = str(torch_ops_raw).split(',')
-        dependencies = get_dependency_from_ops_fuzzy(ops_list, ops_dep_list)
+        dependencies = get_dependency_from_ops_rag(ops_list, ops_dep_list)
         if dependencies:
             ws.cell(row, 23, ';'.join(dependencies))
             dep_count += 1
