@@ -144,6 +144,116 @@ def convert_test_file_to_xml_prefix(test_file):
     return None, 'unknown pattern'
 
 
+def load_ops_dependency():
+    """Load ops_dependency.csv into a dict mapping torch_op -> dependency"""
+    import csv
+    ops_dep_file = os.path.expanduser('~/issue_traige/doc/ops_dependency.csv')
+    ops_dep = {}
+    if os.path.exists(ops_dep_file):
+        with open(ops_dep_file, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                torch_op = row.get('torch_op', '').strip()
+                dependency = row.get('dependency', '').strip() if row.get('dependency') else ''
+                if torch_op and dependency and dependency.lower() != 'none':
+                    ops_dep[torch_op] = dependency
+    return ops_dep
+
+
+def get_dependency_from_ops_fuzzy(ops_list, ops_dep_list):
+    """RAG-based fuzzy matching to find best dependency from ops list"""
+    import re
+    from difflib import SequenceMatcher
+    
+    def score_match(op, csv_op):
+        """Score how well op matches csv_op (higher is better)"""
+        op_lower = op.lower()
+        csv_lower = csv_op.lower()
+        
+        # Exact match gets max score
+        if op_lower == csv_lower:
+            return 100
+        
+        # Remove aten:: / aten. prefix for comparison
+        op_clean = re.sub(r'^aten\.?', '', op_lower).strip()
+        csv_clean = re.sub(r'^aten\.?', '', csv_lower).strip()
+        
+        if op_clean == csv_clean:
+            return 95
+        
+        # Direct substring (op contains csv_op or vice versa)
+        if op_clean in csv_clean or csv_clean in op_clean:
+            return 80
+        
+        # Partial match with word boundaries
+        op_words = set(re.split(r'[_\.\-]', op_clean))
+        csv_words = set(re.split(r'[_\.\-]', csv_clean))
+        
+        # Common words
+        common = op_words & csv_words
+        if common:
+            overlap_ratio = len(common) / max(len(op_words), len(csv_words))
+            if overlap_ratio > 0.5:
+                return 60 + overlap_ratio * 20
+        
+        # Sequence matching for similar names
+        ratio = SequenceMatcher(None, op_clean, csv_clean).ratio()
+        if ratio > 0.7:
+            return int(ratio * 50)
+        
+        return 0
+    
+    # Build matches with scores
+    matches = []
+    for op in ops_list:
+        op_stripped = op.strip()
+        for csv_op, dependency in ops_dep_list:
+            score = score_match(op_stripped, csv_op)
+            if score >= 50:
+                matches.append((op_stripped, csv_op, dependency, score))
+    
+    # Sort by score descending, take top matches
+    matches.sort(key=lambda x: -x[3])
+    
+    deps = set()
+    used_ops = set()
+    for op, csv_op, dependency, score in matches:
+        if op not in used_ops:
+            deps.add(dependency)
+            used_ops.add(op)
+    
+    return sorted(list(deps))
+
+
+def load_ops_dependency_rag():
+    """Load ops_dependency.csv into a list for RAG fuzzy matching"""
+    import csv
+    ops_dep_file = os.path.expanduser('~/issue_traige/doc/ops_dependency.csv')
+    ops_dep_list = []
+    if os.path.exists(ops_dep_file):
+        with open(ops_dep_file, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                torch_op = row.get('torch_op', '').strip()
+                dependency = row.get('dependency', '').strip() if row.get('dependency') else ''
+                if torch_op and dependency and dependency.lower() != 'none':
+                    ops_dep_list.append((torch_op, dependency))
+    return ops_dep_list
+
+
+def get_dependency_from_ops(ops_list, ops_dep_dict):
+    """Get unique dependencies from a list of torch ops - exact matching"""
+    deps = set()
+    for op in ops_list:
+        op = op.strip()
+        if op in ops_dep_dict:
+            deps.add(ops_dep_dict[op])
+        op_clean = op.replace('aten::', '').replace('aten.', '').strip()
+        if op_clean and op_clean in ops_dep_dict:
+            deps.add(ops_dep_dict[op_clean])
+    return sorted(list(deps))
+
+
 def convert_to_stock_prefix(test_file):
     """Convert test file to stock test module name"""
     if not test_file:
@@ -1852,13 +1962,15 @@ def process_issues_sheet(wb, issue_duplicated_map=None):
         stock_status = ws_test.cell(row, 16).value
         cuda_case_exist = ws_test.cell(row, 18).value
         dup_issue = ws_test.cell(row, 22).value  # Correct col for duplicated_issue
+        dependency_lib = ws_test.cell(row, 23).value  # dependency_lib column
         
         if issue_id not in issue_test_results:
             issue_test_results[issue_id] = {
                 'xpu_statuses': set(),
                 'stock_statuses': set(),
                 'cuda_case_not_exist': False,
-                'duplicated_issues': set()
+                'duplicated_issues': set(),
+                'dependency_libs': set()
             }
         
         if xpu_status:
@@ -1872,6 +1984,11 @@ def process_issues_sheet(wb, issue_duplicated_map=None):
                 dup_id = dup_id.strip()
                 if dup_id and dup_id != str(issue_id):
                     issue_test_results[issue_id]['duplicated_issues'].add(dup_id)
+        if dependency_lib:
+            for dep in str(dependency_lib).split(';'):
+                dep = dep.strip()
+                if dep:
+                    issue_test_results[issue_id]['dependency_libs'].add(dep)
     
     ws_e2e = wb['E2E Test Cases']
     for row in range(2, ws_e2e.max_row + 1):
@@ -2329,19 +2446,47 @@ def process_issues_sheet(wb, issue_duplicated_map=None):
         if root_cause:
             ws_issues.cell(row, 27, root_cause)
         
-# Extract dependency using LLM for all issues without existing dependency
+        # Extract dependency with new logic:
+        # 1. From labels (dependency_component) - highest priority
+        # 2. From Test Cases dependency_lib - based on torch_ops
+        # 3. From LLM as fallback - only if above are empty
+        
         existing_dependency = ws_issues.cell(row, 14).value
-        if not existing_dependency or existing_dependency in ['None', None, '']:
-            # Use LLM to determine dependency for ALL issues without one
-            try:
-                dependency_from_llm = extract_dependency_llm(
-                    title_raw, summary_raw, labels, test_module, traceback
-                )
-                if dependency_from_llm:
-                    ws_issues.cell(row, 14, dependency_from_llm)
-                    print(f"  [LLM DEPENDENCY] Issue {issue_id}: {dependency_from_llm}")
-            except Exception:
-                pass  # Silently skip LLM errors
+        final_dependency = ''
+        
+        # Step 1: Check if labels contain dependency_component
+        dep_from_label = ''
+        if labels:
+            labels_lower = str(labels).lower()
+            # Look for dependency_component pattern in labels
+            if 'dependency_component:' in labels_lower:
+                # Extract the dependency component from label
+                import re
+                match = re.search(r'dependency_component:\s*([^\s,;]+)', labels_lower)
+                if match:
+                    dep_from_label = match.group(1).strip()
+            elif 'onednn' in labels_lower:
+                dep_from_label = 'oneDNN'
+            elif 'onemkl' in labels_lower or 'mkl' in labels_lower:
+                dep_from_label = 'oneMKL'
+            elif 'triton' in labels_lower:
+                dep_from_label = 'Triton'
+            elif 'ccl' in labels_lower or 'ccl' in labels_lower:
+                dep_from_label = 'oneCCL'
+            elif 'sycl' in labels_lower or 'oneapi' in labels_lower:
+                dep_from_label = 'oneAPI'
+        
+        if dep_from_label:
+            final_dependency = dep_from_label
+        else:
+            # Step 2: Get dependency from test cases' dependency_lib (RAG fuzzy matched)
+            dep_from_libs = test_info.get('dependency_libs', set())
+            if dep_from_libs:
+                final_dependency = ','.join(sorted(dep_from_libs))
+            # Note: No LLM fallback - only use labels or dependency_lib from test cases
+        
+        # Clear old dependency and write new one (only from labels or test cases dependency_lib)
+        ws_issues.cell(row, 14, final_dependency if final_dependency else '')
     
     print(f"Processed {ws_issues.max_row - 1} issues")
     return wb
@@ -2480,6 +2625,11 @@ def main():
     ws.cell(1, 20, 'case_existence_comments')
     ws.cell(1, 21, 'can_enable_on_xpu')
     ws.cell(1, 22, 'duplicated_issue')
+    ws.cell(1, 23, 'dependency_lib')
+    
+    # Load ops_dependency.csv
+    ops_dep_dict = load_ops_dependency()
+    log(f"  Loaded {len(ops_dep_dict)} ops -> dependency mappings")
     
     # Get XML files
     log("\n" + "=" * 60)
@@ -2625,6 +2775,23 @@ def main():
     
     log(f"  Applied LLM results to {applied} test cases")
     log(f"  Skipped (no LLM analysis): {skipped} test cases")
+    
+    # Populate dependency_lib from ops_dependency.csv using RAG fuzzy matching
+    log("  [DEPENDENCY] Populating dependency_lib from ops_dependency.csv (RAG fuzzy matching)...")
+    ops_dep_list = load_ops_dependency_rag()
+    log(f"  Loaded {len(ops_dep_list)} ops for RAG dependency lookup")
+    
+    dep_count = 0
+    for row in range(2, ws.max_row + 1):
+        torch_ops_raw = ws.cell(row, 10).value
+        if not torch_ops_raw:
+            continue
+        ops_list = str(torch_ops_raw).split(',')
+        dependencies = get_dependency_from_ops_fuzzy(ops_list, ops_dep_list)
+        if dependencies:
+            ws.cell(row, 23, ';'.join(dependencies))
+            dep_count += 1
+    log(f"  Set dependency_lib for {dep_count} test cases")
     
     # Build mapping: (test_class, test_case) -> [issue_ids] (multiple rows, potentially different issues)
     log("  [DUPLICATE CHECK] Finding cross-issue duplicated test cases...")
