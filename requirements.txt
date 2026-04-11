@@ -1,8 +1,10 @@
-github
 PyGithub
 openai
 requests
-langchain_community
 tiktoken
 python-magic
-python-magic-bin;platform_system=="Windows"
+nano_graphrag
+sentence_transformers
+pytesseract
+pillow
+langchain_community
