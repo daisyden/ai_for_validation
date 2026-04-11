@@ -7,7 +7,7 @@ This pipeline processes PyTorch XPU issues through 4 steps to collect, extract, 
 ## Pipeline Steps
 
 ### Step 1: Issue Collection
-**Location**: `torch-xpu-ops-issue-collection/`
+**Location**: `issue_basic_info_extraction/`
 
 Collects GitHub issues from intel/torch-xpu-ops repository and extracts:
 - Issue basic info (ID, Title, Status, Assignee, Labels, etc.)
@@ -28,7 +28,7 @@ Collects GitHub issues from intel/torch-xpu-ops repository and extracts:
 
 **Usage**:
 ```bash
-cd ~/ai_for_validation/opencode/issue_triage/torch-xpu-ops-issue-collection
+cd ~/ai_for_validation/opencode/issue_triage/issue_basic_info_extraction
 python3 generate_excel.py
 ```
 
@@ -211,7 +211,7 @@ Some tests use this pattern to import from pytorch/test with XPU patches instead
 export RESULT_DIR=~/ai_for_validation/opencode/issue_triage/result
 
 # Step 1: Collect issues
-cd ~/ai_for_validation/opencode/issue_triage/torch-xpu-ops-issue-collection
+cd ~/ai_for_validation/opencode/issue_triage/issue_basic_info_extraction
 python3 generate_excel.py
 
 # Step 2: Extract torch ops

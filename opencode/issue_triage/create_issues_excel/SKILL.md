@@ -54,7 +54,7 @@ Three sheets:
 ## Usage
 
 ```bash
-cd ~/ai_for_validation/opencode/issue_triage/torch-xpu-ops-issue-collection
+cd ~/ai_for_validation/opencode/issue_triage/issue_basic_info_extraction
 python3 generate_excel.py
 ```
 

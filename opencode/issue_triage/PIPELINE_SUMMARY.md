@@ -125,7 +125,7 @@ The issue_triage pipeline processes torch-xpu-ops GitHub issues, extracts test c
 
 | Script | Location | Description |
 |--------|----------|-------------|
-| generate_excel.py | torch-xpu-ops-issue-collection/ | Scrapes GitHub issues, generates Excel |
+| generate_excel.py | issue_basic_info_extraction/ | Scrapes GitHub issues, generates Excel |
 | update_test_results.py | update_test_results/ | Adds CI results, case analysis |
 | generate_report.py | update_test_results/ | Generates markdown report |
 | check-xpu-test-existence | check-xpu-test-existence/ | Skill for XPU test existence |
@@ -135,7 +135,7 @@ The issue_triage pipeline processes torch-xpu-ops GitHub issues, extracts test c
 
 ```bash
 # Step 1: Generate Excel
-cd ~/ai_for_validation/opencode/issue_triage/torch-xpu-ops-issue-collection
+cd ~/ai_for_validation/opencode/issue_triage/issue_basic_info_extraction
 python3 generate_excel.py
 
 # Step 2: Update with CI results and generate report
