@@ -1,0 +1,1065 @@
+#!/usr/bin/env python3
+"""
+Test Cases processor module.
+
+Contains all logic for filling in fields of 'Test_Cases' sheet in torch_xpu_ops_issues.xlsx:
+- CI results from torch-xpu-ops nightly and stock PyTorch XPU CI
+- Test case existence analysis (CUDA/XPU)
+- Duplicated issue detection
+- Dependency analysis from torch ops
+
+Usage:
+    from test_result.Test_Cases.test_cases_processor import process_test_cases_sheet
+
+    wb = openpyxl.load_workbook('torch_xpu_ops_issues.xlsx')
+    process_test_cases_sheet(wb)
+    wb.save('torch_xpu_ops_issues.xlsx')
+"""
+
+import openpyxl
+from openpyxl.styles import PatternFill, Font
+import xml.etree.ElementTree as ET
+import os
+import re
+import glob
+import time
+import csv
+from difflib import SequenceMatcher
+
+ROOT_DIR = "/home/daisydeng"
+RESULT_DIR = os.environ.get("RESULT_DIR", "/home/daisydeng/ai_for_validation/opencode/issue_triage/result")
+LOG_FILE = os.path.join(RESULT_DIR, "pipeline.log")
+
+
+def log(msg, print_also=True):
+    """Log message to file and optionally print to console."""
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    log_msg = f"[{timestamp}] {msg}"
+    try:
+        with open(LOG_FILE, "a") as f:
+            f.write(log_msg + "\n")
+    except Exception:
+        pass
+    if print_also:
+        print(log_msg)
+
+
+def get_torch_xpu_ops_xml_files():
+    """Get all XML files from torch-xpu-ops nightly artifacts"""
+    base_dir = '/home/daisydeng/issue_traige/ci_results/torch-xpu-ops'
+    
+    ut_folders = []
+    for d in os.listdir(base_dir):
+        if d.startswith('Inductor-XPU-UT-Data-'):
+            match = re.match(r'Inductor-XPU-UT-Data-([a-f0-9]+)-.*-(\d+)-1$', d)
+            if match:
+                ut_folders.append((d, match.group(1), match.group(2)))
+    
+    xml_files = {}
+    for folder_name, commit, run_id in ut_folders:
+        folder_path = os.path.join(base_dir, folder_name, folder_name)
+        if not os.path.exists(folder_path):
+            continue
+        for f in os.listdir(folder_path):
+            if f.endswith('.xml') and (f.startswith('op_ut_with_all') or f.startswith('op_ut_with_skip')):
+                xml_path = os.path.join(folder_path, f)
+                try:
+                    tree = ET.parse(xml_path)
+                    root = tree.getroot()
+                    count = len(root.findall('.//testcase'))
+                    if count > 0:
+                        prefix = f.replace('.xml', '')
+                        xml_files[prefix] = (xml_path, commit, run_id, count)
+                except:
+                    pass
+    
+    return xml_files
+
+
+def get_stock_xml_files():
+    """Get all XML files from stock PyTorch XPU CI"""
+    stock_base = '/home/daisydeng/issue_traige/ci_results/stock'
+    stock_xml_files = {}
+    
+    for zip_file in glob.glob(f'{stock_base}/test-reports-*.zip'):
+        pytest_dir = os.path.join(zip_file, 'test-reports', 'python-pytest')
+        if not os.path.exists(pytest_dir):
+            continue
+        for root, dirs, files in os.walk(pytest_dir):
+            for f in files:
+                if f.endswith('.xml'):
+                    xml_path = os.path.join(root, f)
+                    test_module = os.path.basename(root)
+                    stock_xml_files[test_module] = xml_path
+    
+    return stock_xml_files
+
+
+def convert_test_file_to_xml_prefix(test_file):
+    """Convert test file to XML prefix for torch-xpu-ops"""
+    if not test_file:
+        return None, 'No test file'
+    
+    test_file = str(test_file)
+    
+    if '/' in test_file:
+        test_file = test_file.replace('torch-xpu-ops/test/xpu/', '')
+        test_file = test_file.replace('.py', '')
+        return 'op_ut_with_all.' + test_file.replace('/', '.'), None
+    
+    parts = test_file.split('.')
+    parts_len = len(parts)
+    
+    if parts_len == 2:
+        module = parts[0]
+        if '_xpu' in module:
+            return 'op_ut_with_skip.' + module, None
+        return 'op_ut_with_all.' + module, None
+    
+    if parts_len == 3:
+        module = parts[0]
+        test_module = parts[1]
+        if module == 'test':
+            return 'op_ut_with_all.test_' + test_module + '_xpu', None
+        if module == 'inductor':
+            return None, 'inductor not in torch-xpu-ops'
+        return 'op_ut_with_all.' + module + '.' + test_module, None
+    
+    if parts_len == 4:
+        module = parts[0]
+        subdir = parts[1]
+        test_module = parts[2]
+        if module == 'test':
+            if subdir == 'functorch':
+                return f'op_ut_with_all.{subdir}.{test_module}_xpu', None
+            return None, f'{subdir} not in torch-xpu-ops'
+        if module == 'inductor':
+            return None, 'inductor not in torch-xpu-ops'
+    
+    return None, 'unknown pattern'
+
+
+def convert_to_stock_prefix(test_file):
+    """Convert test file to stock test module name"""
+    if not test_file:
+        return None
+    
+    test_file = str(test_file)
+    
+    if '/' in test_file:
+        test_file = test_file.replace('torch-xpu-ops/test/xpu/', '')
+        test_file = test_file.replace('.py', '')
+        return test_file.replace('/', '.')
+    
+    parts = test_file.split('.')
+    parts_len = len(parts)
+    
+    if parts_len == 2:
+        return parts[0]
+    if parts_len == 3:
+        module = parts[0]
+        test_module = parts[1]
+        if module == 'test':
+            return test_module
+        return f'{module}.{test_module}'
+    if parts_len == 4:
+        module = parts[0]
+        subdir = parts[1]
+        test_module = parts[2]
+        if module == 'test':
+            return f'{subdir}.{test_module}'
+        if module == 'inductor':
+            return f'{module}.{test_module}'
+    
+    return None
+
+
+def find_best_xml_match(xml_prefix, xml_files):
+    """Find XML file matching prefix"""
+    if not xml_prefix:
+        return None
+    if xml_prefix in xml_files:
+        return xml_files[xml_prefix]
+    return None
+
+
+def parse_failure_content(content):
+    """Parse failure message to extract error_msg and traceback until error type."""
+    error_msg = ""
+    traceback = ""
+
+    if not content:
+        return error_msg, traceback
+
+    lines = content.split('\n')
+
+    error_patterns = [
+        (r'^RuntimeError', 'RuntimeError'),
+        (r'^AssertionError', 'AssertionError'),
+        (r'^ValueError', 'ValueError'),
+        (r'^TypeError', 'TypeError'),
+        (r'^IndexError', 'IndexError'),
+        (r'^KeyError', 'KeyError'),
+        (r'^ImportError', 'ImportError'),
+        (r'^NotImplementedError', 'NotImplementedError'),
+        (r'^AttributeError', 'AttributeError'),
+        (r'^InductorError', 'InductorError'),
+    ]
+
+    exception_raise_patterns = [
+        r'\braise\s+(RuntimeError|AssertionError|ValueError|TypeError|IndexError|KeyError|ImportError|NotImplementedError|AttributeError|InductorError)\s*[\(\'"]',
+    ]
+
+    error_line_idx = -1
+    error_type = None
+    last_error_msg = ""
+
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        for pattern, etype in error_patterns:
+            if re.match(pattern, stripped):
+                error_line_idx = idx
+                error_type = etype
+                clean_line = re.sub(r'^' + etype + r'[:\s]*', '', stripped)
+                error_msg = clean_line[:200]
+                break
+        if error_line_idx >= 0:
+            break
+        for ep in exception_raise_patterns:
+            if re.search(ep, stripped):
+                error_line_idx = idx
+                match = re.search(r'raise\s+\w+\s*[\(\'"](.+?)[\'\"]?', stripped)
+                if match:
+                    last_error_msg = match.group(1).strip()[:200]
+
+    traceback = ""
+    if 'Traceback (most recent call last):' in content:
+        tb_lines = []
+        end_idx = error_line_idx if error_line_idx >= 0 else len(lines)
+        for idx, line in enumerate(lines):
+            if 'Traceback (most recent call last):' in line:
+                for j in range(idx, end_idx + 1):
+                    tb_lines.append(lines[j])
+                break
+
+        if tb_lines:
+            traceback = '\n'.join(tb_lines)
+        elif last_error_msg:
+            for idx, line in enumerate(lines):
+                stripped = line.strip()
+                for ep in exception_raise_patterns:
+                    if re.search(ep, stripped):
+                        traceback = '\n'.join(lines[idx:])
+                        break
+                if traceback:
+                    break
+    else:
+        traceback = ""
+        error_msg = content[:200]
+
+    if last_error_msg and not error_msg:
+        error_msg = last_error_msg
+
+    if error_msg and traceback and error_msg not in traceback:
+        traceback += f"\n{error_msg}"
+
+    return error_msg, traceback[:3000] if traceback else traceback
+
+
+def get_test_result(xml_path, test_case):
+    """Get test case result from XML file. Returns status, error_msg, and traceback."""
+    if not xml_path:
+        return None, None, None
+
+    try:
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
+
+        for testcase in root.findall('.//testcase'):
+            if testcase.get('name') == test_case:
+                failure = testcase.find('failure')
+                if failure is not None:
+                    msg = failure.text or failure.get('message', '')
+                    error_msg, traceback = parse_failure_content(msg)
+                    return 'failed', error_msg, traceback
+                skipped = testcase.find('skipped')
+                if skipped is not None:
+                    msg = skipped.text or skipped.get('message', '')
+                    return 'skipped', msg[:500] if msg else 'skipped', None
+                return 'passed', '', None
+
+        return 'not found', 'Test case not found', None
+    except Exception as e:
+        return 'error', str(e), None
+
+
+def load_ops_dependency():
+    """Load ops_dependency.csv into a dict mapping torch_op -> dependency"""
+    ops_dep_file = os.path.expanduser('~/issue_traige/doc/ops_dependency.csv')
+    ops_dep = {}
+    if os.path.exists(ops_dep_file):
+        with open(ops_dep_file, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                torch_op = row.get('torch_op', '').strip()
+                dependency = row.get('dependency', '').strip() if row.get('dependency') else ''
+                if torch_op and dependency and dependency.lower() != 'none':
+                    ops_dep[torch_op] = dependency
+    return ops_dep
+
+
+def load_ops_dependency_rag():
+    """Load ops_dependency.csv into a list for RAG fuzzy matching"""
+    ops_dep_file = os.path.expanduser('~/issue_traige/doc/ops_dependency.csv')
+    ops_dep_list = []
+    if os.path.exists(ops_dep_file):
+        with open(ops_dep_file, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                torch_op = row.get('torch_op', '').strip()
+                dependency = row.get('dependency', '').strip() if row.get('dependency') else ''
+                if torch_op and dependency and dependency.lower() != 'none':
+                    ops_dep_list.append((torch_op, dependency))
+    return ops_dep_list
+
+
+def score_match(op, csv_op):
+    """Score how well op matches csv_op (higher is better)"""
+    op_lower = op.lower()
+    csv_lower = csv_op.lower()
+    
+    if op_lower == csv_lower:
+        return 100
+    
+    op_clean = re.sub(r'^aten\.?', '', op_lower).strip()
+    csv_clean = re.sub(r'^aten\.?', '', csv_lower).strip()
+    
+    if op_clean == csv_clean:
+        return 95
+    
+    if op_clean in csv_clean or csv_clean in op_clean:
+        return 80
+    
+    op_words = set(re.split(r'[_\.\-]', op_clean))
+    csv_words = set(re.split(r'[_\.\-]', csv_clean))
+    
+    common = op_words & csv_words
+    if common:
+        overlap_ratio = len(common) / max(len(op_words), len(csv_words))
+        if overlap_ratio > 0.5:
+            return 60 + overlap_ratio * 20
+    
+    ratio = SequenceMatcher(None, op_clean, csv_clean).ratio()
+    if ratio > 0.7:
+        return int(ratio * 50)
+    
+    return 0
+
+
+def get_dependency_from_ops_fuzzy(ops_list, ops_dep_list):
+    """RAG-based fuzzy matching to find best dependency from ops list"""
+    matches = []
+    for op in ops_list:
+        op_stripped = op.strip()
+        for csv_op, dependency in ops_dep_list:
+            score = score_match(op_stripped, csv_op)
+            if score >= 50:
+                matches.append((op_stripped, csv_op, dependency, score))
+    
+    matches.sort(key=lambda x: -x[3])
+    
+    deps = set()
+    used_ops = set()
+    for op, csv_op, dependency, score in matches:
+        if op not in used_ops:
+            deps.add(dependency)
+            used_ops.add(op)
+    
+    return sorted(list(deps))
+
+
+def get_dependency_from_ops(ops_list, ops_dep_dict):
+    """Get unique dependencies from a list of torch ops - exact matching"""
+    deps = set()
+    for op in ops_list:
+        op = op.strip()
+        if op in ops_dep_dict:
+            deps.add(ops_dep_dict[op])
+        op_clean = op.replace('aten::', '').replace('aten.', '').strip()
+        if op_clean and op_clean in ops_dep_dict:
+            deps.add(ops_dep_dict[op_clean])
+    return sorted(list(deps))
+
+
+def analyze_test_case_with_llm(test_file, test_class, test_case, origin_test_file):
+    """
+    Use LLM skills to check CUDA and XPU test case existence.
+    Calls check-cuda-test-existence and check-xpu-test-existence skills via opencode.
+    
+    Note: This requires opencode to be available and pytorch skills to be loaded.
+    """
+    import subprocess
+    import json
+    
+    if not test_file or not test_case:
+        return {
+            'cuda_exists': 'No',
+            'xpu_exists': 'No',
+            'explanation': 'No test file or test case',
+            'cuda_decorators': [],
+            'xpu_decorators': []
+        }
+    
+    pytorch_root = os.path.expanduser('~/pytorch')
+    if not os.path.exists(pytorch_root):
+        pytorch_root = os.path.expanduser('~/issue_traige/pytorch')
+    
+    prompt = f"""You are in the pytorch directory: {pytorch_root}
+
+Use the check-cuda-test-existence skill to check if the CUDA test exists in the original PyTorch test file.
+Use the check-xpu-test-existence skill to check if the XPU test exists in torch-xpu-ops repo.
+
+Paths:
+- PyTorch test files: {pytorch_root}/test/
+- torch-xpu-ops test files: {pytorch_root}/third_party/torch-xpu-ops/test/xpu/
+
+Test File: {test_file}
+Origin Test File: {origin_test_file if origin_test_file else 'Not provided'}
+Test Class: {test_class}
+Test Case: {test_case}
+
+IMPORTANT: The base test name is NOT just removing '_xpu' suffix. The base test is the actual test function in the test file that can be parameterized to generate the XPU test case.
+
+IMPORTANT: In the explanation, you MUST explain WHY the XPU test does not exist if cuda_exists is "No" or xpu_exists is "No". The reasons can be:
+1. SKIP DECORATORS: Test has decorators like @onlyCUDA, @skipCUDAIfNoHipdnn, @skipIfXpu, @requires_xccl
+2. PARAMETERIZATION: Test is generated from a parameterized base test
+3. REMOVED/RENAMED: Test was removed or renamed in newer PyTorch versions
+4. NOT APPLICABLE: Test is specific to CUDA/ROCm hardware
+5. OTHER: Other reasons
+
+For each check, provide:
+1. Whether CUDA test exists (Yes/No)
+2. Whether XPU test exists (Yes/N/A)
+3. Key decorators found
+4. Base test name
+5. CUDA test file path if found
+6. XPU test file path if found
+7. CUDA test name found
+8. XPU test name found
+9. Detailed explanation
+
+Return ONLY valid JSON format (no additional text):
+{{
+    "cuda_exists": "Yes/No",
+    "xpu_exists": "Yes/No/N/A", 
+    "cuda_decorators": ["decorator1", "decorator2"],
+    "xpu_decorators": ["decorator1"],
+    "base_test_name": "original_test_function_name",
+    "cuda_test_file": "path/to/test_file.py",
+    "xpu_test_file": "path/to/test_xpu.py", 
+    "cuda_test_name": "test_name_found",
+    "xpu_test_name": "test_name_found",
+    "explanation": "detailed explanation"
+}}
+"""
+    
+    try:
+        result = subprocess.run(
+            ['opencode', 'run', '-m', 'opencode/gpt-5-nano', prompt],
+            capture_output=True,
+            text=True,
+            timeout=180,
+            cwd=pytorch_root
+        )
+        
+        if result.returncode == 0:
+            output = result.stdout.strip()
+            try:
+                import re
+                json_match = re.search(r'\{[^{}]*\}', output, re.DOTALL)
+                if json_match:
+                    data = json.loads(json_match.group())
+                    return data
+                if output.startswith('{') and output.endswith('}'):
+                    data = json.loads(output)
+                    return data
+            except (json.JSONDecodeError, AttributeError) as e:
+                pass
+            return {
+                'cuda_exists': 'Unknown',
+                'xpu_exists': 'Unknown',
+                'cuda_decorators': [],
+                'xpu_decorators': [],
+                'explanation': f"Output: {output[:500]}"
+            }
+        else:
+            return {
+                'cuda_exists': 'Error',
+                'xpu_exists': 'Error',
+                'cuda_decorators': [],
+                'xpu_decorators': [],
+                'explanation': f"LLM error (rc={result.returncode}): {result.stderr[:300]}"
+            }
+    except subprocess.TimeoutExpired:
+        return {
+            'cuda_exists': 'Timeout',
+            'xpu_exists': 'Timeout',
+            'cuda_decorators': [],
+            'xpu_decorators': [],
+            'explanation': 'LLM analysis timed out after 240s'
+        }
+    except FileNotFoundError:
+        return {
+            'cuda_exists': 'Error',
+            'xpu_exists': 'Error',
+            'cuda_decorators': [],
+            'xpu_decorators': [],
+            'explanation': 'opencode command not found'
+        }
+    except Exception as e:
+        return {
+            'cuda_exists': 'Error',
+            'xpu_exists': 'Error',
+            'cuda_decorators': [],
+            'xpu_decorators': [],
+            'explanation': f"Failed to run LLM: {str(e)}"
+        }
+
+
+def analyze_test_case(test_file, test_case):
+    """
+    Analyze why test case exists or not (basic file existence check).
+    Uses simple file-based analysis for fast detection.
+    """
+    result = {
+        'cuda_file': None, 'cuda_exists': 'No',
+        'xpu_file': None, 'xpu_exists': 'No',
+        'explanation': '', 'expected_name': test_case
+    }
+    
+    if not test_file:
+        result['explanation'] = 'No test file'
+        return result
+    
+    test_file = str(test_file)
+    
+    if '/' in test_file:
+        cuda_rel = test_file.replace('torch-xpu-ops/test/xpu/', '').replace('_xpu', '')
+        xpu_rel = test_file.replace('torch-xpu-ops/test/xpu/', '')
+    elif '.' in test_file:
+        parts = test_file.split('.')
+        parts_len = len(parts)
+        
+        if parts_len == 4:
+            cuda_rel = f"{parts[1]}/{parts[2]}.py"
+            xpu_rel = f"{parts[1]}/{parts[2]}_xpu.py"
+            result['expected_name'] = parts[3]
+        elif parts_len == 3:
+            if parts[0] == 'test':
+                cuda_rel = f"{parts[1]}.py"
+                xpu_rel = f"{parts[1]}_xpu.py"
+            elif parts[0] == 'inductor':
+                cuda_rel = f"inductor/{parts[1]}.py"
+                xpu_rel = None
+        elif parts_len == 2:
+            cuda_rel = f"{parts[0].replace('_xpu', '')}.py"
+            xpu_rel = f"{parts[0]}.py"
+        else:
+            return result
+    else:
+        return result
+    
+    pytorch_test_dir = os.path.expanduser('~/pytorch/test')
+    torch_xpu_ops_dir = os.path.expanduser('~/pytorch/third_party/torch-xpu-ops/test/xpu')
+    
+    xpu_path = os.path.join(torch_xpu_ops_dir, xpu_rel) if xpu_rel else None
+    xpu_content = None
+    uses_xpu_patch = False
+    
+    if xpu_path and os.path.exists(xpu_path):
+        with open(xpu_path, 'r') as f:
+            xpu_content = f.read()
+        uses_xpu_patch = 'XPUPatchForImport' in xpu_content
+    
+    cuda_path = os.path.join(pytorch_test_dir, cuda_rel) if cuda_rel else None
+    cuda_content = None
+    
+    if cuda_path and os.path.exists(cuda_path):
+        with open(cuda_path, 'r') as f:
+            cuda_content = f.read()
+    
+    base_name = test_case.replace('_xpu', '') if test_case else None
+    cuda_name = test_case.replace('_xpu', '_cuda') if test_case else None
+    
+    if cuda_content:
+        result['cuda_file'] = cuda_rel
+        result['cuda_exists'] = 'Yes'
+        
+        if test_case and test_case in cuda_content:
+            result['explanation'] += 'CUDA: Found. '
+        elif base_name and base_name in cuda_content:
+            result['explanation'] += f"CUDA: Found (base: {base_name}). "
+        elif cuda_name and cuda_name in cuda_content:
+            result['explanation'] += f"CUDA: Found (cuda: {cuda_name}). "
+        else:
+            result['explanation'] += 'CUDA: Test not found in pytorch/test. '
+            result['cuda_exists'] = 'No'
+    else:
+        result['cuda_file'] = f'Not found: {cuda_rel}'
+        result['explanation'] += 'CUDA file missing. '
+    
+    uses_xpu_patch = xpu_content and 'XPUPatchForImport' in xpu_content
+    
+    if uses_xpu_patch:
+        if cuda_content:
+            if test_case in cuda_content:
+                result['explanation'] += 'XPU: Found (imported from CUDA). '
+            elif base_name and base_name in cuda_content:
+                result['explanation'] += f"XPU: Found (imported from CUDA, base name). "
+            elif cuda_name and cuda_name in cuda_content:
+                result['explanation'] += f"XPU: Found (imported from CUDA, cuda name). "
+            else:
+                result['explanation'] += 'XPU: Imported but test not found in CUDA. '
+        else:
+            result['explanation'] += 'XPU: Uses XPUPatchForImport but CUDA file missing. '
+    elif xpu_path and os.path.exists(xpu_path):
+        result['xpu_file'] = xpu_rel
+        result['xpu_exists'] = 'Yes'
+        
+        if test_case in xpu_content:
+            result['explanation'] += 'XPU: Found in XPU file. '
+        elif base_name and base_name in xpu_content:
+            result['explanation'] += 'XPU: Found without _xpu. '
+        else:
+            result['explanation'] += 'XPU: Test not in file. '
+    elif xpu_rel is None:
+        result['xpu_file'] = 'N/A'
+        result['explanation'] += 'XPU: Inductor tests use stock CI. '
+    else:
+        result['xpu_file'] = f'Not found: {xpu_rel}'
+        result['explanation'] += 'XPU file missing. '
+    
+    return result
+
+
+def analyze_test_case_with_llm_qwen(test_file, test_class, test_case, origin_test_file=None):
+    """
+    Use Qwen3-32B via internal API to check CUDA and XPU test case existence.
+    Returns: dict with test existence info and measures elapsed time.
+    Used for double "not found" cases analysis.
+    """
+    import requests
+    import json
+    import time
+    
+    LLM_ENDPOINT = "http://10.239.15.43/v1/chat/completions"
+    LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-xxxxxxxxxx")
+    LLM_MODEL = "Qwen3-32B"
+    
+    pytorch_root = os.path.expanduser('~/pytorch')
+    if not os.path.exists(pytorch_root):
+        pytorch_root = os.path.expanduser('~/issue_traige/pytorch')
+    
+    prompt = f"""You are in the pytorch directory: {pytorch_root}
+
+Check if the CUDA and XPU test exists in respective test files.
+
+Paths:
+- PyTorch test files: {pytorch_root}/test/
+- torch-xpu-ops test files: {pytorch_root}/third_party/torch-xpu-ops/test/xpu/
+
+Test File: {test_file}
+Origin Test File: {origin_test_file if origin_test_file else 'Not provided'}
+Test Class: {test_class}
+Test Case: {test_case}
+
+Base test is the actual test function in the test file.
+
+IMPORTANT: Determine if this test case can be enabled on XPU (can_enable_on_xpu):
+- can_enable_on_xpu = True if test has hardcoded 'cuda' device or skip decorators (just skips)
+- can_enable_on_xpu = False if test is for HIPDNN/rocBlas/ROCm or uses @onlyCUDA, @skipIfXpu
+
+IMPORTANT: Explain WHY XPU test does not exist if cuda_exists is "No" or xpu_exists is "No":
+1. SKIP DECORATORS: @onlyCUDA, @skipCUDAIfNoHipdnn, @skipIfXpu, @requires_xccl
+2. PARAMETERIZATION: @dtypes, @parametrize_test generating tests
+3. REMOVED/RENAMED: Test removed/renamed in newer versions
+4. NOT APPLICABLE: CUDA/ROCm specific (hipdnn backend)
+5. OTHER: Other reasons
+
+Return ONLY valid JSON:
+{{
+    "explanation": "detailed explanation why XPU test exists or not"
+    "cuda_exists": "Yes/No",
+    "xpu_exists": "Yes/No/N/A",
+    "can_enable_on_xpu": "True/False",
+    "cuda_decorators": ["decorator1"],
+    "xpu_decorators": ["decorator1"],
+    "base_test_name": "original_test_function_name",
+    "cuda_test_file": "path/to/test_file.py",
+    "xpu_test_file": "path/to/test_xpu.py",
+    "cuda_test_name": "test_name_found",
+    "xpu_test_name": "test_name_found",
+}}
+"""
+    
+    headers = {
+        "Authorization": f"Bearer {LLM_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": LLM_MODEL,
+        "messages": [
+            {"role": "system", "content": "You are a PyTorch test analysis assistant. Return ONLY valid JSON."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.0,
+        "max_tokens": 4096
+    }
+    
+    start_time = time.time()
+    
+    try:
+        response = requests.post(
+            LLM_ENDPOINT,
+            headers=headers,
+            json=payload,
+            timeout=180
+        )
+        response.raise_for_status()
+        result = response.json()
+        elapsed = time.time() - start_time
+        
+        if result.get('choices') and len(result['choices']) > 0:
+            content = result['choices'][0].get('message', {}).get('content', '')
+            json_match = re.search(r'\{[^{}]*\}', content, re.DOTALL)
+            if json_match:
+                data = json.loads(json_match.group())
+                data['elapsed_time'] = elapsed
+                return data
+        
+        return {
+            'explanation': f'API response parsing failed: {str(result)[:200]}',
+            'cuda_exists': 'Unknown',
+            'xpu_exists': 'Unknown',
+            'elapsed_time': elapsed
+        }
+        
+    except requests.exceptions.Timeout:
+        elapsed = time.time() - start_time
+        return {
+            'explanation': 'Request timed out after 180s',
+            'cuda_exists': 'Timeout',
+            'xpu_exists': 'Timeout',
+            'elapsed_time': elapsed
+        }
+    except Exception as e:
+        elapsed = time.time() - start_time
+        return {
+            'explanation': f'API error: {str(e)}',
+            'cuda_exists': 'Error',
+            'xpu_exists': 'Error',
+            'elapsed_time': elapsed
+        }
+
+
+def find_duplicated_issues(ws):
+    """Find duplicated issues based on Test Class + Test Case or similar Traceback"""
+    from collections import defaultdict
+    
+    class_case_index = defaultdict(list)
+    for row in range(2, ws.max_row + 1):
+        test_class = ws.cell(row, 6).value
+        test_case = ws.cell(row, 7).value
+        issue_id = ws.cell(row, 1).value
+        if test_class and test_case:
+            key = (test_class, test_case)
+            class_case_index[key].append((row, issue_id))
+    
+    traceback_index = defaultdict(list)
+    for row in range(2, ws.max_row + 1):
+        traceback = ws.cell(row, 9).value or ''
+        issue_id = ws.cell(row, 1).value
+        
+        if 'AssertionError: Tensor-likes are not close!' in traceback:
+            continue
+        
+        norm = traceback.strip()
+        if norm:
+            traceback_index[norm].append((row, issue_id))
+    
+    class_case_duplicates = {}
+    for key, rows in class_case_index.items():
+        if len(rows) > 1:
+            issue_ids = [rid for _, rid in rows]
+            for row, rid in rows:
+                other_issues = [i for i in issue_ids if i != rid]
+                if other_issues:
+                    class_case_duplicates[row] = other_issues
+    
+    traceback_duplicates = {}
+    for key, rows in traceback_index.items():
+        if len(rows) > 1:
+            issue_ids = [rid for _, rid in rows]
+            for row, rid in rows:
+                other_issues = [i for i in issue_ids if i != rid]
+                if other_issues:
+                    if row in traceback_duplicates:
+                        traceback_duplicates[row].extend(other_issues)
+                    else:
+                        traceback_duplicates[row] = other_issues
+    
+    merged_duplicates = {}
+    for row in range(2, ws.max_row + 1):
+        dup_set = set()
+        if row in class_case_duplicates:
+            dup_set.update(class_case_duplicates[row])
+        if row in traceback_duplicates:
+            dup_set.update(traceback_duplicates[row])
+        if dup_set:
+            merged_duplicates[row] = sorted(list(dup_set))
+    
+    return merged_duplicates
+
+
+def process_test_cases_sheet(wb):
+    """
+    Process Test Cases sheet - fills all CI result and analysis columns.
+    
+    This is the main entry point for processing Test_Cases sheet.
+    
+    Columns added (11-23):
+    - Col 11: status in torch-xpu-ops nightly
+    - Col 12: comments in torch-xpu-ops nightly
+    - Col 13: Commit
+    - Col 14: Run_id
+    - Col 15: XML
+    - Col 16: status in stock CI
+    - Col 17: comments in stock CI
+    - Col 18: cuda_case_exist
+    - Col 19: xpu_case_exist
+    - Col 20: case_existence_comments
+    - Col 21: can_enable_on_xpu
+    - Col 22: duplicated_issue
+    - Col 23: dependency_lib
+    """
+    import time as time_module
+    from collections import defaultdict
+    
+    ws = wb['Test Cases']
+    
+    ws.cell(1, 11, 'status in torch-xpu-ops nightly')
+    ws.cell(1, 12, 'comments in torch-xpu-ops nightly')
+    ws.cell(1, 13, 'Commit')
+    ws.cell(1, 14, 'Run_id')
+    ws.cell(1, 15, 'XML')
+    ws.cell(1, 16, 'status in stock CI')
+    ws.cell(1, 17, 'comments in stock CI')
+    ws.cell(1, 18, 'cuda_case_exist')
+    ws.cell(1, 19, 'xpu_case_exist')
+    ws.cell(1, 20, 'case_existence_comments')
+    ws.cell(1, 21, 'can_enable_on_xpu')
+    ws.cell(1, 22, 'duplicated_issue')
+    ws.cell(1, 23, 'dependency_lib')
+    
+    ops_dep_dict = load_ops_dependency()
+    log(f"  Loaded {len(ops_dep_dict)} ops -> dependency mappings")
+    
+    xpu_xml_files = get_torch_xpu_ops_xml_files()
+    log(f"  Found {len(xpu_xml_files)} torch-xpu-ops XML files")
+    
+    stock_xml_files = get_stock_xml_files()
+    log(f"  Found {len(stock_xml_files)} stock XML files")
+    
+    total = ws.max_row - 1
+    log(f"\n[STEP] Processing {total} test cases (two-pass approach)...")
+    log(f"  [START TIME] {time_module.strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    pass1_start = time_module.time()
+    issues_needing_llm = {}
+    
+    log("  [PASS 1/2] Processing CI results and collecting unique issues...")
+    for i, row in enumerate(range(2, ws.max_row + 1), 1):
+        test_file = ws.cell(row, 4).value
+        test_class = ws.cell(row, 6).value
+        test_case = ws.cell(row, 7).value
+        issue_id = ws.cell(row, 1).value
+        origin_test_file = ws.cell(row, 5).value
+        
+        xml_prefix, reason = convert_test_file_to_xml_prefix(test_file)
+        if xml_prefix:
+            matched = find_best_xml_match(xml_prefix, xpu_xml_files)
+            if matched:
+                xml_path, commit, run_id, _ = matched
+                status, error_msg, traceback = get_test_result(xml_path, test_case)
+                ws.cell(row, 11, status)
+                ws.cell(row, 12, error_msg if error_msg else '')
+                if traceback and not ws.cell(row, 9).value:
+                    ws.cell(row, 9, traceback[:3000])
+                ws.cell(row, 13, commit)
+                ws.cell(row, 14, run_id)
+                ws.cell(row, 15, os.path.basename(xml_path))
+            else:
+                ws.cell(row, 11, 'not found')
+                ws.cell(row, 12, f'No XML: {xml_prefix}')
+        else:
+            ws.cell(row, 11, 'not found')
+            ws.cell(row, 12, reason)
+        
+        stock_prefix = convert_to_stock_prefix(test_file)
+        if stock_prefix and stock_prefix in stock_xml_files:
+            stock_xml = stock_xml_files[stock_prefix]
+            stock_status, stock_error_msg, stock_traceback = get_test_result(stock_xml, test_case)
+            ws.cell(row, 16, stock_status)
+            ws.cell(row, 17, stock_error_msg if stock_error_msg else '')
+            if stock_traceback and not ws.cell(row, 9).value:
+                ws.cell(row, 9, stock_traceback[:3000])
+        else:
+            ws.cell(row, 16, 'not found')
+            ws.cell(row, 17, 'Not in stock CI')
+        
+        xpu_status = ws.cell(row, 11).value
+        stock_status = ws.cell(row, 16).value
+        ci_not_found = (xpu_status == 'not found' or not xpu_status) and (stock_status == 'not found' or not stock_status)
+        
+        if ci_not_found and issue_id not in issues_needing_llm:
+            issues_needing_llm[issue_id] = {
+                'test_file': test_file,
+                'test_class': test_class,
+                'test_case': test_case,
+                'origin_test_file': origin_test_file
+            }
+        
+        if i % 500 == 0:
+            log(f"    Progress: {i}/{total} cases, {len(issues_needing_llm)} unique issues needing LLM")
+    
+    pass1_elapsed = time_module.time() - pass1_start
+    issue_count = len(issues_needing_llm)
+    log(f"  PASS 1 complete: {issue_count} unique issues ({pass1_elapsed:.1f}s)")
+    
+    pass2_start = time_module.time()
+    log(f"  [PASS 2/2] Running LLM for {issue_count} unique issues...")
+    llm_results = {}
+    
+    for idx, (issue_id, info) in enumerate(issues_needing_llm.items(), 1):
+        try:
+            test_file = info['test_file']
+            test_class = info['test_class']
+            test_case = info['test_case']
+            origin_test_file = info['origin_test_file']
+            
+            result = analyze_test_case_with_llm_qwen(test_file, test_class, test_case, origin_test_file)
+            elapsed = result.get('elapsed_time', 0)
+            llm_results[issue_id] = result
+            log(f"    [LLM {idx}/{issue_count}] Issue {issue_id}: {elapsed:.1f}s")
+        except Exception as e:
+            log(f"    [LLM ERROR] Issue {issue_id}: {e}")
+            llm_results[issue_id] = {'error': str(e)}
+    
+    pass2_elapsed = time_module.time() - pass2_start
+    log(f"  PASS 2 complete: {len(llm_results)} LLM results ({pass2_elapsed:.1f}s)")
+    
+    log("  [APPLY] Writing LLM results to all test cases...")
+    applied = 0
+    skipped = 0
+    for row in range(2, ws.max_row + 1):
+        issue_id = ws.cell(row, 1).value
+        xpu_status = ws.cell(row, 11).value
+        stock_status = ws.cell(row, 16).value
+        ci_not_found = (xpu_status == 'not found' or not xpu_status) and (stock_status == 'not found' or not stock_status)
+        
+        if ci_not_found and issue_id in llm_results:
+            result = llm_results[issue_id]
+            cuda_exists = result.get('cuda_exists', 'Unknown')
+            xpu_exists = result.get('xpu_exists', 'Unknown')
+            
+            parts = []
+            explanation = result.get('explanation', '')
+            if explanation:
+                parts.append('explanation: ' + explanation + '\n')
+            
+            for key in ['base_test_name', 'cuda_test_file', 'xpu_test_file', 'cuda_test_name', 'xpu_test_name']:
+                val = result.get(key)
+                if val:
+                    parts.append(key + ':' + val)
+            comment = '\n'.join(parts) if parts else 'Double not found - LLM analysis'
+            
+            if result.get('cuda_exists') or result.get('xpu_exists'):
+                ws.cell(row, 18, cuda_exists)
+                ws.cell(row, 19, xpu_exists)
+                ws.cell(row, 20, comment)
+                ws.cell(row, 21, result.get('can_enable_on_xpu', 'Unknown'))
+                applied += 1
+            else:
+                skipped += 1
+        else:
+            skipped += 1
+    
+    log(f"  Applied LLM results to {applied} test cases")
+    log(f"  Skipped (no LLM analysis): {skipped} test cases")
+    
+    log("  [DEPENDENCY] Populating dependency_lib from ops_dependency.csv (RAG fuzzy matching)...")
+    ops_dep_list = load_ops_dependency_rag()
+    log(f"  Loaded {len(ops_dep_list)} ops for RAG dependency lookup")
+    
+    dep_count = 0
+    for row in range(2, ws.max_row + 1):
+        torch_ops_raw = ws.cell(row, 10).value
+        if not torch_ops_raw:
+            continue
+        ops_list = str(torch_ops_raw).split(',')
+        dependencies = get_dependency_from_ops_fuzzy(ops_list, ops_dep_list)
+        if dependencies:
+            ws.cell(row, 23, ';'.join(dependencies))
+            dep_count += 1
+    log(f"  Set dependency_lib for {dep_count} test cases")
+    
+    log("  [DUPLICATE CHECK] Finding cross-issue duplicated test cases...")
+    test_case_to_issues = defaultdict(list)
+    
+    for row in range(2, ws.max_row + 1):
+        issue_id = ws.cell(row, 1).value
+        test_class = ws.cell(row, 6).value
+        test_case = ws.cell(row, 7).value
+        if test_class and test_case:
+            key = (test_class, test_case)
+            test_case_to_issues[key].append(str(issue_id).strip())
+    
+    issue_duplicated_map = {}
+    for key, issue_ids in test_case_to_issues.items():
+        unique_issues = list(set(issue_ids))
+        if len(unique_issues) > 1:
+            for issue_id in unique_issues:
+                other_issues = [i for i in unique_issues if i != issue_id]
+                if issue_id not in issue_duplicated_map:
+                    issue_duplicated_map[issue_id] = set()
+                issue_duplicated_map[issue_id].update(other_issues)
+    
+    dup_count_in_test_cases = 0
+    for row in range(2, ws.max_row + 1):
+        issue_id = ws.cell(row, 1).value
+        test_class = ws.cell(row, 6).value
+        test_case = ws.cell(row, 7).value
+        if test_class and test_case:
+            key = (test_class, test_case)
+            other_issues = [i for i in test_case_to_issues[key] if i != str(issue_id).strip()]
+            if other_issues:
+                other_unique = sorted(list(set(other_issues)))
+                ws.cell(row, 22, ','.join(other_unique))
+                dup_count_in_test_cases += 1
+    
+    log(f"  Marked {dup_count_in_test_cases} test cases with cross-issue duplicates")
+    log(f"  Found {len(issue_duplicated_map)} issues with duplicates")
+    
+    log("  [CLEANUP] Cleaning up old values in duplicated_issue...")
+    old_values_fixed = 0
+    for row in range(2, ws.max_row + 1):
+        dup_issue = ws.cell(row, 22).value
+        if dup_issue in ['True', 'False']:
+            ws.cell(row, 22, '')
+            old_values_fixed += 1
+    if old_values_fixed > 0:
+        log(f"  Cleared {old_values_fixed} old boolean values in Test Cases sheet")
+    
+    log("Test Cases sheet processed successfully!")
+    return ws, issue_duplicated_map
