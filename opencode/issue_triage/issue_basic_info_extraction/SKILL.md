@@ -18,29 +18,25 @@ Use GitHub API with token to fetch all open issues (excluding PRs):
 # Filter out pull requests (items with 'pull_request' key)
 ```
 
-### Step 2: Fetch Comments
-For each issue, fetch associated comments to get full context.
-
-### Step 3: Parse Issue Data
+### Step 2: Parse Issue Data
 Extract the following fields for each issue:
 1. **Basic Information**: Issue ID, Title, Status, Assignee, Reporter, Labels, Created Time, Updated Time, Milestone
-2. **Related PR**: Check for any linked PRs
-3. **Summary**: Brief 1-2 sentence summary of the issue
-4. **Type**: Classify as:
+2. **Summary**: Brief 1-2 sentence summary of the issue
+3. **Type**: Classify as:
    - `feature request` - for feature requests
    - `functionality bug` - for errors/crashes/assertions
    - `performance issue` - for latency/throughput issues
    - `internal task` - for tracking tasks (from labels)
-5. **Module**: Based on content keywords:
+4. **Module**: Based on content keywords:
    - `distributed`, `inductor`, `dynamo`, `autograd`, `aten_ops`, `low_precision`, `optimizer`, `profiling`
-6. **Test Module**: Classify as:
+5. **Test Module**: Classify as:
    - `ut` - pytest/python test commands on test/test_*.py or test/xpu/test_*.py
    - `e2e` - benchmark tests (benchmarks/dynamo/)
    - `build` - only for actual build process issues ([Win][Build], cmake, setup.py)
    - `infrastructure` - only for CI/workflow infrastructure issues (workflow errors, github action config)
-7. **Dependency**: Based on keywords: transformers, AO, oneDNN, oneCCL, oneMKL, driver, Triton, oneAPI
+6. **Dependency**: Based on keywords: transformers, AO, oneDNN, oneCCL, oneMKL, driver, Triton, oneAPI
 
-### Step 4: Parse Test Cases
+### Step 3: Parse Test Cases
 Parse test cases from issue body in these formats:
 - **Format 1**: `op_ut,third_party.torch-xpu-ops.test.xpu.test_nn_xpu.TestNNDeviceTypeXPU,test_case_name`
   - Skip cases wrapped with `~~` (fixed issues)
@@ -55,7 +51,7 @@ Extract:
 - Test Class: extracted from path (e.g., `TestNNDeviceTypeXPU`)
 - Test Case: the actual test name
 
-### Step 5: Extract torch_ops
+### Step 4: Extract torch_ops
 Follow these rules in order:
 
 **Rule 1**: Match from test case name using patterns:
@@ -82,11 +78,11 @@ Follow these rules in order:
 - `test_sparse_csr.py` → sparse operations
 - `test_transformers.py` → attention/transformer ops
 
-### Step 6: Extract Error and Traceback
+### Step 5: Extract Error and Traceback
 - **Error Message**: Match patterns like `AssertionError`, `RuntimeError`, `ValueError`, `TypeError`, `IndexError`, `KeyError`, `ImportError`, `NotImplementedError`, `AttributeError`, `InductorError`
 - **Traceback**: Extract full trace starting from "Traceback (most recent call last):" or pytest format `____ TestXXX.XXX`
 
-### Step 7: Parse E2E Test Cases
+### Step 6: Parse E2E Test Cases
 E2E test cases are benchmark tests from huggingface, timm, or torchbench. Model lists can be found at:
 - https://github.com/intel/torch-xpu-ops/tree/main/.ci/benchmarks
 
@@ -105,11 +101,11 @@ Extract the following fields:
 6. **Cudagraph**: yes or no (from disable-cudagraphs flag)
 7. **Reproducer**: command to reproduce
 
-### Step 8: Create Excel Files
+### Step 7: Create Excel Files
 Create Excel with three sheets:
 
 **Sheet 1: Issues**
-Columns: Issue ID, Title, Status, Assignee, Reporter, Labels, Created Time, Updated Time, Milestone, Summary, Type, Module, Test Module, Dependency, **PR, PR Owner, PR Status**
+Columns: Issue ID, Title, Status, Assignee, Reporter, Labels, Created Time, Updated Time, Milestone, Summary, Type, Module, Test Module, Dependency
 
 **Sheet 2: Test Cases (UT)**
 Columns: Issue ID, Test Reproducer, Test Type, Test File, Origin Test File, Test Class, Test Case, Error Message, Traceback, torch-ops, dependency
@@ -117,39 +113,11 @@ Columns: Issue ID, Test Reproducer, Test Type, Test File, Origin Test File, Test
 **Sheet 3: E2E Test Cases**
 Columns: Issue ID, Test Reproducer, Benchmark, Phase, Dtype, Backend, Test Type, Cudagraph, Error Message, Traceback
 
-### Step 9: Extract PR Information (New)
-For each issue, extract PR information from the issue body and comments:
-
-1. **Extract PR references**: Parse PR URLs and PR numbers from issue body using patterns:
-   - `https://github.com/pytorch/pytorch/pull/172314`
-   - `https://github.com/intel/torch-xpu-ops/pull/1047`
-   - `PR #1234` or `PR1234`
-   - `pull request #1234`
-
-2. **Get PR details from GitHub API**: For each PR number found:
-   - Fetch PR info from `https://api.github.com/repos/pytorch/pytorch/pulls/{pr_number}`
-   - Get PR state (open, closed, merged)
-   - Get PR owner (user login)
-   - Get PR URL
-
-3. **Add PR columns to Issues sheet**:
-   - **PR**: Comma-separated list of PR URLs
-   - **PR Owner**: Comma-separated list of PR owners
-   - **PR Status**: Comma-separated list of PR states
-
-**Example**:
-- Issue https://github.com/intel/torch-xpu-ops/issues/2331 mentions PR https://github.com/pytorch/pytorch/pull/172314
-- The script will extract PR #172314, fetch its status (closed), and owner
-- Columns will show:
-  - PR: https://github.com/pytorch/pytorch/pull/172314
-  - PR Owner: username
-  - PR Status: closed
+**Note**: PR extraction is handled by the `pr-extraction/` skill. Run `python3 pr_extraction.py <excel_file>` after this step to populate PR columns.
 
 ## File Outputs
-- `$RESULT_DIR/torch_xpu_ops_issues.json` - Raw issue data
-- `$RESULT_DIR/torch_xpu_ops_comments.json` - Comments data
-- `$RESULT_DIR/torch_xpu_ops_issues.xlsx` - Final Excel file with PR columns
-(default: `~/ai_for_validation/opencode/issue_triage/result/`)
+- `$RESULT_DIR/torch_xpu_ops_issues.json` - Raw issue data (default: `~/ai_for_validation/opencode/issue_triage/result/`)
+- `$RESULT_DIR/torch_xpu_ops_issues.xlsx` - Final Excel file
 
 ## Key Implementation Notes
 1. Use GitHub token for API authentication (set GITHUB_TOKEN environment variable)
@@ -159,9 +127,8 @@ For each issue, extract PR information from the issue body and comments:
 5. Only classify as 'infrastructure' for CI/workflow issues
 6. Use specific patterns before generic ones for torch_ops
 7. Extract both aten:: and torch. patterns from error messages
-8. Extract PR URLs from issue body and comments using regex patterns
-9. Fetch PR status and owner from GitHub API for each extracted PR
+8. PR extraction (columns PR, PR Owner, PR Status) is handled by `pr-extraction/pr_extraction.py`
 
 ### Related Files
 - `$DOC_DIR/ops_dependency.csv` - Mapping of torch ops to dependency libraries
-(default: `~/issue_traige/doc/`)
+  (default: `~/issue_traige/doc/`)

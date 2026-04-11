@@ -5,6 +5,7 @@ from openpyxl.styles import Font, PatternFill
 import re
 import os
 import requests
+import argparse
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = "/home/daisydeng"
@@ -17,6 +18,23 @@ GITHUB_HEADERS = {
     "Accept": "application/vnd.github.v3+json",
     "Authorization": f"token {GITHUB_TOKEN}"
 } if GITHUB_TOKEN else {}
+
+# Parse command line arguments
+parser = argparse.ArgumentParser(description="Generate Excel report for torch-xpu-ops issues")
+parser.add_argument("--issues", type=str, default="", help="Comma-separated list of issue IDs to process (default: all)")
+args = parser.parse_args()
+
+# Parse target issue IDs
+TARGET_ISSUE_IDS = None
+if args.issues:
+    TARGET_ISSUE_IDS = set()
+    for part in args.issues.split(','):
+        part = part.strip()
+        if part:
+            try:
+                TARGET_ISSUE_IDS.add(int(part))
+            except ValueError:
+                pass
 
 # Load data - try to load from JSON, or fetch from GitHub if not exists
 issues_json_path = os.path.join(DATA_DIR, "torch_xpu_ops_issues.json")
@@ -37,27 +55,18 @@ else:
         batch = response.json()
         if not batch:
             break
-        # Filter out pull requests
         issues.extend([i for i in batch if 'pull_request' not in i])
         print(f"Fetched {len(issues)} issues...")
         page += 1
     with open(issues_json_path, 'w') as f:
         json.dump(issues, f)
 
-if os.path.exists(comments_json_path):
-    with open(comments_json_path) as f:
-        comments = json.load(f)
-else:
-    print("Fetching comments from GitHub...")
-    comments = {}
-    for issue in issues:
-        issue_num = issue.get('number')
-        url = f"https://api.github.com/repos/intel/torch-xpu-ops/issues/{issue_num}/comments"
-        response = requests.get(url, headers=GITHUB_HEADERS, timeout=30)
-        if response.status_code == 200:
-            comments[str(issue_num)] = response.json()
-    with open(comments_json_path, 'w') as f:
-        json.dump(comments, f)
+# Filter to target issues if specified
+if TARGET_ISSUE_IDS:
+    issues = [i for i in issues if i['number'] in TARGET_ISSUE_IDS]
+    print(f"Filtered to {len(issues)} target issues: {sorted(TARGET_ISSUE_IDS)}")
+
+
 
 # Load ops dependency
 ops_dep = {}
@@ -1032,261 +1041,6 @@ def get_dependency_from_body(body, labels=None):
     
     return 'None'
 
-def extract_pr_from_text(text, exclude_version_section=True):
-    """Extract PR URLs and PR numbers from text, only those that could fix the issue"""
-    prs = []
-    
-    if not text:
-        return prs
-    
-    if exclude_version_section:
-        version_headers = [
-            r'###\s*Version',
-            r'###\s*versions',
-            r'###\s*environment',
-            r'###\s*reproduction',
-            r'###\s*steps?\s+to\s+reproduce',
-            r'###\s*additional\s+context',
-        ]
-        
-        for header in version_headers:
-            match = re.search(header, text, re.IGNORECASE)
-            if match:
-                text = text[:match.start()]
-                break
-    
-    fix_context_patterns = [
-        r'fixed\s+(?:in|by|with)?\s*PR',
-        r'fixed\s+in\s+commit',
-        r'resolved\s+(?:in|by)?\s*PR',
-        r'resolution:.*PR',
-        r'merged\s+in\s+PR',
-        r'PR\s*:\s*https?://',  # PR: https://...
-        r'PR\s*#\d+',  # PR #1234
-        r'pull\s+request\s*#\d+',
-        r'landed\s+(?:in|via)?\s*PR',
-    ]
-    
-    fix_context = any(re.search(p, text, re.IGNORECASE) for p in fix_context_patterns)
-    
-    # Always extract PR URLs from the text (not just fix context)
-    pr_url_patterns = [
-        (r'https://github\.com/([\w-]+)/([\w-]+)/pull/(\d+)', None),
-        (r'https://github\.com/([\w-]+)/([\w-]+)/issues/(\d+)', 'issue'),
-    ]
-    
-    seen = set()
-    
-    for pattern, url_type in pr_url_patterns:
-        matches = re.findall(pattern, text, re.IGNORECASE)
-        for match in matches:
-            org, repo, num = match[0], match[1], match[-1]
-            pr_num = str(num).strip()
-            if pr_num.isdigit() and pr_num not in seen:
-                seen.add(pr_num)
-                html_url = f"https://github.com/{org}/{repo}/pull/{pr_num}"
-                prs.append({
-                    'number': pr_num,
-                    'html_url': html_url,
-                    'source_repo': f"{org}/{repo}"
-                })
-    
-    if fix_context:
-        bare_pr_patterns = [
-            r'PR\s*#(\d+)',
-            r'pull\s+request\s*#(\d+)',
-            r'#(\d+)\s+(?:to|fix|resolve|address|close)',
-        ]
-        
-        for pattern in bare_pr_patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
-            for match in matches:
-                pr_num = str(match).strip()
-                if pr_num.isdigit() and pr_num not in seen:
-                    seen.add(pr_num)
-                    prs.append({
-                        'number': pr_num,
-                        'html_url': None,
-                        'source_repo': None
-                    })
-    
-    return prs
-
-def validate_pr_and_get_info(pr_list, issue_title="", issue_body=""):
-    """Validate PR numbers against repos and get PR info - only include PRs that fix the issue"""
-    pr_info_list = []
-    
-    if not pr_list:
-        return pr_info_list
-    
-    repos_to_try = ["pytorch/pytorch", "intel/torch-xpu-ops"]
-    
-    issue_text = f"{issue_title} {issue_body}".lower()
-    
-    keywords_for_fixing = [
-        'fix', 'resolve', 'address', 'close', 'solved', 'resolved', 
-        'bug', 'error', 'patch', 'implement', 'support', 'add', 'enable',
-    ]
-    
-    for pr_item in pr_list[:5]:
-        pr_num = pr_item['number']
-        
-        source_repo = pr_item.get('source_repo')
-        if source_repo:
-            repos_to_check = [source_repo]
-        else:
-            repos_to_check = repos_to_try.copy()
-        
-        pr_found = False
-        pr_data = None
-        repo = None
-        
-        for repo in repos_to_check:
-            try:
-                url = f"https://api.github.com/repos/{repo}/pulls/{pr_num}"
-                response = requests.get(url, headers=GITHUB_HEADERS, timeout=10)
-                
-                if response.status_code == 200:
-                    pr_data = response.json()
-                    pr_found = True
-                    break
-            except:
-                continue
-        
-        if not pr_found or not pr_data:
-            continue
-        
-        pr_title = pr_data.get('title', '').lower()
-        pr_body = pr_data.get('body', '') or ''
-        pr_body = pr_body.lower() if pr_body else ""
-        
-        pr_text = f"{pr_title} {pr_body}"
-        
-        # Check if PR is relevant to the issue
-        is_fix_pr = any(kw in pr_text for kw in keywords_for_fixing)
-        
-        title_match = False
-        title_keywords = []
-        for word in issue_text.split():
-            if len(word) > 3 and word in pr_text:
-                title_keywords.append(word)
-        
-        if len(title_keywords) >= 2:
-            title_match = True
-        
-        if not is_fix_pr and not title_match:
-            continue
-        
-        # Check for intel/torch-xpu-ops repo: Skip if "Closed with unmerged commits"
-        if repo == "intel/torch-xpu-ops":
-            if pr_data.get('state') == 'closed':
-                # Check if merged (not unmerged)
-                if not pr_data.get('merged'):
-                    # Check for unmerged commits
-                    commits_url = pr_data.get('commits_url')
-                    if commits_url:
-                        try:
-                            commits_response = requests.get(commits_url, headers=GITHUB_HEADERS, timeout=10)
-                            if commits_response.status_code == 200:
-                                commits_data = commits_response.json()
-                                if commits_data.get('total_count', 0) > 0:
-                                    # Has commits, likely unmerged - skip
-                                    continue
-                        except:
-                            pass
-        
-        # Check for pytorch/pytorch repo: Only include if has "Merged" label
-        if repo == "pytorch/pytorch":
-            if pr_data.get('state') == 'closed':
-                # Check if merged
-                if not pr_data.get('merged'):
-                    # Check labels
-                    labels = pr_data.get('labels', [])
-                    label_names = [l.get('name', '') for l in labels]
-                    if 'merged' not in [l.lower() for l in label_names]:
-                        # Not merged with "Merged" label - skip
-                        continue
-        
-        pr_info_list.append({
-            'number': pr_num,
-            'state': pr_data.get('state', 'unknown'),
-            'user': pr_data.get('user', {}).get('login', 'unknown'),
-            'html_url': pr_data.get('html_url', ''),
-            'title': pr_data.get('title', ''),
-            'source_repo': repo if pr_found else None
-        })
-    
-    return pr_info_list
-
-def get_issue_comments_with_pr(issue_num, repo="intel/torch-xpu-ops"):
-    """Get PR references from issue comments - only PRs that could fix the issue"""
-    all_prs = []
-    
-    issue_num_str = str(issue_num)
-    if issue_num_str not in comments:
-        return all_prs
-    
-    issue_comments = comments[issue_num_str]
-    
-    fix_context_patterns = [
-        r'fixed\s+(?:in|by|with)?\s*PR',
-        r'fixed\s+in\s+commit',
-        r'resolved\s+(?:in|by)?\s*PR',
-        r'resolution:.*PR',
-        r'merged\s+in\s+PR',
-        r'PR\s*:\s*https?://',  # PR: https://...
-        r'PR\s*#\d+',  # PR #1234
-        r'pull\s+request\s*#\d+',
-        r'landed\s+(?:in|via)?\s*PR',
-    ]
-    
-    for comment in issue_comments:
-        body = comment.get('body', '') or ''
-        if not body:
-            continue
-        
-        fix_context = any(re.search(p, body, re.IGNORECASE) for p in fix_context_patterns)
-        
-        if not fix_context:
-            continue
-        
-        seen = set()
-        pr_url_patterns = [
-            r'https://github\.com/([\w-]+)/([\w-]+)/pull/(\d+)',
-        ]
-        
-        for pattern in pr_url_patterns:
-            matches = re.findall(pattern, body, re.IGNORECASE)
-            for match in matches:
-                org, repo, num = match[0], match[1], match[-1]
-                pr_num = str(num).strip()
-                if pr_num.isdigit() and pr_num not in seen:
-                    seen.add(pr_num)
-                    all_prs.append({
-                        'number': pr_num,
-                        'html_url': f"https://github.com/{org}/{repo}/pull/{pr_num}",
-                        'source_repo': f"{org}/{repo}"
-                    })
-        
-        bare_pr_patterns = [
-            r'PR\s*#(\d+)',
-            r'pull\s+request\s*#(\d+)',
-            r'#(\d+)\s+(?:to|fix|resolve|address|close)',
-        ]
-        
-        for pattern in bare_pr_patterns:
-            matches = re.findall(pattern, body, re.IGNORECASE)
-            for match in matches:
-                pr_num = str(match).strip()
-                if pr_num.isdigit() and pr_num not in seen:
-                    seen.add(pr_num)
-                    all_prs.append({
-                        'number': pr_num,
-                        'html_url': None,
-                        'source_repo': None
-                    })
-    
-    return all_prs
 
 # Create Excel
 wb = openpyxl.Workbook()
@@ -1336,10 +1090,7 @@ issue_row = 2
 case_row = 2
 e2e_row = 2
 
-MAX_ISSUES_FOR_TEST = 10
-TESTING_MODE = True
-
-for issue in issues[:MAX_ISSUES_FOR_TEST] if TESTING_MODE else issues:
+for issue in issues:
     num = issue['number']
     title = issue['title']
     body = issue.get('body', '') or ''
@@ -1376,21 +1127,6 @@ for issue in issues[:MAX_ISSUES_FOR_TEST] if TESTING_MODE else issues:
     ws_issues.cell(row=issue_row, column=12, value=module)
     ws_issues.cell(row=issue_row, column=13, value=test_module)
     ws_issues.cell(row=issue_row, column=14, value=dependency)
-    
-    pr_numbers = get_issue_comments_with_pr(num)
-    
-    pr_info_list = validate_pr_and_get_info(pr_numbers[:3], title, body)
-    
-    pr_str = ", ".join([p['html_url'] for p in pr_info_list if p.get('html_url')])
-    pr_owner = ", ".join([p['user'] for p in pr_info_list])
-    pr_status = ", ".join([p['state'] for p in pr_info_list])
-    pr_desc = ", ".join([p.get('title', '')[:80] for p in pr_info_list if p.get('title')])
-    
-    ws_issues.cell(row=issue_row, column=15, value=pr_str)
-    ws_issues.cell(row=issue_row, column=16, value=pr_owner)
-    ws_issues.cell(row=issue_row, column=17, value=pr_status)
-    ws_issues.cell(row=issue_row, column=18, value=pr_desc)
-    ws_issues.cell(row=issue_row, column=19, value="")
     
     # Parse test cases and e2e info
     test_cases = parse_test_cases_from_body(body)

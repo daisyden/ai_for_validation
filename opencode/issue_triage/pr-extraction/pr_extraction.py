@@ -17,6 +17,7 @@ import json
 import sys
 import os
 import time
+import argparse
 
 GITHUB_API = "https://api.github.com"
 REPO = "intel/torch-xpu-ops"
@@ -129,7 +130,7 @@ def get_pr_info(pr_key):
         return {'error': str(e)}
 
 
-def extract_prs_from_excel(excel_file):
+def extract_prs_from_excel(excel_file, target_issue_ids=None):
     """Extract PRs from all issues in Excel"""
     wb = openpyxl.load_workbook(excel_file)
     ws = wb['Issues']
@@ -139,7 +140,12 @@ def extract_prs_from_excel(excel_file):
         if row[0] is not None:
             issues.append(row[0])
     
-    print(f"Total issues to process: {len(issues)}")
+    # Filter to target issues if specified
+    if target_issue_ids:
+        issues = [i for i in issues if i in target_issue_ids]
+        print(f"Filtered to {len(issues)} target issues: {target_issue_ids}")
+    else:
+        print(f"Total issues to process: {len(issues)}")
     
     # Collect PR refs from comments
     all_pr_refs = {}
@@ -213,19 +219,33 @@ def update_excel(excel_file, all_pr_refs, pr_info):
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python3 pr_extraction.py <excel_file>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Extract PRs from GitHub issue comments")
+    parser.add_argument("excel_file", help="Path to Excel file with issues")
+    parser.add_argument("--issues", type=str, default="", help="Comma-separated list of issue IDs to process (default: all)")
+    args = parser.parse_args()
     
-    excel_file = sys.argv[1]
+    excel_file = args.excel_file
     
     if not os.path.exists(excel_file):
         print(f"Error: File {excel_file} does not exist")
         sys.exit(1)
     
+    # Parse target issue IDs
+    target_issue_ids = None
+    if args.issues:
+        target_issue_ids = set()
+        for part in args.issues.split(','):
+            part = part.strip()
+            if part:
+                try:
+                    target_issue_ids.add(int(part))
+                except ValueError:
+                    pass
+        print(f"Target issues: {sorted(target_issue_ids)}")
+    
     # Step 1: Extract PR refs from comments
     print("Step 1: Extracting PRs from GitHub comments...")
-    all_pr_refs = extract_prs_from_excel(excel_file)
+    all_pr_refs = extract_prs_from_excel(excel_file, target_issue_ids)
     
     if not all_pr_refs:
         print("No PRs found in comments")

@@ -12,24 +12,24 @@ This pipeline processes PyTorch XPU issues through 4 steps to collect, extract, 
 Collects GitHub issues from intel/torch-xpu-ops repository and extracts:
 - Issue basic info (ID, Title, Status, Assignee, Labels, etc.)
 - Test cases from issue body
-- PR references that fix the issue
 
-**PR Extraction Logic**:
-- Only extracts PRs from fix context (e.g., "PR: https://...", "PR #1234", "fixed in PR")
-- For intel/torch-xpu-ops PRs: Skips if "Closed with unmerged commits"
-- For pytorch/pytorch PRs: Only includes if has "Merged" label
+**Note**: PR extraction is handled separately by Step 3 (pr-extraction/).
 
 **Scripts**:
-- `generate_excel.py` - Main script to collect issues, test cases, and PRs
+- `generate_excel.py` - Main script to collect issues and test cases
 
-**When to use**: 
+**When to use**:
 - When starting fresh to collect issues from GitHub
 - When need to update issue list from GitHub API
 
 **Usage**:
 ```bash
+# All issues (default)
 cd ~/ai_for_validation/opencode/issue_triage/issue_basic_info_extraction
 python3 generate_excel.py
+
+# Specific issues only
+python3 generate_excel.py --issues "3246,3243"
 ```
 
 **Output**: `$RESULT_DIR/torch_xpu_ops_issues.xlsx` (default: `~/ai_for_validation/opencode/issue_triage/result/`)
