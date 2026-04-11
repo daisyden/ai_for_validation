@@ -25,36 +25,44 @@ python3 test_cases_processor.py
    - Stock PyTorch XPU CI: `/home/daisydeng/issue_traige/ci_results/stock/test-reports-*.zip`
 
 2. **Process PASS 1** (CI Results):
-   - Match test cases to XML files
-   - Populate columns 11-18:
-     - `XPU Status`: pass/fail/skip/error in nightly CI
-     - `XPU Comments`: failure messages
-     - `Commit` & `Run_id`: CI build identifiers
-     - `Stock Status`: pass/fail in stock PyTorch
+    - Match test cases to XML files
+    - Populate columns 11-18:
+      - `XPU Status`: pass/fail/skip/error in nightly CI
+      - `XPU Comments`: failure messages
+      - `Commit` & `Run_id`: CI build identifiers
+      - `Stock Status`: pass/fail in stock PyTorch
 
-3. **Process PASS 2** (Test Existence Check):
-   - For "not found" cases, run LLM analysis
-   - Check if test exists in CUDA (stock) and XPU (torch-xpu-ops)
-   - Populate columns 19-21:
-     - `CUDA Case Exist`: yes/no/uncertain
-     - `XPU Case Exist`: yes/no/uncertain
-     - `Case Existence Comments`: LLM analysis reason
+3. **Torch-ops Extraction (Pattern + LLM Fallback)**:
+     - Pattern-based extraction: regex for torch.ops.aten.XXX.default, test name parsing
+     - `extract_torch_ops()`: Multi-rule extraction (error msg > test name patterns > test case mappings > traceback)
+     - LLM fallback: `extract_torch_ops_with_llm()` uses Qwen3-32B when pattern-based returns empty
+     - Populate `torch-ops` (column 10) - required for dependency analysis
+     - LLM logging: tracks calls, total time, avg time per call
 
-4. **Dependency Analysis (RAG-based)**:
+4. **Process PASS 2** (Test Existence Check):
+    - For "not found" cases, run LLM analysis
+    - Check if test exists in CUDA (stock) and XPU (torch-xpu-ops)
+    - Populate columns 19-21:
+      - `CUDA Case Exist`: yes/no/uncertain
+      - `XPU Case Exist`: yes/no/uncertain
+      - `Case Existence Comments`: LLM analysis reason
+
+5. **Dependency Analysis (RAG-based)**:
     - `load_ops_dependency()`: Load ops_dependency.csv into list for RAG matching
     - `get_dependency_from_ops_rag()`: RAG-based score matching against ops_dependency.csv
     - Scoring: exact (100), aten prefix (95), containment (80), word overlap (>0.5: 70), SequenceMatcher >0.7 (50)
     - Deps matched: oneDNN, oneMKL, Triton, ROCm, cuSPARSE, torch CPU
     - Populate `dependency_lib` (column 23)
 
-5. **Duplicate Detection**:
-   - Find cross-issue duplicated test cases
-   - Mark in `duplicated_issue` (column 22)
+6. **Duplicate Detection**:
+    - Find cross-issue duplicated test cases
+    - Mark in `duplicated_issue` (column 22)
 
-**Columns Populated (11-23):**
+**Columns Populated (10-23):**
 
 | Col | Header |
 |-----|--------|
+| 10 | torch-ops |
 | 11 | XPU Status |
 | 12 | XPU Comments |
 | 13 | Commit |
@@ -131,9 +139,14 @@ python3 generate_excel.py
 cd ~/ai_for_validation/opencode/issue_triage/issue_analysis/pr-extraction
 python3 pr_extraction.py $RESULT_DIR/torch_xpu_ops_issues.xlsx
 
-# Step 2: Process Test_Cases (CI results, error messages, existence, deps)
+# Step 2: Process Test_Cases (includes CI results + torch-ops extraction + error messages + test existence + deps)
 cd ~/ai_for_validation/opencode/issue_triage/test_result_analysis/Test_Cases
 python3 test_cases_processor.py
+# Note: torch-ops extraction is included in test_cases_processor.py
+
+# Alternative Step 2: Run standalone torch-ops extraction (if not using test_cases_processor)
+# cd ~/ai_for_validation/opencode/issue_triage/test_result_analysis/torch-ops-extraction
+# python3 extract_torch_ops.py $RESULT_DIR/torch_xpu_ops_issues.xlsx
 
 # Step 3: Process E2E_Test_Cases (E2E accuracy status)
 cd ~/ai_for_validation/opencode/issue_triage/test_result_analysis/E2E_Test_Cases
@@ -167,3 +180,4 @@ python3 category_analyzer.py $RESULT_DIR/torch_xpu_ops_issues.xlsx
 - issue_analysis/issue_basic_info_extraction: Create initial Excel with issues
 - issue_analysis/pr-extraction: Add PR references from comments
 - issue_analysis/category: Analyze and categorize issues using LLM
+- test_result_analysis/torch-ops-extraction: Extract torch ops from test cases and errors

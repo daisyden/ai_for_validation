@@ -3,11 +3,24 @@
 Torch-ops Extraction Script
 
 Extracts torch ops from PyTorch XPU test case data in Excel format.
+Uses pattern-based extraction with LLM fallback for unknown cases.
+
+Usage:
+    python3 extract_torch_ops.py <input_file> [output_file]
+    python3 extract_torch_ops.py torch_xpu_ops_issues.xlsx
 """
 
 import pandas as pd
 import re
 import sys
+import os
+import time
+import requests
+
+
+LLM_ENDPOINT = os.environ.get("LLM_ENDPOINT", "http://10.239.15.43/v1/chat/completions")
+LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-xxxxxxxxxx")
+LLM_MODEL = "Qwen3-32B"
 
 
 def clean_op(op):
@@ -24,32 +37,26 @@ def extract_ops_from_test_name(test_name):
         return []
     test_name = str(test_name)
     
-    # torch_ops_aten__xxx -> aten._xxx
     match = re.search(r'torch_ops_aten__(\w+)', test_name)
     if match:
         return [f'aten._{clean_op(match.group(1))}']
     
-    # __refs_xxx -> aten._xxx
     match = re.search(r'__refs_(\w+)', test_name)
     if match:
         return [f'aten._{clean_op(match.group(1))}']
     
-    # _nn_xxx -> nn.xxx
     match = re.search(r'_nn_(\w+)', test_name)
     if match:
         return [f'nn.{clean_op(match.group(1))}']
     
-    # _refs_xxx -> _refs_xxx
     match = re.search(r'_refs_(\w+)', test_name)
     if match:
         return [f'_{clean_op(match.group(1))}']
     
-    # aten__xxx -> aten.xxx
     match = re.search(r'aten__(\w+)', test_name)
     if match:
         return [f'aten.{clean_op(match.group(1))}']
     
-    # Attention patterns
     if 'fused_attention' in test_name or 'fused_kernel' in test_name:
         return ['aten.fused_attention']
     if 'sdpa' in test_name.lower() or 'sdp' in test_name.lower():
@@ -65,12 +72,10 @@ def extract_ops_from_test_name(test_name):
     if 'mem_eff_attention' in test_name:
         return ['aten.memory_efficient_attention']
     
-    # vjp patterns
     match = re.search(r'vjp_linalg_(\w+)', test_name)
     if match:
         return [f'torch.linalg.{clean_op(match.group(1))}']
     
-    # Sparse patterns
     if 'csr_matvec' in test_name:
         return ['aten.csr_matvec']
     if 'sparse_csr' in test_name or 'SparseCSR' in test_name:
@@ -80,13 +85,11 @@ def extract_ops_from_test_name(test_name):
     if 'sparse' in test_name.lower():
         return ['sparse_ops']
     
-    # Decomp patterns
     if 'rms_norm_decomp' in test_name:
         return ['aten.rms_norm']
     if '_fft_' in test_name or 'fft_' in test_name:
         return ['torch.fft']
     
-    # has_decomposition
     if 'has_decomposition' in test_name:
         return ['decomp_ops']
     
@@ -100,7 +103,6 @@ def extract_from_error_or_traceback(text):
     text = str(text)
     found = []
     
-    # torch.ops.aten.XXX.default
     matches = re.findall(r'torch\.ops\.aten\.(\w+)\.default', text)
     for m in matches[:3]:
         found.append(f'torch.ops.aten.{m}.default')
@@ -118,13 +120,11 @@ def extract_from_error_or_traceback(text):
     return list(set(found))
 
 
-def extract_from_test_case(test_case):
+def extract_from_test_case_name(test_case):
     """Extract torch ops from test case name mapping"""
     if pd.isna(test_case) or test_case == 'nan':
         return []
     test_case = str(test_case)
-    found = []
-    
     name = test_case
     name = re.sub(r'^test_out_', '', name)
     name = re.sub(r'^test_quick_', '', name)
@@ -160,51 +160,127 @@ def extract_from_test_case(test_case):
     
     for key, op in op_mappings.items():
         if key in name:
-            found.append(op)
-            break
+            return [op]
     
-    return found
+    return []
 
 
-def extract_torch_ops(row):
-    """Extract torch ops using all rules in priority order"""
-    test_case = str(row['Test Case']) if pd.notna(row['Test Case']) else ''
-    error_msg = str(row['Error Message']) if pd.notna(row['Error Message']) else ''
-    traceback = str(row['Traceback']) if pd.notna(row['Traceback']) else ''
+def extract_torch_ops_with_llm(test_file, test_case, error_msg, traceback):
+    """
+    LLM-based torch ops extraction using Qwen3-32B.
+    Used as fallback when pattern-based extraction returns empty.
+    Returns list of torch ops and elapsed time.
+    """
+    context_parts = []
+    if test_file:
+        context_parts.append(f"Test file: {test_file}")
+    if test_case:
+        context_parts.append(f"Test case: {test_case}")
+    if error_msg:
+        error_sample = str(error_msg)[:1500] if len(str(error_msg)) > 1500 else str(error_msg)
+        context_parts.append(f"Error message: {error_sample}")
+    if traceback:
+        traceback_sample = str(traceback)[:1000] if len(str(traceback)) > 1000 else str(traceback)
+        context_parts.append(f"Traceback: {traceback_sample}")
     
+    context = '\n'.join(context_parts)
+    
+    prompt = f"""You are a PyTorch expert. Extract the torch operations involved in this test failure.
+
+Context:
+{context}
+
+Common torch ops to identify:
+- aten ops: add, mm, bmm, matmul, conv2d, softmax, layernorm, gelu, dropout, linear, embedding, etc.
+- torch ops: torch.add, torch.matmul, torch.nn.functional.*, torch.linalg.*, torch.fft.*, etc.
+- aten.*_default ops: _flash_attention_forward, _scaled_mm, _convolution_forward, etc.
+
+Return ONLY a JSON list of torch operation names, e.g.:
+["aten.add", "aten.mm", "aten.conv2d"]
+
+If no specific torch op can be identified, return empty list []."""
+    
+    headers = {
+        "Authorization": f"Bearer {LLM_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": LLM_MODEL,
+        "messages": [
+            {"role": "system", "content": "You are a PyTorch operation analysis assistant. Return ONLY valid JSON list."},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.0,
+        "max_tokens": 1024
+    }
+    
+    start_time = time.time()
+    
+    try:
+        response = requests.post(
+            LLM_ENDPOINT,
+            headers=headers,
+            json=payload,
+            timeout=60
+        )
+        response.raise_for_status()
+        result = response.json()
+        elapsed = time.time() - start_time
+        
+        if result.get('choices') and len(result['choices']) > 0:
+            content = result['choices'][0].get('message', {}).get('content', '')
+            json_match = re.search(r'\[[^\]]*\]', content, re.DOTALL)
+            if json_match:
+                ops = json.loads(json_match.group())
+                if isinstance(ops, list):
+                    return [str(op) for op in ops if op], elapsed
+        
+        return [], elapsed
+    
+    except Exception as e:
+        elapsed = time.time() - start_time
+        print(f"  [LLM OPS ERROR] {e} (elapsed: {elapsed:.1f}s)")
+        return [], elapsed
+
+
+def extract_torch_ops(test_file, test_case, error_msg, traceback, use_llm_fallback=True):
+    """Extract torch ops using all rules in priority order.
+    Falls back to LLM when pattern-based extraction returns empty.
+    Returns: (ops_list, llm_elapsed_time_or_None)
+    """
     found_ops = []
+    llm_elapsed = None
     
-    # Rule 1: Error message with torch.ops.aten.XXX.default pattern (HIGHEST)
     if error_msg:
         extracted = extract_from_error_or_traceback(error_msg)
         if extracted and any('default' in e for e in extracted):
-            return extracted
+            return extracted, None
     
-    # Rule 2: Test name OpDB patterns
     if test_case:
         extracted = extract_ops_from_test_name(test_case)
         if extracted:
-            return extracted
+            return extracted, None
     
-    # Rule 3: Test case name mapping
     if test_case:
-        extracted = extract_from_test_case(test_case)
+        extracted = extract_from_test_case_name(test_case)
         if extracted:
-            return extracted
+            return extracted, None
     
-    # Rule 4: Error message patterns
     if error_msg:
         extracted = extract_from_error_or_traceback(error_msg)
         if extracted:
-            return extracted
+            return extracted, None
     
-    # Rule 5: Traceback patterns
     if traceback:
         extracted = extract_from_error_or_traceback(traceback)
         if extracted:
-            return extracted
+            return extracted, None
     
-    return list(set(found_ops)) if found_ops else ['unknown']
+    if use_llm_fallback and found_ops == []:
+        found_ops, llm_elapsed = extract_torch_ops_with_llm(test_file, test_case, error_msg, traceback)
+    
+    return found_ops if found_ops else [], llm_elapsed
 
 
 def process_excel(input_file, output_file=None):
@@ -212,7 +288,6 @@ def process_excel(input_file, output_file=None):
     if output_file is None:
         output_file = input_file
     
-    # Read Test Cases sheet
     print(f"Reading {input_file}...")
     try:
         df_test = pd.read_excel(input_file, sheet_name='Test Cases')
@@ -222,17 +297,39 @@ def process_excel(input_file, output_file=None):
     
     print(f"Processing {len(df_test)} test cases...")
     
-    # Process each row
+    llm_fallback_count = 0
+    llm_total_time = 0
     results = []
+    
     for i in range(len(df_test)):
         row = df_test.iloc[i]
-        extracted = extract_torch_ops(row)
-        results.append(', '.join(extracted))
+        test_case = str(row['Test Case']) if pd.notna(row['Test Case']) else ''
+        error_msg = str(row['Error Message']) if pd.notna(row['Error Message']) else ''
+        traceback = str(row['Traceback']) if pd.notna(row['Traceback']) else ''
+        
+        ops, llm_elapsed = extract_torch_ops(None, test_case, error_msg, traceback)
+        if not ops:
+            ops = ['unknown']
+        else:
+            if llm_elapsed is not None:
+                llm_fallback_count += 1
+                llm_total_time += llm_elapsed
+        
+        results.append(', '.join(ops))
+        
+        if (i + 1) % 500 == 0:
+            print(f"  Progress: {i + 1}/{len(df_test)} processed")
     
     df_test['torch-ops'] = results
     
-    # Try to read Issues sheet
-    df_issues = None
+    print(f"\nPattern extraction complete")
+    if llm_fallback_count > 0:
+        avg_time = llm_total_time / llm_fallback_count if llm_fallback_count > 0 else 0
+        print(f"  LLM fallback used: {llm_fallback_count} calls, total: {llm_total_time:.1f}s, avg: {avg_time:.2f}s")
+    
+    unknown_count = (df_test['torch-ops'] == 'unknown').sum()
+    print(f"  Extracted: {len(df_test) - unknown_count}, Unknown: {unknown_count}")
+    
     try:
         df_issues = pd.read_excel(input_file, sheet_name='Issues')
         print(f"Found Issues sheet with {len(df_issues)} rows")
@@ -241,15 +338,12 @@ def process_excel(input_file, output_file=None):
     except:
         print("No Issues sheet found")
     
-    # Try to read E2E Test Cases sheet
-    df_e2e = None
     try:
         df_e2e = pd.read_excel(input_file, sheet_name='E2E Test Cases')
         print(f"Found E2E Test Cases sheet with {len(df_e2e)} rows")
     except:
         print("No E2E Test Cases sheet found")
     
-    # Save to Excel
     print(f"Writing to {output_file}...")
     with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
         if df_issues is not None:
@@ -258,14 +352,7 @@ def process_excel(input_file, output_file=None):
         if df_e2e is not None:
             df_e2e.to_excel(writer, sheet_name='E2E Test Cases', index=False)
     
-    # Print summary
-    unknown_count = (df_test['torch-ops'] == 'unknown').sum()
-    print(f"\nSummary:")
-    print(f"  Total: {len(df_test)}")
-    print(f"  Unknown: {unknown_count}")
-    print(f"  Known: {len(df_test) - unknown_count}")
-    
-    print("\nTop 15 torch-ops:")
+    print(f"\nTop 15 torch-ops:")
     vc = df_test['torch-ops'].value_counts()
     for op, count in vc.head(15).items():
         print(f"  {op}: {count}")
