@@ -1,42 +1,35 @@
-# Skill: Collect intel/torch-xpu-ops Open Issue Information
+# Create torch_xpu_ops_issues.xlsx
 
 ## Overview
-This skill collects open issue information from the intel/torch-xpu-ops GitHub repository and generates Excel files with issue details and test cases.
+This skill creates the torch_xpu_ops_issues.xlsx Excel file by collecting open issues from intel/torch-xpu-ops GitHub repository and extracting test case information.
 
-## Prerequisites
-- GitHub token with appropriate permissions
-- Python with openpyxl installed
-- Access to PyTorch test files for test case mapping
+## When to Use
+- When need to generate a fresh Excel file with all open issues from torch-xpu-ops
+- When issues need to be re-collected from GitHub
 
-## Workflow
+## Workflow Steps
 
-### Step 1: Fetch Open Issues
-Use GitHub API with token to fetch all open issues (excluding PRs):
-```python
-# API endpoint: https://api.github.com/repos/intel/torch-xpu-ops/issues
-# Parameters: state=open, per_page=100
-# Filter out pull requests (items with 'pull_request' key)
-```
+### Step 1: Fetch Issues from GitHub
+The script automatically fetches issues if JSON files don't exist:
+- API: `https://api.github.com/repos/intel/torch-xpu-ops/issues?state=open&per_page=100`
+- Filters out pull requests
+- Saves to: `/home/daisydeng/issue_traige/data/torch_xpu_ops_issues.json`
 
-### Step 2: Parse Issue Data
-Extract the following fields for each issue:
-1. **Basic Information**: Issue ID, Title, Status, Assignee, Reporter, Labels, Created Time, Updated Time, Milestone
-2. **Summary**: Brief 1-2 sentence summary of the issue
-3. **Type**: Classify as:
-   - `feature request` - for feature requests
-   - `functionality bug` - for errors/crashes/assertions
-   - `performance issue` - for latency/throughput issues
-   - `internal task` - for tracking tasks (from labels)
-4. **Module**: Based on content keywords:
-   - `distributed`, `inductor`, `dynamo`, `autograd`, `aten_ops`, `low_precision`, `optimizer`, `profiling`
-5. **Test Module**: Classify as:
-   - `ut` - pytest/python test commands on test/test_*.py or test/xpu/test_*.py
-   - `e2e` - benchmark tests (benchmarks/dynamo/)
-   - `build` - only for actual build process issues ([Win][Build], cmake, setup.py)
-   - `infrastructure` - only for CI/workflow infrastructure issues (workflow errors, github action config)
-6. **Dependency**: Based on keywords: transformers, AO, oneDNN, oneCCL, oneMKL, driver, Triton, oneAPI
+### Step 2: Fetch Comments
+For each issue, fetch associated comments:
+- API: `https://api.github.com/repos/intel/torch-xpu-ops/issues/{issue_num}/comments`
+- Saves to: `/home/daisydeng/issue_traige/data/torch_xpu_ops_comments.json`
 
-### Step 3: Parse Test Cases
+### Step 3: Parse Issue Data
+Extract fields:
+- **Basic Info**: Issue ID, Title, Status, Assignee, Reporter, Labels, Created/Updated Time, Milestone
+- **Classification**: Type (bug/feature/performance), Module (distributed/inductor/autograd/etc), Test Module (ut/e2e/build)
+- **PR Extraction**: Only PRs that fix the issue
+  - Extract from issue body and comments
+  - Skip intel/torch-xpu-ops PRs if "Closed with unmerged commits"
+  - Skip pytorch/pytorch PRs unless they have "Merged" label
+
+### Step 4: Parse Test Cases
 Parse test cases from issue body in these formats:
 - **Format 1**: `op_ut,third_party.torch-xpu-ops.test.xpu.test_nn_xpu.TestNNDeviceTypeXPU,test_case_name`
   - Skip cases wrapped with `~~` (fixed issues)
@@ -51,38 +44,9 @@ Extract:
 - Test Class: extracted from path (e.g., `TestNNDeviceTypeXPU`)
 - Test Case: the actual test name
 
-### Step 4: Extract torch_ops
-Follow these rules in order:
+**Note**: Fields `Error Message`, `Traceback`, and `torch-ops` will be blank - populated later by `test_result_analysis/` skill.
 
-**Rule 1**: Match from test case name using patterns:
-- `test_block_addmv` → `torch.addmv`
-- `test_block_addmm` → `torch.addmm`
-- `test_block_triangular_solve` → `aten.triangular_solve.X`
-- `test_cudnn_attention` → `scaled_dot_product_attention`
-- `test_scaled_dot_product` / `test_sdpa` → `scaled_dot_product_attention`
-- `test_flash_attention` → `_flash_attention_forward`
-- `test_baddbmm` → `aten.baddbmm`
-- `test_bmm` → `aten.bmm`
-- `test_mm` → `aten.mm`
-- `test_addmm` → `aten.addmm`
-- `test_addmv` → `torch.addmv`
-- `test_matmul` → `aten.matmul`
-- And 60+ more patterns...
-
-**Rule 2**: Extract from error message/traceback:
-- Match `aten::xxx` pattern: `aten::triangular_solve.X` → `aten.triangular_solve.X`
-- Match `aten._xxx` pattern: `aten::_scaled_dot_product_efficient_attention_backward`
-- Match `torch.xxx` pattern in code
-
-**Rule 3**: Use test file context as fallback:
-- `test_sparse_csr.py` → sparse operations
-- `test_transformers.py` → attention/transformer ops
-
-### Step 5: Extract Error and Traceback
-- **Error Message**: Match patterns like `AssertionError`, `RuntimeError`, `ValueError`, `TypeError`, `IndexError`, `KeyError`, `ImportError`, `NotImplementedError`, `AttributeError`, `InductorError`
-- **Traceback**: Extract full trace starting from "Traceback (most recent call last):" or pytest format `____ TestXXX.XXX`
-
-### Step 6: Parse E2E Test Cases
+### Step 5: Parse E2E Test Cases
 E2E test cases are benchmark tests from huggingface, timm, or torchbench. Model lists can be found at:
 - https://github.com/intel/torch-xpu-ops/tree/main/.ci/benchmarks
 
@@ -94,41 +58,45 @@ E2E test cases are benchmark tests from huggingface, timm, or torchbench. Model 
 **Parse E2E Info from Issue Body:**
 Extract the following fields:
 1. **Benchmark**: huggingface, timm, or torchbench (identified from model name)
-2. **Phase**: training or inference
-3. **Dtype**: bfloat16, float16, float32, int8 (from keywords in body)
-4. **Test Type**: accuracy or performance (from throughputs/performance/latency keywords)
-5. **Backend**: inductor or eager (from --backend flag or context)
-6. **Cudagraph**: yes or no (from disable-cudagraphs flag)
-7. **Reproducer**: command to reproduce
+2. **Model**: Model name from the benchmark suite
+3. **Phase**: training or inference
+4. **Dtype**: bfloat16, float16, float32, int8 (from keywords in body)
+5. **AMP**: auto mixed precision setting
+6. **Backend**: inductor or eager (from --backend flag or context)
+7. **Test Type**: accuracy or performance (from throughputs/performance/latency keywords)
+8. **Cudagraph**: yes or no (from disable-cudagraphs flag)
+9. **Reproducer**: command to reproduce
 
-### Step 7: Create Excel Files
-Create Excel with three sheets:
+### Step 6: Create Excel File
+Three sheets:
 
-**Sheet 1: Issues**
-Columns: Issue ID, Title, Status, Assignee, Reporter, Labels, Created Time, Updated Time, Milestone, Summary, Type, Module, Test Module, Dependency
+1. **Issues**: Columns: Issue ID, Title, Status, Assignee, Reporter, Labels, Created Time, Updated Time, Milestone, Summary, Type, Module, Test Module, Dependency, PR, PR Owner, PR Status, PR Description
 
-**Sheet 2: Test Cases (UT)**
-Columns: Issue ID, Test Reproducer, Test Type, Test File, Origin Test File, Test Class, Test Case, Error Message, Traceback, torch-ops, dependency
+2. **Test Cases** (~2017 rows): Columns populated by this skill:
+   - Issue ID, Test Reproducer, Test Type, Test File, Origin Test File, Test Class, Test Case
+   - Fields left blank for test_result_analysis to fill: Error Message, Traceback, torch-ops, dependency
 
-**Sheet 3: E2E Test Cases**
-Columns: Issue ID, Test Reproducer, Benchmark, Phase, Dtype, Backend, Test Type, Cudagraph, Error Message, Traceback
+3. **E2E Test Cases** (~119 rows): Columns: Issue ID, Test Reproducer, Benchmark, Model, Phase, Dtype, AMP, Backend, Test Type, Cudagraph, Error Message, Traceback
 
-**Note**: PR extraction is handled by the `issue_analysis/pr-extraction/` skill. Run `python3 pr_extraction.py <excel_file>` after this step to populate PR columns.
+**Note**: Error Message, Traceback, and torch-ops are populated by `test_result_analysis/Test_Cases/test_cases_processor.py` using CI XML results.
 
-## File Outputs
-- `$RESULT_DIR/torch_xpu_ops_issues.json` - Raw issue data (default: `~/ai_for_validation/opencode/issue_triage/result/`)
-- `$RESULT_DIR/torch_xpu_ops_issues.xlsx` - Final Excel file
+## Usage
 
-## Key Implementation Notes
-1. Use GitHub token for API authentication (set GITHUB_TOKEN environment variable)
-2. Filter out pull requests (check for 'pull_request' key)
-3. Skip test cases wrapped with `~~` (fixed)
-4. Only classify as 'build' for actual build process issues
-5. Only classify as 'infrastructure' for CI/workflow issues
-6. Use specific patterns before generic ones for torch_ops
-7. Extract both aten:: and torch. patterns from error messages
-8. PR extraction (columns PR, PR Owner, PR Status) is handled by `issue_analysis/pr-extraction/pr_extraction.py`
+```bash
+cd ~/ai_for_validation/opencode/issue_triage/issue_analysis/issue_basic_info_extraction
+python3 generate_excel.py
+```
 
-### Related Files
-- `$DOC_DIR/ops_dependency.csv` - Mapping of torch ops to dependency libraries
-  (default: `~/issue_traige/doc/`)
+## Output
+- `$RESULT_DIR/torch_xpu_ops_issues.xlsx` (default: `~/ai_for_validation/opencode/issue_triage/result/`)
+
+## Prerequisites
+- GitHub token with repo access (set GITHUB_TOKEN env var)
+- Python with: openpyxl, requests, json
+
+## Related Skills
+- ../test_result_analysis/Test_Cases: Add CI test results and case existence analysis
+- ../test_result_analysis/check-xpu-test-existence: Check if XPU test exists in torch-xpu-ops
+- ../test_result_analysis/check-cuda-test-existence: Check if CUDA test exists in PyTorch
+  - Location: test_result_analysis/check-xpu-test-existence/
+  - Location: test_result_analysis/check-cuda-test-existence/
