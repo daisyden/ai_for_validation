@@ -52,15 +52,15 @@ If no relevant commit found in pytorch/pytorch, check:
 ## Usage
 
 ```bash
-python ~/ai_for_validation/opencode/issue_triage/guilty_commit/find_guilty_commit.py \
+python ~/ai_for_validation/opencode/issue_triage/issue_analysis/guilty_commit/find_guilty_commit.py \
   --issue-id "2640" \
   --repo "torch-xpu-ops" \
-  --output-dir ~/ai_for_validation/opencode/issue_triage/guilty_commit/output
+  --output-dir ~/ai_for_validation/opencode/issue_triage/issue_analysis/guilty_commit/output
 ```
 
 Or with manual input:
 ```bash
-python ~/ai_for_validation/opencode/issue_triage/guilty_commit/find_guilty_commit.py \
+python ~/ai_for_validation/opencode/issue_triage/issue_analysis/guilty_commit/find_guilty_commit.py \
   --test-file "test_ops_xpu.py" \
   --test-name "test_compare_cpu_addcmul" \
   --error-message "AssertionError: Tensor-likes are not close" \

@@ -7,13 +7,13 @@ This pipeline processes PyTorch XPU issues through 4 steps to collect, extract, 
 ## Pipeline Steps
 
 ### Step 1: Issue Collection
-**Location**: `issue_basic_info_extraction/`
+**Location**: `issue_analysis/issue_basic_info_extraction/`
 
 Collects GitHub issues from intel/torch-xpu-ops repository and extracts:
 - Issue basic info (ID, Title, Status, Assignee, Labels, etc.)
 - Test cases from issue body
 
-**Note**: PR extraction is handled separately by Step 3 (pr-extraction/).
+**Note**: PR extraction is handled separately by Step 3 (issue_analysis/pr-extraction/).
 
 **Scripts**:
 - `generate_excel.py` - Main script to collect issues and test cases
@@ -25,7 +25,7 @@ Collects GitHub issues from intel/torch-xpu-ops repository and extracts:
 **Usage**:
 ```bash
 # All issues (default)
-cd ~/ai_for_validation/opencode/issue_triage/issue_basic_info_extraction
+cd ~/ai_for_validation/opencode/issue_triage/issue_analysis/issue_basic_info_extraction
 python3 generate_excel.py
 
 # Specific issues only
@@ -37,7 +37,7 @@ python3 generate_excel.py --issues "3246,3243"
 ---
 
 ### Step 2: Torch Ops Extraction
-**Location**: `torch-ops-extraction/`
+**Location**: `test_result_analysis/torch-ops-extraction/`
 
 Extracts torch operation information from issue test cases to classify issues by operation type.
 
@@ -50,7 +50,7 @@ Extracts torch operation information from issue test cases to classify issues by
 
 **Usage**:
 ```bash
-cd ~/ai_for_validation/opencode/issue_triage/torch-ops-extraction
+cd ~/ai_for_validation/opencode/issue_triage/test_result_analysis/torch-ops-extraction
 python3 extract_torch_ops.py $RESULT_DIR/torch_xpu_ops_issues.xlsx
 ```
 
@@ -59,7 +59,7 @@ python3 extract_torch_ops.py $RESULT_DIR/torch_xpu_ops_issues.xlsx
 ---
 
 ### Step 3: PR Extraction
-**Location**: `pr-extraction/`
+**Location**: `issue_analysis/pr-extraction/`
 
 Extracts PR references from GitHub issue comments with fix-related keywords and fetches PR status.
 
@@ -72,7 +72,7 @@ Extracts PR references from GitHub issue comments with fix-related keywords and 
 
 **Usage**:
 ```bash
-cd ~/ai_for_validation/opencode/issue_triage/pr-extraction
+cd ~/ai_for_validation/opencode/issue_triage/issue_analysis/pr-extraction
 python3 pr_extraction.py $RESULT_DIR/torch_xpu_ops_issues.xlsx
 ```
 
@@ -112,41 +112,6 @@ python3 generate_report.py
 - Updates status columns (torch-xpu-ops nightly, stock CI, case existence)
 - Adds Root Cause column (col 25) to Issues sheet for issues with blank action_TBD
 - Generates `issue_report.md` with By Root Cause statistics
-
----
-
-### Step 5: Process Issues Sheet
-**Location**: `process_issues_sheet/`
-
-Processes Issues sheet to add priority, category, root cause, and category_reason analysis.
-
-**Scripts**:
-- `process_issues_sheet.py` - Main script for issue analysis (extracted from update_test_results.py)
-
-**When to use**:
-- After Step 4 to perform LLM-based priority, category, and root cause analysis
-- When need to categorize all issues with action_TBD
-- When need to prioritize issues (P0-P4) based on severity
-
-**LLM Analysis**:
-- `analyze_priority()` - Determines priority (P0-P4) based on issue severity and impact
-- `analyze_category()` - Classifies issue into categories (Memory, Dtype/Precision, Inductor, DNNL, Flash Attention, Distributed, Skip, API Mismatch, Backend, Others)
-- `analyze_root_cause()` - Identifies root cause and fills category_reason
-
-**Usage**:
-```bash
-cd ~/ai_for_validation/opencode/issue_triage/process_issues_sheet
-python3 process_issues_sheet.py
-```
-
-**Configuration**:
-- `MAX_LLM_ROOT_CAUSE = 500` - Max issues for root cause analysis
-- `MAX_LLM_CATEGORY = 500` - Max issues for category analysis
-- `MAX_LLM_PRIORITY = 500` - Max issues for priority analysis
-
-**Output**:
-- Updates Priority (col 22), Category (col 24), Root Cause (col 25), Category Reason (col 26) columns
-- Persists changes to Excel file
 
 ---
 
@@ -211,22 +176,18 @@ Some tests use this pattern to import from pytorch/test with XPU patches instead
 export RESULT_DIR=~/ai_for_validation/opencode/issue_triage/result
 
 # Step 1: Collect issues
-cd ~/ai_for_validation/opencode/issue_triage/issue_basic_info_extraction
+cd ~/ai_for_validation/opencode/issue_triage/issue_analysis/issue_basic_info_extraction
 python3 generate_excel.py
 
 # Step 2: Extract torch ops
-cd ~/ai_for_validation/opencode/issue_triage/torch-ops-extraction
+cd ~/ai_for_validation/opencode/issue_triage/test_result_analysis/torch-ops-extraction
 python3 extract_torch_ops.py $RESULT_DIR/torch_xpu_ops_issues.xlsx
 
 # Step 3: Extract PRs
-cd ~/ai_for_validation/opencode/issue_triage/pr-extraction
+cd ~/ai_for_validation/opencode/issue_triage/issue_analysis/pr-extraction
 python3 pr_extraction.py $RESULT_DIR/torch_xpu_ops_issues.xlsx
 
-# Step 4: Update test results
+# Step 4: Update test results (includes priority, category, root cause analysis)
 cd ~/ai_for_validation/opencode/issue_triage/update_test_results
 python3 update_test_results.py
-
-# Step 5: Process issues sheet (priority, category, root cause analysis)
-cd ~/ai_for_validation/opencode/issue_triage/process_issues_sheet
-python3 process_issues_sheet.py
 ```

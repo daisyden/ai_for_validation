@@ -4,7 +4,7 @@
 This skill updates the torch_xpu_ops_issues.xlsx with CI test results from XML files and performs case existence analysis using LLM.
 
 ## When to Use
-- After create_issues_excel skill generates the initial Excel file
+- After issue_analysis/create_issues_excel skill generates the initial Excel file
 - When need to add CI test status and case existence info
 
 ## Workflow Steps
@@ -60,6 +60,6 @@ python3 update_test_results.py
 - Model = opencode/gpt-5-nano (faster free model)
 
 ## Related Skills
-- create_issues_excel: Generate initial Excel file
-- check-xpu-test-existence: Check XPU test existence
-- check-cuda-test-existence: Check CUDA test existence
+- issue_analysis/create_issues_excel: Generate initial Excel file
+- check-xpu-test-existence: Check XPU test existence (test_result_analysis/check-xpu-test-existence/)
+- check-cuda-test-existence: Check CUDA test existence (test_result_analysis/check-cuda-test-existence/)

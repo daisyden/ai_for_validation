@@ -54,7 +54,7 @@ Three sheets:
 ## Usage
 
 ```bash
-cd ~/ai_for_validation/opencode/issue_triage/issue_basic_info_extraction
+cd ~/ai_for_validation/opencode/issue_triage/issue_analysis/issue_basic_info_extraction
 python3 generate_excel.py
 ```
 
@@ -69,3 +69,5 @@ python3 generate_excel.py
 - update_test_results: Add CI test results and case existence analysis
 - check-xpu-test-existence: Check if XPU test exists in torch-xpu-ops
 - check-cuda-test-existence: Check if CUDA test exists in PyTorch
+- Location: test_result_analysis/check-xpu-test-existence/
+- Location: test_result_analysis/check-cuda-test-existence/

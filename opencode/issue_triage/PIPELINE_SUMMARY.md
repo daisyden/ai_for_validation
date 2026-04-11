@@ -72,7 +72,7 @@ The issue_triage pipeline processes torch-xpu-ops GitHub issues, extracts test c
 - Extracts pass/fail/skipped status
 
 ### 4. Case Existence Analysis
-- Uses check-cuda-test-existence and check-xpu-test-existence skills
+- Uses check-cuda-test-existence and check-xpu-test-existence skills (test_result_analysis/)
 - Analyzes why tests don't exist:
   - Skip decorators (@onlyCUDA, @skipCUDAIfNoHipdnn, etc.)
   - Parameterization from base tests
@@ -125,7 +125,7 @@ The issue_triage pipeline processes torch-xpu-ops GitHub issues, extracts test c
 
 | Script | Location | Description |
 |--------|----------|-------------|
-| generate_excel.py | issue_basic_info_extraction/ | Scrapes GitHub issues, generates Excel |
+| generate_excel.py | issue_analysis/issue_basic_info_extraction/ | Scrapes GitHub issues, generates Excel |
 | update_test_results.py | update_test_results/ | Adds CI results, case analysis |
 | generate_report.py | update_test_results/ | Generates markdown report |
 | check-xpu-test-existence | check-xpu-test-existence/ | Skill for XPU test existence |
@@ -135,7 +135,7 @@ The issue_triage pipeline processes torch-xpu-ops GitHub issues, extracts test c
 
 ```bash
 # Step 1: Generate Excel
-cd ~/ai_for_validation/opencode/issue_triage/issue_basic_info_extraction
+cd ~/ai_for_validation/opencode/issue_triage/issue_analysis/issue_basic_info_extraction
 python3 generate_excel.py
 
 # Step 2: Update with CI results and generate report

@@ -113,7 +113,7 @@ Columns: Issue ID, Test Reproducer, Test Type, Test File, Origin Test File, Test
 **Sheet 3: E2E Test Cases**
 Columns: Issue ID, Test Reproducer, Benchmark, Phase, Dtype, Backend, Test Type, Cudagraph, Error Message, Traceback
 
-**Note**: PR extraction is handled by the `pr-extraction/` skill. Run `python3 pr_extraction.py <excel_file>` after this step to populate PR columns.
+**Note**: PR extraction is handled by the `issue_analysis/pr-extraction/` skill. Run `python3 pr_extraction.py <excel_file>` after this step to populate PR columns.
 
 ## File Outputs
 - `$RESULT_DIR/torch_xpu_ops_issues.json` - Raw issue data (default: `~/ai_for_validation/opencode/issue_triage/result/`)
@@ -127,7 +127,7 @@ Columns: Issue ID, Test Reproducer, Benchmark, Phase, Dtype, Backend, Test Type,
 5. Only classify as 'infrastructure' for CI/workflow issues
 6. Use specific patterns before generic ones for torch_ops
 7. Extract both aten:: and torch. patterns from error messages
-8. PR extraction (columns PR, PR Owner, PR Status) is handled by `pr-extraction/pr_extraction.py`
+8. PR extraction (columns PR, PR Owner, PR Status) is handled by `issue_analysis/pr-extraction/pr_extraction.py`
 
 ### Related Files
 - `$DOC_DIR/ops_dependency.csv` - Mapping of torch ops to dependency libraries

@@ -25,7 +25,7 @@ from typing import Optional, List, Dict, Tuple
 PYTORCH_REPO_PATH = os.environ.get("PYTORCH_REPO_PATH", "/home/gta/daisyden/pytorch")
 XPU_OPS_REPO_PATH = os.environ.get("XPU_OPS_REPO_PATH", 
     os.path.join(PYTORCH_REPO_PATH, "third_party/torch-xpu-ops"))
-OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "~/ai_for_validation/opencode/issue_triage/guilty_commit/output")
+OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "~/ai_for_validation/opencode/issue_triage/issue_analysis/guilty_commit/output")
 
 
 class GuiltyCommitFinder:
