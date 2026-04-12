@@ -365,7 +365,7 @@ def parse_test_cases_from_body(body):
                     test_class = ""
                     test_file_parts = []
                     for part in rel_parts:
-                        if part.startswith('Test'):
+                        if part.startswith('Test') or part.endswith('Tests') or part.endswith('Test'):
                             test_class = part
                             break
                         test_file_parts.append(part)
@@ -383,9 +383,16 @@ def parse_test_cases_from_body(body):
                     test_class = ""
                     origin_file = ""
             else:
-                test_file = test_path
-                origin_file = ""
+                path_parts = test_path.split('.')
+                test_file_parts = []
                 test_class = ""
+                for part in path_parts:
+                    if part.startswith('Test') or part.endswith('Tests') or part.endswith('Test'):
+                        test_class = part
+                        break
+                    test_file_parts.append(part)
+                test_file = '/'.join(test_file_parts) + '.py'
+                origin_file = ""
 
             cases.append({
                 'test_type': test_type,
