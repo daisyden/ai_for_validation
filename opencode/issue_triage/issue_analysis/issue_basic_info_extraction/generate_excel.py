@@ -400,26 +400,31 @@ def parse_test_cases_from_body(body):
         code_blocks = body.split('```')
         for block in code_blocks:
             # Look for pytest patterns with test path and test method
-            pytest_pattern = r'pytest\s+-v\s+(test[/a-zA-Z0-9_]+\.py::[a-zA-Z0-9_]+)'
+            # Handles formats: test/test_ops.py or test/distributed/test_c10d_xccl.py::ClassName::method
+            pytest_pattern = r'pytest\s+-v\s+(test[/a-zA-Z0-9_/.]+\.py(?:::[a-zA-Z0-9_]+)*)'
             matches = re.findall(pytest_pattern, block)
             for match in matches:
                 test_path = match.strip()
                 if '::' in test_path:
                     parts = test_path.split('::')
                     file_path = parts[0]
-                    test_method = parts[1]
-                    test_class = ""
-                    # Check if class part exists
-                    if '.' in test_method:
-                        class_method = test_method.rsplit('.', 1)
-                        test_class = class_method[0]
-                        test_method = class_method[1]
+                    test_class = parts[1] if len(parts) > 1 else ""
+                    test_method = parts[2] if len(parts) > 2 else parts[-1]
                     cases.append({
                         'test_type': 'ut',
                         'test_file': file_path,
                         'origin_test_file': file_path,
                         'test_class': test_class,
                         'test_case': test_method
+                    })
+                else:
+                    # No class/method, just file
+                    cases.append({
+                        'test_type': 'ut',
+                        'test_file': test_path,
+                        'origin_test_file': test_path,
+                        'test_class': '',
+                        'test_case': ''
                     })
 
             # Also look for test_xpu,...,... format in code blocks
