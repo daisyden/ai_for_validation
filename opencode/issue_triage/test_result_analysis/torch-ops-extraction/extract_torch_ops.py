@@ -16,6 +16,7 @@ import sys
 import os
 import time
 import requests
+import json
 
 
 LLM_ENDPOINT = os.environ.get("LLM_ENDPOINT", "http://10.239.15.43/v1/chat/completions")

@@ -131,11 +131,13 @@ def convert_test_file_to_xml_prefix(test_file):
     """Convert test file to XML prefix for torch-xpu-ops.
 
     Handles multiple formats of test_file values:
-    1. torch-xpu-ops/test/xpu/xxx/YYY_xpu.py -> op_ut_with_all.xxx.YYY_xpu
-    2. test/xxx.py -> op_ut_with_all.test_xxx
-    3. test/xxx/yyy.py -> op_ut_with_all.xxx.yyy
-    4. module_only (no path) -> op_ut_with_all.module_only
-    5. Extended tests (extended/test_ops_xpu.py) -> op_extended
+    1. torch-xpu-ops/test/xpu/xxx/YYY_xpu.py -> op_ut_with_all.xxx.YYY_xpu (then find_best_xml_match falls back to skip)
+    2. torch-xpu-ops/test/xpu/dynamo/test_ctx_manager_xpu.py -> op_ut_with_all.test.xpu.dynamo.test_ctx_manager_xpu
+    3. test/xxx.py -> op_ut_with_all.test_xxx
+    4. test/xxx/yyy.py -> op_ut_with_all.xxx.yyy
+    5. module_only (no path) -> op_ut_with_all.module_only
+    6. Extended tests (extended/test_ops_xpu.py) -> op_extended
+    7. Creates prefix that find_best_xml_match can resolve to _with_skip if _with_all not exists
     """
     if not test_file:
         return None, 'No test file'
@@ -146,20 +148,14 @@ def convert_test_file_to_xml_prefix(test_file):
     if test_file.endswith('.py'):
         test_file = test_file[:-3]
 
-    # Format 5: Extended tests - map to op_extended
+    # Format 6: Extended tests - map to op_extended
     if 'extended/test_ops_xpu' in test_file or test_file.endswith('extended/test_ops_xpu'):
         return 'op_extended', None
 
-    # Format 1: torch-xpu-ops/test/xpu/xxx/YYY_xpu.py
+    # Format 2: torch-xpu-ops/test/xpu/subdir/YYY_xpu.py -> op_ut_with_all.test.xpu.subdir.YYY_xpu
     if test_file.startswith('torch-xpu-ops/test/xpu/'):
-        test_file = test_file.replace('torch-xpu-ops/test/xpu/', '')
-        parts = test_file.split('/')
-        if len(parts) >= 2:
-            # e.g., "nn/test_convolution_xpu" -> "op_ut_with_all.nn.test_convolution_xpu"
-            return 'op_ut_with_all.' + test_file.replace('/', '.'), None
-        else:
-            # Single file like "test_optim_xpu" -> "op_ut_with_all.test_optim_xpu"
-            return 'op_ut_with_all.' + parts[0], None
+        test_path = test_file.replace('torch-xpu-ops/test/xpu/', '')
+        return 'op_ut_with_all.test.xpu.' + test_path.replace('/', '.'), None
 
     # Format 2 & 3: Paths with "/"
     if '/' in test_file:
@@ -314,40 +310,43 @@ def find_best_xml_match(xml_prefix, xml_files):
     """Find XML file matching prefix. Also handles dot-encoded test paths and checks op_ut_with_skip if op_ut_with_all not found."""
     if not xml_prefix:
         return None
-    
+
     # Direct match
     if xml_prefix in xml_files:
         return xml_files[xml_prefix]
-    
+
     # Try op_ut_with_skip if op_ut_with_all not found
     if xml_prefix.startswith('op_ut_with_all.'):
         skip_prefix = 'op_ut_with_skip.' + xml_prefix[len('op_ut_with_all.'):]
         if skip_prefix in xml_files:
             return xml_files[skip_prefix]
-        
+
         # Handle dot-encoded paths: e.g., "op_ut_with_all.............test.distributed.fsdp.test_fsdp_apply"
-        # The dots encode "test/" prefix - convert back and try matching
         base_path = xml_prefix[len('op_ut_with_all.'):]
-        
+
         # Check if prefix has 12+ consecutive dots (encoding test/)
-        # Pattern: op_ut_with_all.+++++++++++.rest -> op_ut_with_all.test.rest
         import re
         dot_match = re.match(r'^(.{12,})(.+)$', base_path)
         if dot_match:
-            # Replace dots with "test/" and try again
             encoded_prefix = dot_match.group(1)
             rest = dot_match.group(2)
             if all(c == '.' for c in encoded_prefix) and len(encoded_prefix) >= 12:
-                # Dots encode "test/" prefix
                 test_path = 'test/' + rest
                 test_prefix = 'op_ut_with_all.' + test_path
                 if test_prefix in xml_files:
                     return xml_files[test_prefix]
-                # Also try skip variant
                 test_skip_prefix = 'op_ut_with_skip.' + test_path
                 if test_skip_prefix in xml_files:
                     return xml_files[test_skip_prefix]
-    
+
+        # Fuzzy match for missing subdirectories
+        # e.g., op_ut_with_all.test.xpu.test_ctx_manager_xpu -> try op_ut_with_all.test.xpu.*.test_ctx_manager_xpu
+        if xml_prefix.startswith('op_ut_with_all.test.xpu.'):
+            base_name = xml_prefix.replace('op_ut_with_all.test.xpu.', '')
+            for prefix, path in xml_files.items():
+                if prefix.startswith('op_ut_with_all.test.xpu.') and prefix.endswith('.' + base_name):
+                    return path
+
     return None
 
 
@@ -712,13 +711,17 @@ def extract_from_test_case_name_inline(test_case):
 
 def extract_torch_ops(test_file, test_case, error_msg, traceback, use_llm_fallback=True):
     """Extract torch ops using torch-ops-extraction module.
+    Uses pattern-based extraction from module, which includes its own fallback.
     Falls back to inline pattern matching if module unavailable.
     Returns: (ops_list, llm_elapsed_time_or_None)
     """
     import time as time_module
 
+    if TORCH_OPS_MODULE_AVAILABLE:
+        found_ops, llm_elapsed = torch_ops_extract_torch_ops(test_file, test_case, error_msg, traceback, use_llm_fallback)
+        return found_ops if found_ops else [], llm_elapsed
+
     found_ops = []
-    llm_elapsed = None
 
     if error_msg:
         extracted = extract_from_error_or_traceback_inline(error_msg)
@@ -740,10 +743,7 @@ def extract_torch_ops(test_file, test_case, error_msg, traceback, use_llm_fallba
         if extracted:
             return extracted, None
 
-    if use_llm_fallback and found_ops == []:
-        found_ops, llm_elapsed = extract_torch_ops_with_llm(test_file, test_case, error_msg, traceback)
-
-    return found_ops if found_ops else [], llm_elapsed
+    return found_ops if found_ops else [], None
 
 
 def load_ops_dependency():
@@ -1265,76 +1265,26 @@ def find_duplicated_issues(ws):
     return merged_duplicates
 
 
-def process_test_cases_sheet(wb):
+def pass1_match_ci_results(ws, xpu_xml_files, stock_xml_files):
     """
-    Process Test Cases sheet - fills all CI result and analysis columns.
-
-    This is the main entry point for processing Test_Cases sheet.
-
-    Steps:
-    1. PASS 1: Match CI results from XML files (XPU nightly + stock)
-    2. Torch-ops extraction: Uses torch-ops-extraction module (Pattern + LLM fallback)
-    3. PASS 2: LLM analysis for test existence (CUDA/XPU)
-    4. Dependency RAG: Match ops to deps from ops_dependency.csv
-    5. Duplicate detection
-
-    Torch-ops Extraction:
-    - Attempts to use test_result_analysis/torch-ops-extraction module
-    - Falls back to inline pattern matching if module unavailable
-    - LLM fallback for unmatched cases via Qwen3-32B
-
-    Columns added (10-23):
-    - Col 10: torch-ops (extracted from test name/error)
-    - Col 11: status in torch-xpu-ops nightly
-    - Col 12: comments in torch-xpu-ops nightly
-    - Col 13: Commit
-    - Col 14: Run_id
-    - Col 15: XML
-    - Col 16: status in stock CI
-    - Col 17: comments in stock CI
-    - Col 18: cuda_case_exist
-    - Col 19: xpu_case_exist
-    - Col 20: case_existence_comments
-    - Col 21: can_enable_on_xpu
-    - Col 22: duplicated_issue
-    - Col 23: dependency_lib
+    PASS 1: Match CI results from XML files (XPU nightly + stock).
+    
+    Matches test cases against:
+    - torch-xpu-ops nightly XML files (cols 11-15)
+    - stock PyTorch CI XML files (cols 16-17)
+    
+    Returns:
+        dict: issues_needing_llm - issues where both XPU and stock CI results were "not found"
     """
     import time as time_module
     from collections import defaultdict
     
-    ws = wb['Test Cases']
-    
-    ws.cell(1, 11, 'status in torch-xpu-ops nightly')
-    ws.cell(1, 12, 'comments in torch-xpu-ops nightly')
-    ws.cell(1, 13, 'Commit')
-    ws.cell(1, 14, 'Run_id')
-    ws.cell(1, 15, 'XML')
-    ws.cell(1, 16, 'status in stock CI')
-    ws.cell(1, 17, 'comments in stock CI')
-    ws.cell(1, 18, 'cuda_case_exist')
-    ws.cell(1, 19, 'xpu_case_exist')
-    ws.cell(1, 20, 'case_existence_comments')
-    ws.cell(1, 21, 'can_enable_on_xpu')
-    ws.cell(1, 22, 'duplicated_issue')
-    ws.cell(1, 23, 'dependency_lib')
-
-    ops_dep_list = load_ops_dependency()
-    log(f"  Loaded {len(ops_dep_list)} ops for RAG dependency lookup")
-
-    xpu_xml_files = get_torch_xpu_ops_xml_files()
-    log(f"  Found {len(xpu_xml_files)} torch-xpu-ops XML files")
-    
-    stock_xml_files = get_stock_xml_files()
-    log(f"  Found {len(stock_xml_files)} stock XML files")
-    
-    total = ws.max_row - 1
-    log(f"\n[STEP] Processing {total} test cases (two-pass approach)...")
-    log(f"  [START TIME] {time_module.strftime('%Y-%m-%d %H:%M:%S')}")
-    
-    pass1_start = time_module.time()
     issues_needing_llm = {}
+    total = ws.max_row - 1
     
-    log("  [PASS 1/2] Processing CI results and collecting unique issues...")
+    log("  [PASS 1/5] Matching CI results from XML files...")
+    start_time = time_module.time()
+    
     for i, row in enumerate(range(2, ws.max_row + 1), 1):
         test_file = ws.cell(row, 4).value
         test_class = ws.cell(row, 6).value
@@ -1387,17 +1337,31 @@ def process_test_cases_sheet(wb):
             }
         
         if i % 500 == 0:
-            log(f"    Progress: {i}/{total} cases, {len(issues_needing_llm)} unique issues needing LLM")
+            log(f"    Progress: {i}/{total}")
     
-    pass1_elapsed = time_module.time() - pass1_start
-    issue_count = len(issues_needing_llm)
-    log(f"  PASS 1 complete: {issue_count} unique issues ({pass1_elapsed:.1f}s)")
+    elapsed = time_module.time() - start_time
+    log(f"  PASS 1 complete: {len(issues_needing_llm)} unique issues need LLM ({elapsed:.1f}s)")
+    return issues_needing_llm
 
-    log("  [TORCH OPS] Extracting torch ops from test cases and error messages...")
+
+def pass2_extract_torch_ops(ws):
+    """
+    Step 2: Torch-ops extraction using torch-ops-extraction module.
+    
+    Uses pattern-based extraction first, with LLM fallback for unmatched cases.
+    
+    Updates:
+        Col 10: torch-ops (comma-separated list)
+    """
+    from collections import defaultdict
+    
+    log("  [PASS 2/5] Extracting torch ops from test cases and error messages...")
+    start_time = time.time()
+    
     ops_extracted_count = 0
     llm_fallback_count = 0
     llm_total_time = 0
-
+    
     for row in range(2, ws.max_row + 1):
         test_file = ws.cell(row, 4).value
         test_case = ws.cell(row, 7).value
@@ -1413,14 +1377,33 @@ def process_test_cases_sheet(wb):
             if llm_elapsed is not None:
                 llm_fallback_count += 1
                 llm_total_time += llm_elapsed
-
-    log(f"  Extracted torch-ops for {ops_extracted_count} test cases")
+    
+    elapsed = time.time() - start_time
+    log(f"  PASS 2 complete: Extracted ops for {ops_extracted_count} cases ({elapsed:.1f}s)")
     if llm_fallback_count > 0:
-        avg_time = llm_total_time / llm_fallback_count if llm_fallback_count > 0 else 0
-        log(f"  LLM fallback used: {llm_fallback_count} calls, total: {llm_total_time:.1f}s, avg: {avg_time:.2f}s")
+        avg = llm_total_time / llm_fallback_count
+        log(f"  LLM fallback used: {llm_fallback_count} calls, avg: {avg:.2f}s")
 
-    pass2_start = time_module.time()
-    log(f"  [PASS 2/2] Running LLM for {issue_count} unique issues...")
+
+def pass3_llm_analysis_for_test_existence(ws, issues_needing_llm):
+    """
+    PASS 3: LLM analysis for test existence (CUDA/XPU case existence).
+    
+    For issues where CI results were "not found", uses LLM to determine
+    if CUDA/XPU test cases exist and can be enabled.
+    
+    Updates:
+        Col 18: cuda_case_exist
+        Col 19: xpu_case_exist
+        Col 20: case_existence_comments
+        Col 21: can_enable_on_xpu
+    """
+    import time as time_module
+    
+    log("  [PASS 3/5] Running LLM analysis for test existence (CUDA/XPU)...")
+    start_time = time_module.time()
+    
+    issue_count = len(issues_needing_llm)
     llm_results = {}
     
     for idx, (issue_id, info) in enumerate(issues_needing_llm.items(), 1):
@@ -1438,12 +1421,13 @@ def process_test_cases_sheet(wb):
             log(f"    [LLM ERROR] Issue {issue_id}: {e}")
             llm_results[issue_id] = {'error': str(e)}
     
-    pass2_elapsed = time_module.time() - pass2_start
-    log(f"  PASS 2 complete: {len(llm_results)} LLM results ({pass2_elapsed:.1f}s)")
+    elapsed = time_module.time() - start_time
+    log(f"  PASS 3 complete: {len(llm_results)} LLM results ({elapsed:.1f}s)")
     
-    log("  [APPLY] Writing LLM results to all test cases...")
+    log("  [APPLY] Writing LLM results to test cases...")
     applied = 0
     skipped = 0
+    
     for row in range(2, ws.max_row + 1):
         issue_id = ws.cell(row, 1).value
         xpu_status = ws.cell(row, 11).value
@@ -1452,23 +1436,22 @@ def process_test_cases_sheet(wb):
         
         if ci_not_found and issue_id in llm_results:
             result = llm_results[issue_id]
-            cuda_exists = result.get('cuda_exists', 'Unknown')
-            xpu_exists = result.get('xpu_exists', 'Unknown')
-            
-            parts = []
-            explanation = result.get('explanation', '')
-            if explanation:
-                parts.append('explanation: ' + explanation + '\n')
-            
-            for key in ['base_test_name', 'cuda_test_file', 'xpu_test_file', 'cuda_test_name', 'xpu_test_name']:
-                val = result.get(key)
-                if val:
-                    parts.append(key + ':' + val)
-            comment = '\n'.join(parts) if parts else 'Double not found - LLM analysis'
             
             if result.get('cuda_exists') or result.get('xpu_exists'):
-                ws.cell(row, 18, cuda_exists)
-                ws.cell(row, 19, xpu_exists)
+                ws.cell(row, 18, result.get('cuda_exists', 'Unknown'))
+                ws.cell(row, 19, result.get('xpu_exists', 'Unknown'))
+                
+                parts = []
+                explanation = result.get('explanation', '')
+                if explanation:
+                    parts.append('explanation: ' + explanation)
+                
+                for key in ['base_test_name', 'cuda_test_file', 'xpu_test_file', 'cuda_test_name', 'xpu_test_name']:
+                    val = result.get(key)
+                    if val:
+                        parts.append(f'{key}:{val}')
+                
+                comment = '\n'.join(parts) if parts else 'Double not found - LLM analysis'
                 ws.cell(row, 20, comment)
                 ws.cell(row, 21, result.get('can_enable_on_xpu', 'Unknown'))
                 applied += 1
@@ -1477,14 +1460,24 @@ def process_test_cases_sheet(wb):
         else:
             skipped += 1
     
-    log(f"  Applied LLM results to {applied} test cases")
-    log(f"  Skipped (no LLM analysis): {skipped} test cases")
+    log(f"  Applied to {applied} cases, skipped {skipped}")
 
-    log("  [DEPENDENCY] Populating dependency_lib using RAG from ops_dependency.csv...")
+
+def pass4_dependency_rag(ws):
+    """
+    Step 4: Dependency RAG - match ops to deps from ops_dependency.csv.
+    
+    Uses RAG to find dependencies for extracted torch ops.
+    
+    Updates:
+        Col 23: dependency_lib
+    """
+    log("  [PASS 4/5] Populating dependency_lib using RAG...")
+    start_time = time.time()
+    
     ops_dep_list = load_ops_dependency()
-    log(f"  Loaded {len(ops_dep_list)} ops for RAG dependency lookup")
-
     dep_count = 0
+    
     for row in range(2, ws.max_row + 1):
         torch_ops_raw = ws.cell(row, 10).value
         if not torch_ops_raw:
@@ -1494,9 +1487,25 @@ def process_test_cases_sheet(wb):
         if dependencies:
             ws.cell(row, 23, ';'.join(dependencies))
             dep_count += 1
-    log(f"  Set dependency_lib for {dep_count} test cases")
     
-    log("  [DUPLICATE CHECK] Finding cross-issue duplicated test cases...")
+    elapsed = time.time() - start_time
+    log(f"  PASS 4 complete: Set dependency_lib for {dep_count} cases ({elapsed:.1f}s)")
+
+
+def pass5_duplicate_detection(ws):
+    """
+    Step 5: Duplicate detection across issues.
+    
+    Finds test cases (Test Class + Test Case) that appear in multiple issues.
+    
+    Updates:
+        Col 22: duplicated_issue (comma-separated list of other issue IDs)
+    """
+    from collections import defaultdict
+    
+    log("  [PASS 5/5] Detecting cross-issue duplicates...")
+    start_time = time.time()
+    
     test_case_to_issues = defaultdict(list)
     
     for row in range(2, ws.max_row + 1):
@@ -1517,7 +1526,7 @@ def process_test_cases_sheet(wb):
                     issue_duplicated_map[issue_id] = set()
                 issue_duplicated_map[issue_id].update(other_issues)
     
-    dup_count_in_test_cases = 0
+    dup_count = 0
     for row in range(2, ws.max_row + 1):
         issue_id = ws.cell(row, 1).value
         test_class = ws.cell(row, 6).value
@@ -1528,12 +1537,12 @@ def process_test_cases_sheet(wb):
             if other_issues:
                 other_unique = sorted(list(set(other_issues)))
                 ws.cell(row, 22, ','.join(other_unique))
-                dup_count_in_test_cases += 1
+                dup_count += 1
     
-    log(f"  Marked {dup_count_in_test_cases} test cases with cross-issue duplicates")
-    log(f"  Found {len(issue_duplicated_map)} issues with duplicates")
+    elapsed = time.time() - start_time
+    log(f"  PASS 5 complete: Marked {dup_count} duplicates ({elapsed:.1f}s)")
     
-    log("  [CLEANUP] Cleaning up old values in duplicated_issue...")
+    log("  [CLEANUP] Fixing old boolean values...")
     old_values_fixed = 0
     for row in range(2, ws.max_row + 1):
         dup_issue = ws.cell(row, 22).value
@@ -1541,7 +1550,77 @@ def process_test_cases_sheet(wb):
             ws.cell(row, 22, '')
             old_values_fixed += 1
     if old_values_fixed > 0:
-        log(f"  Cleared {old_values_fixed} old boolean values in Test Cases sheet")
+        log(f"  Cleared {old_values_fixed} old boolean values")
+    
+    return issue_duplicated_map
+
+
+def process_test_cases_sheet(wb):
+    """
+    Process Test Cases sheet - fills all CI result and analysis columns.
+
+    This is the main entry point for processing Test_Cases sheet.
+
+    Steps:
+    1. PASS 1: Match CI results from XML files (XPU nightly + stock)
+    2. Torch-ops extraction: Uses torch-ops-extraction module (Pattern + LLM fallback)
+    3. PASS 2: LLM analysis for test existence (CUDA/XPU) [renumbered to PASS 3]
+    4. Dependency RAG: Match ops to deps from ops_dependency.csv [PASS 4]
+    5. Duplicate detection [PASS 5]
+
+    Columns added (10-23):
+    - Col 10: torch-ops (extracted from test name/error)
+    - Col 11: status in torch-xpu-ops nightly
+    - Col 12: comments in torch-xpu-ops nightly
+    - Col 13: Commit
+    - Col 14: Run_id
+    - Col 15: XML
+    - Col 16: status in stock CI
+    - Col 17: comments in stock CI
+    - Col 18: cuda_case_exist
+    - Col 19: xpu_case_exist
+    - Col 20: case_existence_comments
+    - Col 21: can_enable_on_xpu
+    - Col 22: duplicated_issue
+    - Col 23: dependency_lib
+    """
+    import time as time_module
+    
+    ws = wb['Test Cases']
+    
+    ws.cell(1, 11, 'status in torch-xpu-ops nightly')
+    ws.cell(1, 12, 'comments in torch-xpu-ops nightly')
+    ws.cell(1, 13, 'Commit')
+    ws.cell(1, 14, 'Run_id')
+    ws.cell(1, 15, 'XML')
+    ws.cell(1, 16, 'status in stock CI')
+    ws.cell(1, 17, 'comments in stock CI')
+    ws.cell(1, 18, 'cuda_case_exist')
+    ws.cell(1, 19, 'xpu_case_exist')
+    ws.cell(1, 20, 'case_existence_comments')
+    ws.cell(1, 21, 'can_enable_on_xpu')
+    ws.cell(1, 22, 'duplicated_issue')
+    ws.cell(1, 23, 'dependency_lib')
+
+    xpu_xml_files = get_torch_xpu_ops_xml_files()
+    log(f"  Found {len(xpu_xml_files)} torch-xpu-ops XML files")
+    
+    stock_xml_files = get_stock_xml_files()
+    log(f"  Found {len(stock_xml_files)} stock XML files")
+    
+    total = ws.max_row - 1
+    log(f"\n[STEP] Processing {total} test cases (5-pass approach)...")
+    log(f"  [START TIME] {time_module.strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    issues_needing_llm = pass1_match_ci_results(ws, xpu_xml_files, stock_xml_files)
+    
+    pass2_extract_torch_ops(ws)
+    
+    pass3_llm_analysis_for_test_existence(ws, issues_needing_llm)
+    
+    pass4_dependency_rag(ws)
+    
+    issue_duplicated_map = pass5_duplicate_detection(ws)
     
     log("Test Cases sheet processed successfully!")
     return ws, issue_duplicated_map
