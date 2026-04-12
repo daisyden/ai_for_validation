@@ -25,6 +25,7 @@ import re
 import glob
 import time
 import csv
+import zipfile
 from difflib import SequenceMatcher
 
 try:
@@ -75,7 +76,7 @@ def get_torch_xpu_ops_xml_files():
         if not os.path.exists(folder_path):
             continue
         for f in os.listdir(folder_path):
-            if f.endswith('.xml') and (f.startswith('op_ut_with_all') or f.startswith('op_ut_with_skip')):
+            if f.endswith('.xml') and (f.startswith('op_ut_with_all') or f.startswith('op_ut_with_skip') or f == 'op_extended.xml'):
                 xml_path = os.path.join(folder_path, f)
                 try:
                     tree = ET.parse(xml_path)
@@ -91,109 +92,262 @@ def get_torch_xpu_ops_xml_files():
 
 
 def get_stock_xml_files():
-    """Get all XML files from stock PyTorch XPU CI"""
+    """Get all XML files from stock PyTorch XPU CI.
+
+    Handles two cases:
+    1. Real ZIP files - use zipfile module
+    2. S3-mounted paths (extension .zip but actually directory) - iterate directly
+    """
     stock_base = '/home/daisydeng/issue_traige/ci_results/stock'
     stock_xml_files = {}
-    
-    for zip_file in glob.glob(f'{stock_base}/test-reports-*.zip'):
-        pytest_dir = os.path.join(zip_file, 'test-reports', 'python-pytest')
-        if not os.path.exists(pytest_dir):
+
+    for mount_point in glob.glob(f'{stock_base}/test-reports-runattempt1*.zip'):
+        try:
+            pytest_dir = os.path.join(mount_point, 'test-reports', 'python-pytest')
+            if os.path.isdir(pytest_dir):
+                # S3-mounted directory structure
+                for root, dirs, files in os.walk(pytest_dir):
+                    for f in files:
+                        if f.endswith('.xml'):
+                            xml_path = os.path.join(root, f)
+                            test_module = os.path.basename(root)
+                            stock_xml_files[test_module] = xml_path
+            else:
+                # Real ZIP file fallback
+                with zipfile.ZipFile(mount_point, 'r') as zf:
+                    for name in zf.namelist():
+                        if name.endswith('.xml') and '/python-pytest/' in name:
+                            parts = name.split('/')
+                            if len(parts) >= 2:
+                                test_module = parts[-2]
+                                stock_xml_files[test_module] = (mount_point, name)
+        except Exception as e:
             continue
-        for root, dirs, files in os.walk(pytest_dir):
-            for f in files:
-                if f.endswith('.xml'):
-                    xml_path = os.path.join(root, f)
-                    test_module = os.path.basename(root)
-                    stock_xml_files[test_module] = xml_path
-    
+
     return stock_xml_files
 
 
 def convert_test_file_to_xml_prefix(test_file):
-    """Convert test file to XML prefix for torch-xpu-ops"""
+    """Convert test file to XML prefix for torch-xpu-ops.
+
+    Handles multiple formats of test_file values:
+    1. torch-xpu-ops/test/xpu/xxx/YYY_xpu.py -> op_ut_with_all.xxx.YYY_xpu
+    2. test/xxx.py -> op_ut_with_all.test_xxx
+    3. test/xxx/yyy.py -> op_ut_with_all.xxx.yyy
+    4. module_only (no path) -> op_ut_with_all.module_only
+    5. Extended tests (extended/test_ops_xpu.py) -> op_extended
+    """
     if not test_file:
         return None, 'No test file'
-    
+
     test_file = str(test_file)
-    
-    if '/' in test_file:
+
+    # Strip .py extension early
+    if test_file.endswith('.py'):
+        test_file = test_file[:-3]
+
+    # Format 5: Extended tests - map to op_extended
+    if 'extended/test_ops_xpu' in test_file or test_file.endswith('extended/test_ops_xpu'):
+        return 'op_extended', None
+
+    # Format 1: torch-xpu-ops/test/xpu/xxx/YYY_xpu.py
+    if test_file.startswith('torch-xpu-ops/test/xpu/'):
         test_file = test_file.replace('torch-xpu-ops/test/xpu/', '')
-        test_file = test_file.replace('.py', '')
-        return 'op_ut_with_all.' + test_file.replace('/', '.'), None
-    
+        parts = test_file.split('/')
+        if len(parts) >= 2:
+            # e.g., "nn/test_convolution_xpu" -> "op_ut_with_all.nn.test_convolution_xpu"
+            return 'op_ut_with_all.' + test_file.replace('/', '.'), None
+        else:
+            # Single file like "test_optim_xpu" -> "op_ut_with_all.test_optim_xpu"
+            return 'op_ut_with_all.' + parts[0], None
+
+    # Format 2 & 3: Paths with "/"
+    if '/' in test_file:
+        parts = test_file.split('/')
+        parts = [p for p in parts if p]  # Remove empty strings
+
+        # e.g., ["test", "autograd", "test_autograd"] -> "test_autograd"
+        # e.g., ["test", "distributed", "test_c10d_xccl"] -> "distributed.test_c10d_xccl"
+        if len(parts) >= 2:
+            if parts[0] == 'test':
+                # Remove leading "test"
+                base_parts = parts[1:]
+            else:
+                base_parts = parts
+
+            # Check if this is a functorch test
+            if base_parts[0] == 'functorch' or (len(base_parts) >= 2 and base_parts[1] == 'functorch'):
+                if len(base_parts) >= 3:
+                    module_name = '_'.join(base_parts[2:]) if len(base_parts) > 2 else base_parts[-1]
+                    return f'op_ut_with_all.functorch.{module_name}_xpu', None
+                return None, 'Invalid functorch path format'
+
+            # Check if this is a distributed test (contains 'distributed' in path)
+            # For distributed tests like "test/distributed/test_c10d_xccl.py", keep the full subpath
+            # XML files encode "test/" as 12 dots (.............), so we need to prefix with that
+            # BUT: tests from test/xpu/distributed/ should NOT have the dots encoding
+            if 'distributed' in base_parts:
+                distributed_idx = 0
+                for i, part in enumerate(base_parts):
+                    if part == 'distributed':
+                        distributed_idx = i
+                        break
+                distributed_parts = base_parts[distributed_idx:]
+                module_name = '.'.join(distributed_parts)
+
+                # Check if this is from test/xpu/distributed/ (xpu tests) - no dots
+                if 'test/xpu/distributed' in test_file or 'torch-xpu-ops/test/xpu/distributed' in test_file:
+                    return f'op_ut_with_all.{module_name}', None
+                # Otherwise from test/distributed/ (stock PyTorch tests) - add dots for "test/" prefix
+                return f'op_ut_with_all.............test.{module_name}', None
+
+            # Regular test module (non-distributed)
+            module_name = '_'.join(base_parts[1:]) if len(base_parts) > 1 else base_parts[-1]
+            # Convert to our naming convention (test_xxx)
+            if not module_name.startswith('test_'):
+                module_name = 'test_' + module_name
+
+            return f'op_ut_with_all.{module_name}', None
+
+    # Format 4: module_only format (e.g., "test_torch_xpu", "inductor.test_xxx")
     parts = test_file.split('.')
-    parts_len = len(parts)
-    
-    if parts_len == 2:
+    parts = [p for p in parts if p]
+
+    if len(parts) == 1:
+        # Just module name like "test_torch_xpu" or "test_optim"
         module = parts[0]
+        # Order matters: check _xpu modules first as op_ut_with_all
         if '_xpu' in module:
-            return 'op_ut_with_skip.' + module, None
-        return 'op_ut_with_all.' + module, None
-    
-    if parts_len == 3:
+            # Try op_ut_with_all first, then op_ut_with_skip
+            all_prefix = f'op_ut_with_all.{module}'
+            skip_prefix = f'op_ut_with_skip.{module}'
+            # Don't return here - the caller will check
+            return all_prefix, None
+        return f'op_ut_with_all.{module}', None
+
+    if len(parts) == 2:
+        # e.g., "dynamo.test_compile" or "test.test_optim"
         module = parts[0]
         test_module = parts[1]
+
         if module == 'test':
-            return 'op_ut_with_all.test_' + test_module + '_xpu', None
+            # "test.test_optim" -> "test_optim"
+            if not test_module.startswith('test_'):
+                test_module = 'test_' + test_module
+            return f'op_ut_with_all.{test_module}', None
+
         if module == 'inductor':
-            return None, 'inductor not in torch-xpu-ops'
-        return 'op_ut_with_all.' + module + '.' + test_module, None
-    
-    if parts_len == 4:
+            return None, 'inductor tests not in XPU CI'
+
+        # Other modules like "dynamo.test_compile"
+        if not test_module.startswith('test_'):
+            test_module = 'test_' + test_module
+        return f'op_ut_with_all.{module}.{test_module}', None
+
+    if len(parts) == 3:
+        # e.g., "test.nn.test_convolution"
         module = parts[0]
         subdir = parts[1]
         test_module = parts[2]
+
         if module == 'test':
+            if not test_module.startswith('test_'):
+                test_module = 'test_' + test_module
             if subdir == 'functorch':
                 return f'op_ut_with_all.{subdir}.{test_module}_xpu', None
-            return None, f'{subdir} not in torch-xpu-ops'
-        if module == 'inductor':
-            return None, 'inductor not in torch-xpu-ops'
-    
-    return None, 'unknown pattern'
+            # Skip distributed tests (not in XPU CI)
+            if subdir == 'distributed':
+                return None, 'distributed tests not in XPU CI'
+            return f'op_ut_with_all.{subdir}.{test_module}', None
+
+    return None, 'Unknown test_file format'
 
 
 def convert_to_stock_prefix(test_file):
-    """Convert test file to stock test module name"""
+    """Convert test file to stock test module name.
+
+    Stock CI XML files are organized under python-pytest/ as module directories
+    like 'test_autograd', 'dynamo.test_compile', 'inductor.test_torchinductor', etc.
+    """
     if not test_file:
         return None
-    
+
     test_file = str(test_file)
-    
+
     if '/' in test_file:
+        # Handle paths like "test/test_autograd.py" or "torch-xpu-ops/test/xpu/test_optim_xpu.py"
         test_file = test_file.replace('torch-xpu-ops/test/xpu/', '')
+        test_file = test_file.replace('test/xpu/', '')
         test_file = test_file.replace('.py', '')
-        return test_file.replace('/', '.')
-    
+
+        parts = test_file.split('/')
+        # Strip _xpu suffix from module name for all parts
+        parts = [p.replace('_xpu', '') for p in parts]
+
+        # Check for distributed tests - keep full path after distributed
+        if 'distributed' in parts:
+            distributed_idx = parts.index('distributed')
+            distributed_parts = parts[distributed_idx:]
+            return '.'.join(distributed_parts)
+
+        if len(parts) >= 2:
+            # e.g., "extended/test_ops" -> "extended.test_ops"
+            subdir = parts[-2] if not parts[-1].startswith('test_') else None
+            module = parts[-1]
+            if subdir and not module.startswith(subdir):
+                return f'{subdir}.{module}'
+            return module
+        module = parts[-1] if parts else None
+        return module
+
+    # Handle _xpu suffix in non-path formats
+    test_file = test_file.replace('_xpu', '')
+
+    # Handle dot notation like "test.test_optim" -> "test_optim" (remove test. prefix)
     parts = test_file.split('.')
-    parts_len = len(parts)
-    
-    if parts_len == 2:
-        return parts[0]
-    if parts_len == 3:
-        module = parts[0]
-        test_module = parts[1]
-        if module == 'test':
-            return test_module
-        return f'{module}.{test_module}'
-    if parts_len == 4:
-        module = parts[0]
-        subdir = parts[1]
-        test_module = parts[2]
-        if module == 'test':
-            return f'{subdir}.{test_module}'
-        if module == 'inductor':
-            return f'{module}.{test_module}'
-    
-    return None
+    if len(parts) >= 2 and parts[0] == 'test':
+        return '.'.join(parts[1:])
+    return test_file
 
 
 def find_best_xml_match(xml_prefix, xml_files):
-    """Find XML file matching prefix"""
+    """Find XML file matching prefix. Also handles dot-encoded test paths and checks op_ut_with_skip if op_ut_with_all not found."""
     if not xml_prefix:
         return None
+    
+    # Direct match
     if xml_prefix in xml_files:
         return xml_files[xml_prefix]
+    
+    # Try op_ut_with_skip if op_ut_with_all not found
+    if xml_prefix.startswith('op_ut_with_all.'):
+        skip_prefix = 'op_ut_with_skip.' + xml_prefix[len('op_ut_with_all.'):]
+        if skip_prefix in xml_files:
+            return xml_files[skip_prefix]
+        
+        # Handle dot-encoded paths: e.g., "op_ut_with_all.............test.distributed.fsdp.test_fsdp_apply"
+        # The dots encode "test/" prefix - convert back and try matching
+        base_path = xml_prefix[len('op_ut_with_all.'):]
+        
+        # Check if prefix has 12+ consecutive dots (encoding test/)
+        # Pattern: op_ut_with_all.+++++++++++.rest -> op_ut_with_all.test.rest
+        import re
+        dot_match = re.match(r'^(.{12,})(.+)$', base_path)
+        if dot_match:
+            # Replace dots with "test/" and try again
+            encoded_prefix = dot_match.group(1)
+            rest = dot_match.group(2)
+            if all(c == '.' for c in encoded_prefix) and len(encoded_prefix) >= 12:
+                # Dots encode "test/" prefix
+                test_path = 'test/' + rest
+                test_prefix = 'op_ut_with_all.' + test_path
+                if test_prefix in xml_files:
+                    return xml_files[test_prefix]
+                # Also try skip variant
+                test_skip_prefix = 'op_ut_with_skip.' + test_path
+                if test_skip_prefix in xml_files:
+                    return xml_files[test_skip_prefix]
+    
     return None
 
 
@@ -281,13 +435,27 @@ def parse_failure_content(content):
 
 
 def get_test_result(xml_path, test_case):
-    """Get test case result from XML file. Returns status, error_msg, and traceback."""
+    """Get test case result from XML file. Returns status, error_msg, and traceback.
+
+    xml_path can be:
+    - A regular file path (string)
+    - A tuple (zip_file, internal_path) for files inside ZIP archives
+    """
     if not xml_path:
         return None, None, None
 
     try:
-        tree = ET.parse(xml_path)
-        root = tree.getroot()
+        # Handle ZIP file entries
+        if isinstance(xml_path, tuple):
+            zip_file, internal_path = xml_path
+            with zipfile.ZipFile(zip_file, 'r') as zf:
+                with zf.open(internal_path) as f:
+                    content = f.read().decode('utf-8', errors='ignore')
+                    root = ET.fromstring(content)
+        else:
+            # Regular file
+            tree = ET.parse(xml_path)
+            root = tree.getroot()
 
         for testcase in root.findall('.//testcase'):
             if testcase.get('name') == test_case:
@@ -1194,7 +1362,7 @@ def process_test_cases_sheet(wb):
             ws.cell(row, 11, 'not found')
             ws.cell(row, 12, reason)
         
-        stock_prefix = convert_to_stock_prefix(test_file)
+        stock_prefix = convert_to_stock_prefix(origin_test_file)
         if stock_prefix and stock_prefix in stock_xml_files:
             stock_xml = stock_xml_files[stock_prefix]
             stock_status, stock_error_msg, stock_traceback = get_test_result(stock_xml, test_case)
