@@ -51,11 +51,12 @@ from pass1_ci_matcher import (
 
 from test_cases_processor import (
     pass2_extract_torch_ops,
-    pass3_llm_analysis_for_test_existence,
     pass4_dependency_rag,
-    pass5_duplicate_detection,
     log as base_log
 )
+
+from pass3_llm_verification import pass3_llm_verification
+from pass5_duplicate_detection import pass5_duplicate_detection
 
 STEPS_DESC = {
     1: "PASS 1: Create test_cases_all.xlsx, collect stock & xpu CI results, match CI",
@@ -67,7 +68,7 @@ STEPS_DESC = {
 
 STEP_FUNCS = {
     2: pass2_extract_torch_ops,
-    3: pass3_llm_analysis_for_test_existence,
+    3: pass3_llm_verification,
     4: pass4_dependency_rag,
     5: pass5_duplicate_detection
 }
@@ -185,10 +186,8 @@ def run_steps(steps_to_run, input_file=None, save=True):
 
     if 3 in steps_to_run:
         print_step_info([3])
-        if issues_needing_llm is None:
-            print("Note: Running PASS 1 first to get issues needing LLM...")
-            issues_needing_llm = pass1_match_ci_results(ws, os.path.join(RESULT_DIR, 'test_cases_all.xlsx'))
-        pass3_llm_analysis_for_test_existence(ws, issues_needing_llm)
+        ci_data_file = os.path.join(RESULT_DIR, 'test_cases_all.xlsx')
+        pass3_llm_verification(ws, ci_data_file)
         if save:
             wb.save(excel_file)
             print(f"Saved to: {excel_file}")

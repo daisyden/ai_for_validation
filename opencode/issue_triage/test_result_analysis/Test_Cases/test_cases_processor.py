@@ -967,37 +967,63 @@ def pass2_extract_torch_ops(ws):
         Col 10: torch-ops (comma-separated list)
     """
     from collections import defaultdict
+    import time as time_module
 
     ensure_headers(ws, [10], ["torch-ops"])
 
     log("  [PASS 2/5] Extracting torch ops from test cases and error messages...")
+    log("-" * 80)
     start_time = time.time()
-    
+
     ops_extracted_count = 0
     llm_fallback_count = 0
     llm_total_time = 0
-    
+    pattern_matched_count = 0
+
+    total_rows = ws.max_row - 1
+    processed = 0
+
     for row in range(2, ws.max_row + 1):
         test_file = ws.cell(row, 4).value
+        test_class = ws.cell(row, 6).value
         test_case = ws.cell(row, 7).value
         error_msg = ws.cell(row, 12).value
         traceback = ws.cell(row, 9).value
         existing_ops = ws.cell(row, 10).value
+        issue_id = ws.cell(row, 1).value
+
+        processed += 1
+
         if existing_ops:
             continue
+
+        extract_start = time_module.time()
         ops, llm_elapsed = extract_torch_ops(test_file, test_case, error_msg, traceback)
+        extract_time = time_module.time() - extract_start
+
         if ops:
+            is_llm = llm_elapsed is not None
+            method = "LLM" if is_llm else "PATTERN"
             ws.cell(row, 10, ','.join(ops))
             ops_extracted_count += 1
-            if llm_elapsed is not None:
+
+            if is_llm:
                 llm_fallback_count += 1
                 llm_total_time += llm_elapsed
-    
+            else:
+                pattern_matched_count += 1
+
+            log(f"  [PASS2] Issue:{issue_id} | Class:{test_class} | Case:{test_case}")
+            log(f"           Ops:{','.join(ops)} | Time:{extract_time:.3f}s | Method:{method}")
+
+        if processed % 100 == 0:
+            log(f"    Progress: {processed}/{total_rows}")
+
     elapsed = time.time() - start_time
+    log("-" * 80)
     log(f"  PASS 2 complete: Extracted ops for {ops_extracted_count} cases ({elapsed:.1f}s)")
-    if llm_fallback_count > 0:
-        avg = llm_total_time / llm_fallback_count
-        log(f"  LLM fallback used: {llm_fallback_count} calls, avg: {avg:.2f}s")
+    log(f"    Pattern matched: {pattern_matched_count}")
+    log(f"    LLM fallback: {llm_fallback_count}, avg time: {llm_total_time/llm_fallback_count:.2f}s" if llm_fallback_count > 0 else "    LLM fallback: 0")
 
 
 def pass3_llm_analysis_for_test_existence(ws, issues_needing_llm):
@@ -1109,71 +1135,6 @@ def pass4_dependency_rag(ws):
     
     elapsed = time.time() - start_time
     log(f"  PASS 4 complete: Set dependency_lib for {dep_count} cases ({elapsed:.1f}s)")
-
-
-def pass5_duplicate_detection(ws):
-    """
-    Step 5: Duplicate detection across issues.
-
-    Finds test cases (Test Class + Test Case) that appear in multiple issues.
-
-    Updates:
-        Col 20: duplicated_issue (comma-separated list of other issue IDs)
-    """
-    from collections import defaultdict
-
-    ensure_headers(ws, [20], ["duplicated_issue"])
-
-    log("  [PASS 5/5] Detecting cross-issue duplicates...")
-    start_time = time.time()
-    
-    test_case_to_issues = defaultdict(list)
-    
-    for row in range(2, ws.max_row + 1):
-        issue_id = ws.cell(row, 1).value
-        test_class = ws.cell(row, 6).value
-        test_case = ws.cell(row, 7).value
-        if test_class and test_case:
-            key = (test_class, test_case)
-            test_case_to_issues[key].append(str(issue_id).strip())
-    
-    issue_duplicated_map = {}
-    for key, issue_ids in test_case_to_issues.items():
-        unique_issues = list(set(issue_ids))
-        if len(unique_issues) > 1:
-            for issue_id in unique_issues:
-                other_issues = [i for i in unique_issues if i != issue_id]
-                if issue_id not in issue_duplicated_map:
-                    issue_duplicated_map[issue_id] = set()
-                issue_duplicated_map[issue_id].update(other_issues)
-    
-    dup_count = 0
-    for row in range(2, ws.max_row + 1):
-        issue_id = ws.cell(row, 1).value
-        test_class = ws.cell(row, 6).value
-        test_case = ws.cell(row, 7).value
-        if test_class and test_case:
-            key = (test_class, test_case)
-            other_issues = [i for i in test_case_to_issues[key] if i != str(issue_id).strip()]
-            if other_issues:
-                other_unique = sorted(list(set(other_issues)))
-                ws.cell(row, 20, ','.join(other_unique))  # Col 20: duplicated_issue
-                dup_count += 1
-    
-    elapsed = time.time() - start_time
-    log(f"  PASS 5 complete: Marked {dup_count} duplicates ({elapsed:.1f}s)")
-    
-    log("  [CLEANUP] Fixing old boolean values...")
-    old_values_fixed = 0
-    for row in range(2, ws.max_row + 1):
-        dup_issue = ws.cell(row, 22).value
-        if dup_issue in ['True', 'False']:
-            ws.cell(row, 22, '')
-            old_values_fixed += 1
-    if old_values_fixed > 0:
-        log(f"  Cleared {old_values_fixed} old boolean values")
-    
-    return issue_duplicated_map
 
 
 def process_test_cases_sheet(wb):

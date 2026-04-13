@@ -901,6 +901,11 @@ issue_row = 2
 case_row = 2
 e2e_row = 2
 
+# Track test case duplicates: (test_file, test_class, test_case) per issue
+# Also skip cases where test_case or test_class cannot be extracted
+seen_test_cases = set()
+valid_test_types = set(KNOWN_TEST_TYPES + ['e2e'])
+
 for issue in issues:
     num = issue['number']
     title = issue['title']
@@ -950,18 +955,40 @@ for issue in issues:
     
     # Add to test cases sheet (non-e2e)
     if test_cases:
+        # Deduplicate within this issue, filter invalid cases
         for tc in test_cases:
             # Skip e2e cases - they go to e2e sheet
             if tc.get('test_type') == 'e2e':
                 continue
 
+            test_class = tc.get('test_class', '')
+            test_case = tc.get('test_case', '')
+            test_file = tc.get('test_file', '')
+
+            # Filter: skip if test_class or test_case is empty/invalid
+            if not test_class or not test_case:
+                continue
+            if len(test_class) < 3 or len(test_case) < 3:
+                continue
+            # Skip if too short or looks like garbage text
+            if any(c in test_class for c in ['~', '`', '@', '#', '$', '%', '^', '&', '*', '(', ')']):
+                continue
+            if any(c in test_case for c in ['~', '`', '@', '#', '$', '%', '^', '&', '*', '(', ')']):
+                continue
+
+            # Deduplication key: (test_file, test_class, test_case)
+            dup_key = (test_file, test_class, test_case)
+            if dup_key in seen_test_cases:
+                continue
+            seen_test_cases.add(dup_key)
+
             ws_cases.cell(row=case_row, column=1, value=num)
             ws_cases.cell(row=case_row, column=2, value=title[:150])
             ws_cases.cell(row=case_row, column=3, value=tc.get('test_type', ''))
-            ws_cases.cell(row=case_row, column=4, value=tc.get('test_file', ''))
+            ws_cases.cell(row=case_row, column=4, value=test_file)
             ws_cases.cell(row=case_row, column=5, value=tc.get('origin_test_file', ''))
-            ws_cases.cell(row=case_row, column=6, value=tc.get('test_class', ''))
-            ws_cases.cell(row=case_row, column=7, value=tc.get('test_case', ''))
+            ws_cases.cell(row=case_row, column=6, value=test_class)
+            ws_cases.cell(row=case_row, column=7, value=test_case)
             # Columns 8-11: Error Message, Traceback, torch-ops, dependency - left blank for test_result_analysis/
             case_row += 1
 
