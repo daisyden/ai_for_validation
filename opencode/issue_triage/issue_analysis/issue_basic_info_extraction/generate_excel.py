@@ -876,16 +876,8 @@ for col, header in enumerate(headers, 1):
 
 # Sheet 2: Test Cases (ut)
 ws_cases = wb.create_sheet("Test Cases")
-
-# Core columns for test case basic info
-# Note: Error Message, Traceback, torch-ops, dependency filled by test_result_analysis/Test_Cases
-# Note: XPU Status, Stock Status, CUDA/XPU case exist filled by update_test_results/
 case_headers = ["Issue ID", "Test Reproducer", "Test Type", "Test File",
-                "Origin Test File", "Test Class", "Test Case",
-                "Error Message", "Traceback", "torch-ops", "dependency",
-                "XPU Status", "Stock Status", "Is SKIP", "Is CUDA Skip",
-                "CUDA Case Exist", "XPU Case Exist", "case_existence_comments",
-                "can_enable_on_xpu", "duplicated_issue"]
+                "Origin Test File", "Test Class", "Test Case"]
 
 for col, header in enumerate(case_headers, 1):
     cell = ws_cases.cell(row=1, column=col, value=header)
