@@ -3,7 +3,7 @@
 Test Cases processor module.
 
 Contains all logic for filling in fields of 'Test_Cases' sheet in torch_xpu_ops_issues.xlsx:
-- CI results from torch-xpu-ops nightly and stock PyTorch XPU CI
+- CI results from torch-xpu-ops nightly and stock PyTorch XPU CI (PASS 1 moved to pass1_ci_matcher.py)
 - Torch ops extraction from error messages and test names (uses torch-ops-extraction module)
 - Test case existence analysis (CUDA/XPU)
 - Duplicated issue detection
@@ -39,13 +39,10 @@ Column mapping for Test Cases sheet:
 
 import openpyxl
 from openpyxl.styles import PatternFill, Font
-import xml.etree.ElementTree as ET
 import os
 import re
-import glob
 import time
 import csv
-import zipfile
 from difflib import SequenceMatcher
 
 try:
@@ -77,327 +74,6 @@ def log(msg, print_also=True):
         pass
     if print_also:
         print(log_msg)
-
-
-def get_torch_xpu_ops_xml_files():
-    """Get all XML files from torch-xpu-ops nightly artifacts"""
-    base_dir = '/home/daisydeng/issue_traige/ci_results/torch-xpu-ops'
-    
-    ut_folders = []
-    for d in os.listdir(base_dir):
-        if d.startswith('Inductor-XPU-UT-Data-'):
-            match = re.match(r'Inductor-XPU-UT-Data-([a-f0-9]+)-.*-(\d+)-1$', d)
-            if match:
-                ut_folders.append((d, match.group(1), match.group(2)))
-    
-    xml_files = {}
-    for folder_name, commit, run_id in ut_folders:
-        folder_path = os.path.join(base_dir, folder_name, folder_name)
-        if not os.path.exists(folder_path):
-            continue
-        for f in os.listdir(folder_path):
-            if f.endswith('.xml') and (f.startswith('op_ut_with_all') or f.startswith('op_ut_with_skip') or f == 'op_extended.xml'):
-                xml_path = os.path.join(folder_path, f)
-                try:
-                    tree = ET.parse(xml_path)
-                    root = tree.getroot()
-                    count = len(root.findall('.//testcase'))
-                    if count > 0:
-                        prefix = f.replace('.xml', '')
-                        xml_files[prefix] = (xml_path, commit, run_id, count)
-                except:
-                    pass
-    
-    return xml_files
-
-
-def get_stock_xml_files():
-    """Get all XML files from stock PyTorch XPU CI.
-
-    Handles two cases:
-    1. Real ZIP files - use zipfile module
-    2. S3-mounted paths (extension .zip but actually directory) - iterate directly
-    """
-    stock_base = '/home/daisydeng/issue_traige/ci_results/stock'
-    stock_xml_files = {}
-
-    for mount_point in glob.glob(f'{stock_base}/test-reports-runattempt1*.zip'):
-        try:
-            pytest_dir = os.path.join(mount_point, 'test-reports', 'python-pytest')
-            if os.path.isdir(pytest_dir):
-                # S3-mounted directory structure
-                for root, dirs, files in os.walk(pytest_dir):
-                    for f in files:
-                        if f.endswith('.xml'):
-                            xml_path = os.path.join(root, f)
-                            test_module = os.path.basename(root)
-                            stock_xml_files[test_module] = xml_path
-            else:
-                # Real ZIP file fallback
-                with zipfile.ZipFile(mount_point, 'r') as zf:
-                    for name in zf.namelist():
-                        if name.endswith('.xml') and '/python-pytest/' in name:
-                            parts = name.split('/')
-                            if len(parts) >= 2:
-                                test_module = parts[-2]
-                                stock_xml_files[test_module] = (mount_point, name)
-        except Exception as e:
-            continue
-
-    return stock_xml_files
-
-
-def convert_test_file_to_xml_prefix(test_file):
-    """Convert test file to XML prefix for torch-xpu-ops.
-
-    Handles multiple formats of test_file values:
-    1. torch-xpu-ops/test/xpu/xxx/YYY_xpu.py -> op_ut_with_all.xxx.YYY_xpu (then find_best_xml_match falls back to skip)
-    2. torch-xpu-ops/test/xpu/dynamo/test_ctx_manager_xpu.py -> op_ut_with_all.test.xpu.dynamo.test_ctx_manager_xpu
-    3. test/xxx.py -> op_ut_with_all.test_xxx
-    4. test/xxx/yyy.py -> op_ut_with_all.xxx.yyy
-    5. module_only (no path) -> op_ut_with_all.module_only
-    6. Extended tests (extended/test_ops_xpu.py) -> op_extended
-    7. Creates prefix that find_best_xml_match can resolve to _with_skip if _with_all not exists
-    """
-    if not test_file:
-        return None, 'No test file'
-
-    test_file = str(test_file)
-
-    # Strip .py extension early
-    if test_file.endswith('.py'):
-        test_file = test_file[:-3]
-
-    # Format 6: Extended tests - map to op_extended
-    if 'extended/test_ops_xpu' in test_file or test_file.endswith('extended/test_ops_xpu'):
-        return 'op_extended', None
-
-    # Format 2: torch-xpu-ops/test/xpu/subdir/file_xpu.py -> op_ut_with_all.subdir.file_xpu
-    if test_file.startswith('torch-xpu-ops/test/xpu/'):
-        test_path = test_file.replace('torch-xpu-ops/test/xpu/', '')
-        parts = test_path.split('/')
-        if len(parts) >= 2:
-            # e.g., "dynamo/test_ctx_manager_xpu" -> "op_ut_with_all.dynamo.test_ctx_manager_xpu"
-            return 'op_ut_with_all.' + test_path.replace('/', '.'), None
-        else:
-            # Single file like "test_ops_xpu" -> "op_ut_with_all.test_ops_xpu"
-            return 'op_ut_with_all.' + parts[0], None
-    
-    # Format 3: test/xpu/subdir/file_xpu.py -> op_ut_with_all.subdir.file_xpu
-    if test_file.startswith('test/xpu/'):
-        test_path = test_file.replace('test/xpu/', '')
-        parts = test_path.split('/')
-        if len(parts) >= 2:
-            # test/xpu/dynamo/test_ctx_manager_xpu -> op_ut_with_all.dynamo.test_ctx_manager_xpu
-            return 'op_ut_with_all.' + test_path.replace('/', '.'), None
-        else:
-            # test/xpu/test_ops_xpu -> op_ut_with_all.test_ops_xpu
-            return 'op_ut_with_all.' + parts[0], None
-    
-    # Format 4: test/subdir/file.py (stock PyTorch XPU tests) -> op_ut_with_all.subdir.file_xpu
-    if test_file.startswith('test/') and 'xpu' in test_file.split('/')[1]:
-        # test/xpu/xxx -> test_xxx_xpu convention
-        test_path = test_file.replace('test/', '')
-        parts = test_path.split('/')
-        if len(parts) >= 2:
-            subdir = parts[0]
-            filename = parts[-1]
-            # Convert "test_ctx_manager.py" to "test_ctx_manager_xpu"
-            if not filename.endswith('_xpu.py'):
-                filename = filename.replace('.py', '_xpu.py')
-            return f'op_ut_with_all.{subdir}.{filename[:-3]}', None
-
-    # Format 2 & 3: Paths with "/"
-    if '/' in test_file:
-        parts = test_file.split('/')
-        parts = [p for p in parts if p]  # Remove empty strings
-
-        # e.g., ["test", "autograd", "test_autograd"] -> "test_autograd"
-        # e.g., ["test", "distributed", "test_c10d_xccl"] -> "distributed.test_c10d_xccl"
-        if len(parts) >= 2:
-            if parts[0] == 'test':
-                # Remove leading "test"
-                base_parts = parts[1:]
-            else:
-                base_parts = parts
-
-            # Check if this is a functorch test
-            if base_parts[0] == 'functorch' or (len(base_parts) >= 2 and base_parts[1] == 'functorch'):
-                if len(base_parts) >= 3:
-                    module_name = '_'.join(base_parts[2:]) if len(base_parts) > 2 else base_parts[-1]
-                    return f'op_ut_with_all.functorch.{module_name}_xpu', None
-                return None, 'Invalid functorch path format'
-
-            # Check if this is a distributed test (contains 'distributed' in path)
-            # For distributed tests like "test/distributed/test_c10d_xccl.py", keep the full subpath
-            # XML files encode "test/" as 12 dots (.............), so we need to prefix with that
-            # BUT: tests from test/xpu/distributed/ should NOT have the dots encoding
-            if 'distributed' in base_parts:
-                distributed_idx = 0
-                for i, part in enumerate(base_parts):
-                    if part == 'distributed':
-                        distributed_idx = i
-                        break
-                distributed_parts = base_parts[distributed_idx:]
-                module_name = '.'.join(distributed_parts)
-
-                # Check if this is from test/xpu/distributed/ (xpu tests) - no dots
-                if 'test/xpu/distributed' in test_file or 'torch-xpu-ops/test/xpu/distributed' in test_file:
-                    return f'op_ut_with_all.{module_name}', None
-                # Otherwise from test/distributed/ (stock PyTorch tests) - add dots for "test/" prefix
-                return f'op_ut_with_all.............test.{module_name}', None
-
-            # Regular test module (non-distributed)
-            module_name = '_'.join(base_parts[1:]) if len(base_parts) > 1 else base_parts[-1]
-            # Convert to our naming convention (test_xxx)
-            if not module_name.startswith('test_'):
-                module_name = 'test_' + module_name
-
-            return f'op_ut_with_all.{module_name}', None
-
-    # Format 4: module_only format (e.g., "test_torch_xpu", "inductor.test_xxx")
-    parts = test_file.split('.')
-    parts = [p for p in parts if p]
-
-    if len(parts) == 1:
-        # Just module name like "test_torch_xpu" or "test_optim"
-        module = parts[0]
-        # Order matters: check _xpu modules first as op_ut_with_all
-        if '_xpu' in module:
-            # Try op_ut_with_all first, then op_ut_with_skip
-            all_prefix = f'op_ut_with_all.{module}'
-            skip_prefix = f'op_ut_with_skip.{module}'
-            # Don't return here - the caller will check
-            return all_prefix, None
-        return f'op_ut_with_all.{module}', None
-
-    if len(parts) == 2:
-        # e.g., "dynamo.test_compile" or "test.test_optim"
-        module = parts[0]
-        test_module = parts[1]
-
-        if module == 'test':
-            # "test.test_optim" -> "test_optim"
-            if not test_module.startswith('test_'):
-                test_module = 'test_' + test_module
-            return f'op_ut_with_all.{test_module}', None
-
-        if module == 'inductor':
-            return None, 'inductor tests not in XPU CI'
-
-        # Other modules like "dynamo.test_compile"
-        if not test_module.startswith('test_'):
-            test_module = 'test_' + test_module
-        return f'op_ut_with_all.{module}.{test_module}', None
-
-    if len(parts) == 3:
-        # e.g., "test.nn.test_convolution"
-        module = parts[0]
-        subdir = parts[1]
-        test_module = parts[2]
-
-        if module == 'test':
-            if not test_module.startswith('test_'):
-                test_module = 'test_' + test_module
-            if subdir == 'functorch':
-                return f'op_ut_with_all.{subdir}.{test_module}_xpu', None
-            # Skip distributed tests (not in XPU CI)
-            if subdir == 'distributed':
-                return None, 'distributed tests not in XPU CI'
-            return f'op_ut_with_all.{subdir}.{test_module}', None
-
-    return None, 'Unknown test_file format'
-
-
-def convert_to_stock_prefix(test_file):
-    """Convert test file to stock test module name.
-
-    Stock CI XML files are organized under python-pytest/ as module directories
-    like 'test_autograd', 'dynamo.test_compile', 'inductor.test_torchinductor', etc.
-    """
-    if not test_file:
-        return None
-
-    test_file = str(test_file)
-
-    if '/' in test_file:
-        # Handle paths like "test/test_autograd.py" or "torch-xpu-ops/test/xpu/test_optim_xpu.py"
-        test_file = test_file.replace('torch-xpu-ops/test/xpu/', '')
-        test_file = test_file.replace('test/xpu/', '')
-        test_file = test_file.replace('.py', '')
-
-        parts = test_file.split('/')
-        # Strip _xpu suffix from module name for all parts
-        parts = [p.replace('_xpu', '') for p in parts]
-
-        # Check for distributed tests - keep full path after distributed
-        if 'distributed' in parts:
-            distributed_idx = parts.index('distributed')
-            distributed_parts = parts[distributed_idx:]
-            return '.'.join(distributed_parts)
-
-        if len(parts) >= 2:
-            # e.g., "extended/test_ops" -> "extended.test_ops"
-            subdir = parts[-2] if not parts[-1].startswith('test_') else None
-            module = parts[-1]
-            if subdir and not module.startswith(subdir):
-                return f'{subdir}.{module}'
-            return module
-        module = parts[-1] if parts else None
-        return module
-
-    # Handle _xpu suffix in non-path formats
-    test_file = test_file.replace('_xpu', '')
-
-    # Handle dot notation like "test.test_optim" -> "test_optim" (remove test. prefix)
-    parts = test_file.split('.')
-    if len(parts) >= 2 and parts[0] == 'test':
-        return '.'.join(parts[1:])
-    return test_file
-
-
-def find_best_xml_match(xml_prefix, xml_files):
-    """Find XML file matching prefix. Also handles dot-encoded test paths and checks op_ut_with_skip if op_ut_with_all not found."""
-    if not xml_prefix:
-        return None
-
-    # Direct match
-    if xml_prefix in xml_files:
-        return xml_files[xml_prefix]
-
-    # Try op_ut_with_skip if op_ut_with_all not found
-    if xml_prefix.startswith('op_ut_with_all.'):
-        skip_prefix = 'op_ut_with_skip.' + xml_prefix[len('op_ut_with_all.'):]
-        if skip_prefix in xml_files:
-            return xml_files[skip_prefix]
-
-        # Handle dot-encoded paths: e.g., "op_ut_with_all.............test.distributed.fsdp.test_fsdp_apply"
-        base_path = xml_prefix[len('op_ut_with_all.'):]
-
-        # Check if prefix has 12+ consecutive dots (encoding test/)
-        import re
-        dot_match = re.match(r'^(.{12,})(.+)$', base_path)
-        if dot_match:
-            encoded_prefix = dot_match.group(1)
-            rest = dot_match.group(2)
-            if all(c == '.' for c in encoded_prefix) and len(encoded_prefix) >= 12:
-                test_path = 'test/' + rest
-                test_prefix = 'op_ut_with_all.' + test_path
-                if test_prefix in xml_files:
-                    return xml_files[test_prefix]
-                test_skip_prefix = 'op_ut_with_skip.' + test_path
-                if test_skip_prefix in xml_files:
-                    return xml_files[test_skip_prefix]
-
-        # Fuzzy match for missing subdirectories
-        # e.g., op_ut_with_all.test.xpu.test_ctx_manager_xpu -> try op_ut_with_all.test.xpu.*.test_ctx_manager_xpu
-        if xml_prefix.startswith('op_ut_with_all.test.xpu.'):
-            base_name = xml_prefix.replace('op_ut_with_all.test.xpu.', '')
-            for prefix, path in xml_files.items():
-                if prefix.startswith('op_ut_with_all.test.xpu.') and prefix.endswith('.' + base_name):
-                    return path
-
-    return None
 
 
 def parse_failure_content(content):
@@ -481,47 +157,6 @@ def parse_failure_content(content):
         traceback += f"\n{error_msg}"
 
     return error_msg, traceback[:3000] if traceback else traceback
-
-
-def get_test_result(xml_path, test_case):
-    """Get test case result from XML file. Returns status, error_msg, and traceback.
-
-    xml_path can be:
-    - A regular file path (string)
-    - A tuple (zip_file, internal_path) for files inside ZIP archives
-    """
-    if not xml_path:
-        return None, None, None
-
-    try:
-        # Handle ZIP file entries
-        if isinstance(xml_path, tuple):
-            zip_file, internal_path = xml_path
-            with zipfile.ZipFile(zip_file, 'r') as zf:
-                with zf.open(internal_path) as f:
-                    content = f.read().decode('utf-8', errors='ignore')
-                    root = ET.fromstring(content)
-        else:
-            # Regular file
-            tree = ET.parse(xml_path)
-            root = tree.getroot()
-
-        for testcase in root.findall('.//testcase'):
-            if testcase.get('name') == test_case:
-                failure = testcase.find('failure')
-                if failure is not None:
-                    msg = failure.text or failure.get('message', '')
-                    error_msg, traceback = parse_failure_content(msg)
-                    return 'failed', error_msg, traceback
-                skipped = testcase.find('skipped')
-                if skipped is not None:
-                    msg = skipped.text or skipped.get('message', '')
-                    return 'skipped', msg[:500] if msg else 'skipped', None
-                return 'passed', '', None
-
-        return 'not found', 'Test case not found', None
-    except Exception as e:
-        return 'error', str(e), None
 
 
 def extract_torch_ops_with_llm(test_file, test_case, error_msg, traceback):
@@ -822,8 +457,6 @@ def get_dependency_from_ops_rag(ops_list, ops_dep_list):
     if not ops_list or len(ops_list) == 0:
         return []
 
-    from difflib import SequenceMatcher
-
     SCORE_EXACT = 100
     SCORE_ATEN_PREFIX = 95
     SCORE_CONTAIN = 80
@@ -968,7 +601,6 @@ Return ONLY valid JSON format (no additional text):
         if result.returncode == 0:
             output = result.stdout.strip()
             try:
-                import re
                 json_match = re.search(r'\{[^{}]*\}', output, re.DOTALL)
                 if json_match:
                     data = json.loads(json_match.group())
@@ -1317,103 +949,12 @@ def find_duplicated_issues(ws):
 
 def ensure_headers(ws, col_indices, col_names):
     """Ensure column headers exist for given columns."""
-    from openpyxl.styles import Font, PatternFill
-
     for col_idx, header_name in zip(col_indices, col_names):
         existing = ws.cell(row=1, column=col_idx).value
         if not existing:
             cell = ws.cell(row=1, column=col_idx, value=header_name)
             cell.font = Font(bold=True, color="FFFFFF")
             cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-
-
-def pass1_match_ci_results(ws, xpu_xml_files, stock_xml_files):
-    """
-    PASS 1: Match CI results from XML files (XPU nightly + stock).
-
-    Matches test cases against:
-    - torch-xpu-ops nightly XML files (cols 11-12)
-    - stock PyTorch CI XML files (col 13)
-
-    Updates:
-        Col 8: Error Message
-        Col 9: Traceback
-        Col 12: XPU Status
-        Col 13: Stock Status
-
-    Returns:
-        dict: issues_needing_llm - issues where both XPU and stock CI results were "not found"
-    """
-    import time as time_module
-    from collections import defaultdict
-
-    ensure_headers(ws, [8, 9, 12, 13], ["Error Message", "Traceback", "XPU Status", "Stock Status"])
-
-    issues_needing_llm = {}
-    total = ws.max_row - 1
-
-    log("  [PASS 1/5] Matching CI results from XML files...")
-    start_time = time_module.time()
-    
-    for i, row in enumerate(range(2, ws.max_row + 1), 1):
-        test_file = ws.cell(row, 4).value
-        test_class = ws.cell(row, 6).value
-        test_case = ws.cell(row, 7).value
-        issue_id = ws.cell(row, 1).value
-        origin_test_file = ws.cell(row, 5).value
-
-        xpu_status = None
-        xpu_error_msg = None
-        xpu_xml_name = None
-        
-        xml_prefix, reason = convert_test_file_to_xml_prefix(test_file)
-        if xml_prefix:
-            matched = find_best_xml_match(xml_prefix, xpu_xml_files)
-            if matched:
-                xml_path, commit, run_id, _ = matched
-                status, error_msg, traceback = get_test_result(xml_path, test_case)
-                xpu_status = status
-                xpu_error_msg = error_msg if error_msg else ''
-                ws.cell(row, 12, status)  # Col 12: XPU Status
-                ws.cell(row, 8, error_msg if error_msg else '')  # Col 8: Error Message
-                if traceback and not ws.cell(row, 9).value:
-                    ws.cell(row, 9, traceback[:3000])  # Col 9: Traceback
-            else:
-                ws.cell(row, 12, 'not found')  # Col 12: XPU Status
-                ws.cell(row, 8, f'No XPU XML: {xml_prefix}')  # Col 8: Error Message
-        else:
-            ws.cell(row, 12, 'not found')  # Col 12: XPU Status
-            ws.cell(row, 8, reason)  # Col 8: Error Message
-        
-        stock_prefix = convert_to_stock_prefix(origin_test_file)
-        if stock_prefix and stock_prefix in stock_xml_files:
-            stock_xml = stock_xml_files[stock_prefix]
-            stock_status, stock_error_msg, stock_traceback = get_test_result(stock_xml, test_case)
-            ws.cell(row, 13, stock_status)  # Col 13: Stock Status
-            ws.cell(row, 8, (ws.cell(row, 8).value or stock_error_msg if stock_error_msg else '').strip()[:500])  # Col 8: Error Message
-            if stock_traceback and not ws.cell(row, 9).value:
-                ws.cell(row, 9, stock_traceback[:3000])  # Col 9: Traceback
-        else:
-            ws.cell(row, 13, 'not in stock CI')  # Col 13: Stock Status
-        
-        xpu_status = ws.cell(row, 12).value
-        stock_status = ws.cell(row, 13).value
-        ci_not_found = (xpu_status == 'not found' or not xpu_status) and (stock_status == 'not found' or stock_status == 'not in stock CI')
-        
-        if ci_not_found and issue_id not in issues_needing_llm:
-            issues_needing_llm[issue_id] = {
-                'test_file': test_file,
-                'test_class': test_class,
-                'test_case': test_case,
-                'origin_test_file': origin_test_file
-            }
-        
-        if i % 500 == 0:
-            log(f"    Progress: {i}/{total}")
-    
-    elapsed = time_module.time() - start_time
-    log(f"  PASS 1 complete: {len(issues_needing_llm)} unique issues need LLM ({elapsed:.1f}s)")
-    return issues_needing_llm
 
 
 def pass2_extract_torch_ops(ws):
@@ -1639,64 +1180,44 @@ def process_test_cases_sheet(wb):
     """
     Process Test Cases sheet - fills all CI result and analysis columns.
 
-    This is the main entry point for processing Test_Cases sheet.
+    NOTE: PASS 1 has been moved to pass1_ci_matcher.py for better modularity.
+    This function now starts from PASS 2.
 
-    Steps:
-    1. PASS 1: Match CI results from XML files (XPU nightly + stock)
-    2. Torch-ops extraction: Uses torch-ops-extraction module (Pattern + LLM fallback)
-    3. PASS 2: LLM analysis for test existence (CUDA/XPU) [renumbered to PASS 3]
-    4. Dependency RAG: Match ops to deps from ops_dependency.csv [PASS 4]
-    5. Duplicate detection [PASS 5]
+    Steps (PASS 1 is now in pass1_ci_matcher.py):
+        1. PASS 1: Match CI results from test_cases_all.xlsx (moved to pass1_ci_matcher.py)
+        2. PASS 2: Torch-ops extraction (pattern + LLM fallback)
+        3. PASS 3: LLM analysis for test existence (CUDA/XPU)
+        4. PASS 4: Dependency RAG (match ops to deps)
+        5. PASS 5: Duplicate detection (cross-issue)
 
-    Columns added (10-23):
-    - Col 10: torch-ops (extracted from test name/error)
-    - Col 11: status in torch-xpu-ops nightly
-    - Col 12: comments in torch-xpu-ops nightly
-    - Col 13: Commit
-    - Col 14: Run_id
-    - Col 15: XML
-    - Col 16: status in stock CI
-    - Col 17: comments in stock CI
-    - Col 18: cuda_case_exist
-    - Col 19: xpu_case_exist
-    - Col 20: case_existence_comments
-    - Col 21: can_enable_on_xpu
-    - Col 22: duplicated_issue
-    - Col 23: dependency_lib
+    Columns added (10-13, 16-23 via PASS 1 + passes 2-5):
+        - Col 8: Error Message (PASS 1)
+        - Col 9: Traceback (PASS 1)
+        - Col 10: torch-ops (PASS 2)
+        - Col 11: dependency (PASS 4)
+        - Col 12: XPU Status (PASS 1)
+        - Col 13: Stock Status (PASS 1)
+        - Col 14: No Match Reason (PASS 1)
+        - Col 16: CUDA Case Exist (PASS 3)
+        - Col 17: XPU Case Exist (PASS 3)
+        - Col 18: case_existence_comments (PASS 3)
+        - Col 19: can_enable_on_xpu (PASS 3)
+        - Col 20: duplicated_issue (PASS 5)
     """
     import time as time_module
     
     ws = wb['Test Cases']
     
-    ws.cell(1, 11, 'status in torch-xpu-ops nightly')
-    ws.cell(1, 12, 'comments in torch-xpu-ops nightly')
-    ws.cell(1, 13, 'Commit')
-    ws.cell(1, 14, 'Run_id')
-    ws.cell(1, 15, 'XML')
-    ws.cell(1, 16, 'status in stock CI')
-    ws.cell(1, 17, 'comments in stock CI')
-    ws.cell(1, 18, 'cuda_case_exist')
-    ws.cell(1, 19, 'xpu_case_exist')
-    ws.cell(1, 20, 'case_existence_comments')
-    ws.cell(1, 21, 'can_enable_on_xpu')
-    ws.cell(1, 22, 'duplicated_issue')
-    ws.cell(1, 23, 'dependency_lib')
-
-    xpu_xml_files = get_torch_xpu_ops_xml_files()
-    log(f"  Found {len(xpu_xml_files)} torch-xpu-ops XML files")
-    
-    stock_xml_files = get_stock_xml_files()
-    log(f"  Found {len(stock_xml_files)} stock XML files")
+    log("Test Cases processor - PASS 1 moved to pass1_ci_matcher.py")
+    log("Processing passes 2-5 only (PASS 1 must be run first via pass1_ci_matcher.py)")
     
     total = ws.max_row - 1
-    log(f"\n[STEP] Processing {total} test cases (5-pass approach)...")
+    log(f"\n[STEP] Processing {total} test cases (passes 2-5)...")
     log(f"  [START TIME] {time_module.strftime('%Y-%m-%d %H:%M:%S')}")
-    
-    issues_needing_llm = pass1_match_ci_results(ws, xpu_xml_files, stock_xml_files)
     
     pass2_extract_torch_ops(ws)
     
-    pass3_llm_analysis_for_test_existence(ws, issues_needing_llm)
+    pass3_llm_analysis_for_test_existence(ws, {})
     
     pass4_dependency_rag(ws)
     
