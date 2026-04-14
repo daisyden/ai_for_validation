@@ -198,17 +198,23 @@ def update_excel(excel_file, all_pr_refs, pr_info):
     wb = openpyxl.load_workbook(excel_file)
     ws = wb['Issues']
 
-    # Check if PR columns already exist (column 15 onwards)
-    max_col = ws.max_column
-    has_pr_headers = max_col >= 17
+    # Find first blank column for PR headers (don't overwrite existing)
+    first_blank = None
+    for col in range(1, 51):
+        if ws.cell(1, col).value is None:
+            first_blank = col
+            break
 
-    # Add PR headers if not exist
-    if not has_pr_headers:
-        pr_headers = ["", "", "", "", "", "", "", "", "", "", "", "", "", "", "PR", "PR Owner", "PR Status", "PR Description"]
-        for col, header in enumerate(pr_headers, 1):
-            cell = ws.cell(row=1, column=col, value=header)
-            cell.font = Font(bold=True, color="FFFFFF")
-            cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+    if first_blank is None:
+        print("  Error: No blank column found!")
+        return
+
+    # Add PR headers starting at first blank column
+    pr_headers = ["PR", "PR Owner", "PR Status", "PR Description"]
+    for idx, header in enumerate(pr_headers):
+        cell = ws.cell(row=1, column=first_blank + idx, value=header)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
 
     # Build issue to row mapping
     row_by_issue = {}
@@ -240,15 +246,11 @@ def update_excel(excel_file, all_pr_refs, pr_info):
                         if title:
                             pr_descs.append(title[:100] + ('...' if body else ''))
 
-            # Write semicolon-separated values
-            # Column O (15): PR
-            ws.cell(row=row, column=15).value = ';'.join(pr_urls) if pr_urls else ''
-            # Column P (16): PR Owner
-            ws.cell(row=row, column=16).value = ';'.join(pr_owners) if pr_owners else ''
-            # Column Q (17): PR Status
-            ws.cell(row=row, column=17).value = ';'.join(pr_states) if pr_states else ''
-            # Column R (18): PR Description
-            ws.cell(row=row, column=18).value = ' | '.join(pr_descs) if pr_descs else ''
+            # Write semicolon-separated values to first_blank columns
+            ws.cell(row=row, column=first_blank).value = ';'.join(pr_urls) if pr_urls else ''
+            ws.cell(row=row, column=first_blank + 1).value = ';'.join(pr_owners) if pr_owners else ''
+            ws.cell(row=row, column=first_blank + 2).value = ';'.join(pr_states) if pr_states else ''
+            ws.cell(row=row, column=first_blank + 3).value = ' | '.join(pr_descs) if pr_descs else ''
 
     wb.save(excel_file)
     print(f"Updated {len(all_pr_refs)} issues in {excel_file}")
