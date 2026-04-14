@@ -10,8 +10,7 @@ Action Types:
 - Enable test
 - Verify the issue
 - Revisit the PR as case failed
-- Needs Upstream Skip PR (not_target + ut_upstream)
-- Needs Skip PR (wontfix / not_target)
+- Needs Skip PR (wontfix / not_target + upstream)
 - Awaiting response from reporter
 - Need reproduce steps
 - and more...
@@ -74,34 +73,30 @@ def action_close_fixed_issue(
 
 
 def action_enable_test(
-    issue_id: str,
-    issue_can_enable: Dict[str, Dict[str, List[Any]]],
+    can_enable_true: bool,
+    can_enable_false: bool,
     reporter: str = None
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """
     Action: Enable test (when test cases can be enabled on XPU).
 
+    Note: If both can_enable_true and can_enable_false are True, 
+    'Enable test' takes precedence (tests can be enabled).
+
     Returns:
         Tuple of (owner_transfer, action_tbd, reason) or (None, None, None)
     """
-    if issue_id not in issue_can_enable:
+    if not can_enable_true and not can_enable_false:
         return (None, None, None)
 
-    can_enable_info = issue_can_enable[issue_id]
-    can_enable_list = can_enable_info.get('can_enable_list', [])
-    comments_list = can_enable_info.get('comments_list', [])
-
-    can_enable_true = any(str(val) == 'True' for val in can_enable_list)
-    can_enable_false = any(str(val) == 'False' for val in can_enable_list)
-
-    if can_enable_true or can_enable_false:
-        owner = reporter
-        action = 'Enable test' if can_enable_true else 'add to skiplist'
-        comments = ' | '.join([str(c) for c in comments_list if c])
-        reason = f'Case existence comments: {comments}'
-        return (owner, action, reason)
-
-    return (None, None, None)
+    owner = reporter
+    if can_enable_true:
+        action = 'Enable test'
+        reason = 'Test cases can be enabled on XPU'
+    else:
+        action = 'add to skiplist'
+        reason = 'Test cases cannot be enabled on XPU - marked for skiplist'
+    return (owner, action, reason)
 
 
 def action_verify_issue(
@@ -145,25 +140,6 @@ def action_revisit_pr_failed(
     return (None, None, None)
 
 
-def action_needs_upstream_skip_pr(
-    is_not_target_upstream: bool,
-    assignee: str = None
-) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    """
-    Action: Needs Upstream Skip PR (not_target + ut_upstream).
-
-    Returns:
-        Tuple of (owner_transfer, action_tbd, reason) or (None, None, None) if not applicable
-    """
-    if is_not_target_upstream:
-        owner = assignee
-        action = 'Needs Upstream Skip PR (not_target + ut_upstream)'
-        reason = 'Issue has not_target label and is upstream - needs skip PR upstream'
-        return (owner, action, reason)
-
-    return (None, None, None)
-
-
 def action_needs_skip_pr(
     is_wontfix: bool,
     is_upstream: bool,
@@ -171,7 +147,8 @@ def action_needs_skip_pr(
     assignee: str = None
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """
-    Action: Needs Skip PR (wontfix / not_target).
+    Action: Needs Skip PR (wontfix / not_target + upstream).
+    Combines upstream skip PR logic - removed duplicate function.
 
     Returns:
         Tuple of (owner_transfer, action_tbd, reason) or (None, None, None) if not applicable
@@ -188,36 +165,6 @@ def action_needs_skip_pr(
         action = 'Needs Skip PR (wontfix / not_target)'
         reason = 'Issue marked as wontfix or not_target - needs skip PR'
         return (owner, action, reason)
-
-    return (None, None, None)
-
-
-def action_upstream_investigation(
-    is_upstream: bool,
-    is_not_target: bool,
-    is_wontfix: bool,
-    assignee: str = None,
-    is_e2e_issue: bool = False
-) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    """
-    Action: Upstream investigation needed (for upstream issues without skip).
-
-    Returns:
-        Tuple of (owner_transfer, action_tbd, reason) or (None, None, None) if not applicable
-    """
-    is_not_target_upstream = is_not_target and is_upstream
-
-    if is_upstream and not is_not_target_upstream and not is_wontfix:
-        if is_e2e_issue:
-            owner = assignee
-            action = ''
-            reason = 'E2E issue pending - needs upstream investigation'
-            return (owner, action, reason)
-        else:
-            owner = assignee
-            action = ''
-            reason = 'Upstream issue - owner should investigate upstream fix'
-            return (owner, action, reason)
 
     return (None, None, None)
 
@@ -374,28 +321,30 @@ def action_e2e_issue(
     is_e2e_issue: bool,
     has_e2e_status: bool,
     e2e_all_passed: bool,
+    is_accuracy_issue: bool,
     reporter: str,
     assignee: str = None
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """
-    Action: E2E issue pending - needs upstream investigation.
+    Action: E2E accuracy issue pending - needs upstream investigation.
+    Only triggers for accuracy-related E2E issues.
 
     Returns:
         Tuple of (owner_transfer, action_tbd, reason) or (None, None, None) if not applicable
     """
-    if is_e2e_issue:
-        if has_e2e_status and e2e_all_passed:
-            owner = reporter
-            action = 'Close fixed issue'
-            reason = 'All E2E test cases passed - issue is resolved'
-            return (owner, action, reason)
-        else:
-            owner = assignee
-            action = ''
-            reason = 'E2E issue pending - needs upstream investigation'
-            return (owner, action, reason)
+    if not is_e2e_issue or not is_accuracy_issue:
+        return (None, None, None)
 
-    return (None, None, None)
+    if has_e2e_status and e2e_all_passed:
+        owner = reporter
+        action = 'Close fixed issue'
+        reason = 'All E2E accuracy test cases passed - issue is resolved'
+        return (owner, action, reason)
+    else:
+        owner = assignee
+        action = 'Need Investigation'
+        reason = 'E2E accuracy issue pending - needs upstream investigation'
+        return (owner, action, reason)
 
 
 def analyze_action_all(
@@ -432,9 +381,9 @@ def analyze_action_all(
     is_not_target = ('not target' in labels_str or 'wont' in labels_str or "won't" in labels_str)
     is_wontfix = 'wont ' in labels_str or ' wont ' in labels_str or 'wontfix' in labels_str or 'not target' in labels_str.replace('nottarget', '')
     is_upstream = 'ut_upstream' in labels_str or 'inductor' in labels_str
-    is_not_target_upstream = is_not_target and is_upstream
 
     is_e2e_issue = test_module == 'e2e'
+    is_accuracy_issue = 'accuracy' in title_lower or 'accuracy' in summary_lower
 
     xpu_all_passed = xpu_statuses == {'passed'}
     stock_all_passed = stock_statuses == {'passed'}
@@ -477,48 +426,45 @@ def analyze_action_all(
     action_tbd = ''
     action_tbd_reason = ''
 
+    # Priority 1: Add to skiplist (not_target or cannot enable)
     result = action_add_to_skiplist(is_not_target, can_enable_false, reporter)
     if result[0]:
         owner_transfer, action_tbd, action_tbd_reason = result
         return (owner_transfer, action_tbd, action_tbd_reason)
 
+    # Priority 2: Close fixed issue (all tests passed)
     result = action_close_fixed_issue(xpu_all_passed, stock_all_passed, e2e_all_passed, reporter, is_random)
     if result[0] or result[1]:
         owner_transfer, action_tbd, action_tbd_reason = result
         return (owner_transfer, action_tbd, action_tbd_reason)
 
-    result = action_enable_test(issue_id, issue_can_enable, reporter)
+    # Priority 3: Enable test (can_enable_true takes precedence over can_enable_false)
+    result = action_enable_test(can_enable_true, can_enable_false, reporter)
     if result[0] and result[1]:
         owner_transfer, action_tbd, action_tbd_reason = result
         return (owner_transfer, action_tbd, action_tbd_reason)
 
+    # Priority 4: Verify the issue (PR closed, no failures)
     result = action_verify_issue(pr_closed, has_failed, reporter, assignee)
     if result[0] and result[1]:
         owner_transfer, action_tbd, action_tbd_reason = result
         return (owner_transfer, action_tbd, action_tbd_reason)
 
+    # Priority 5: Revisit PR as case failed (PR closed, still failing)
     result = action_revisit_pr_failed(pr_closed, has_failed, assignee)
     if result[0] and result[1]:
         owner_transfer, action_tbd, action_tbd_reason = result
         return (owner_transfer, action_tbd, action_tbd_reason)
 
-    result = action_needs_upstream_skip_pr(is_not_target_upstream, assignee)
-    if result[0] and result[1]:
-        owner_transfer, action_tbd, action_tbd_reason = result
-        return (owner_transfer, action_tbd, action_tbd_reason)
-
+    # Priority 6: Needs Skip PR (combines upstream skip PR logic)
     result = action_needs_skip_pr(is_wontfix, is_upstream, is_not_target, assignee)
     if result[0] and result[1]:
         owner_transfer, action_tbd, action_tbd_reason = result
         return (owner_transfer, action_tbd, action_tbd_reason)
 
-    result = action_upstream_investigation(is_upstream, is_not_target, is_wontfix, assignee, is_e2e_issue)
-    if result[0] is not None:
-        owner_transfer, action_tbd, action_tbd_reason = result
-        return (owner_transfer, action_tbd, action_tbd_reason)
-
+    # Priority 7: E2E accuracy issue pending
     if not action_tbd:
-        result = action_e2e_issue(is_e2e_issue, has_e2e_status, e2e_all_passed, reporter, assignee)
+        result = action_e2e_issue(is_e2e_issue, has_e2e_status, e2e_all_passed, is_accuracy_issue, reporter, assignee)
         if result[0] is not None:
             owner_transfer, action_tbd, action_tbd_reason = result
             return (owner_transfer, action_tbd, action_tbd_reason)
@@ -528,8 +474,9 @@ def analyze_action_all(
             owner_transfer, action_tbd, action_tbd_reason = result
             return (owner_transfer, action_tbd, action_tbd_reason)
 
+    # Priority 8: LLM suggestions
     if not action_tbd and not is_feature_request and not is_e2e_issue:
-        has_already_requested = check_info_requested_to_reporter(title_raw + ' ' + summary_raw)
+        has_already_requested = check_info_requested_to_reporter(title_raw + ' ' + summary_raw, title_raw, summary_raw)
 
         result = action_need_reproduce_steps(llm_info_action, reporter)
         if result[0] and result[1]:
@@ -564,15 +511,25 @@ def analyze_action_all(
             owner_transfer, action_tbd, action_tbd_reason = result
             return (owner_transfer, action_tbd, action_tbd_reason)
 
+    # Fallback: If no action TBD found, set to Need Investigation
+    if not action_tbd:
+        owner_transfer = assignee
+        action_tbd = 'Need Investigation'
+        action_tbd_reason = 'No specific action identified - needs investigation'
+        return (owner_transfer, action_tbd, action_tbd_reason)
+
     return (owner_transfer, action_tbd, action_tbd_reason)
 
 
-def check_info_requested_to_reporter(issue_content: str) -> bool:
+def check_info_requested_to_reporter(issue_content: str, title_raw: str = '', summary_raw: str = '') -> bool:
     """
     Check if maintainer has requested more information from reporter.
+    Uses keyword-based check first, falls back to LLM if negative.
 
     Args:
         issue_content: Combined issue title and summary
+        title_raw: Original title (for LLM fallback)
+        summary_raw: Original summary (for LLM fallback)
 
     Returns:
         True if info was requested from reporter
@@ -597,7 +554,19 @@ def check_info_requested_to_reporter(issue_content: str) -> bool:
     ]
 
     content_lower = issue_content.lower()
-    return any(kw in content_lower for kw in request_keywords)
+    keyword_found = any(kw in content_lower for kw in request_keywords)
+    
+    if keyword_found:
+        return True
+    
+    # Fallback to LLM if title/summary available
+    if title_raw and summary_raw:
+        llm_result = check_info_requested_to_reporter_llm(title_raw, summary_raw)
+        # If LLM suggests we need more info or reproduce steps, treat as if info was requested
+        if llm_result and ('more information' in llm_result.lower() or 'reproduce' in llm_result.lower()):
+            return True
+    
+    return False
 
 
 def is_public_branch(version_str: str) -> bool:
@@ -633,6 +602,13 @@ def is_public_branch(version_str: str) -> bool:
 
     return False
 
+import os
+MINIMAX_ENDPOINT = os.environ.get("MINIMAX_ENDPOINT", "http://10.239.15.43/v1/chat/completions")
+MINIMAX_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-xxxx")
+MINIMAX_MODEL = "glm-latest"
+PYTORCH_TEST_ROOT = os.path.expanduser("~/issue_traige/pytorch/test")
+TORCH_XPU_TEST_ROOT = os.path.expanduser("~/issue_traige/torch-xpu-ops/test/xpu")
+
 
 def check_info_requested_to_reporter_llm(
     issue_title: str,
@@ -641,12 +617,13 @@ def check_info_requested_to_reporter_llm(
     traceback: str = None
 ) -> str:
     """
-    Use Qwen3-32B via internal API to check if more info needs to be requested from reporter.
-    Returns: action string (e.g., "Need reproduce steps", "Ready to analyze", "Need more information")
+    Use Qwen3-32B via internal API to check if maintainer has requested more info from reporter.
+    Returns: "Need reproduce steps" or "Need more information" if info was requested, empty string otherwise.
     """
     import requests
     import os
     import time
+    import re
 
     LLM_ENDPOINT = "http://10.239.15.43/v1/chat/completions"
     LLM_API_KEY = os.environ.get("OPENCODE_API_KEY", "sk-xxxxxxxxxx")
@@ -655,24 +632,22 @@ def check_info_requested_to_reporter_llm(
     issue_content = f"{issue_title} {issue_summary} {error_msg or ''} {traceback or ''}".strip()
 
     if not issue_content or len(issue_content) < 20:
-        return "Need more information"
+        return ""
 
-    prompt = f"""You are analyzing a PyTorch XPU GitHub issue to determine if more information is needed from the reporter.
+    prompt = f"""Analyze this PyTorch XPU GitHub issue to determine if the maintainer has requested more information from the reporter.
 
-Issue Content:
-{issue_content[:1500]}
+Issue Title: {issue_title}
+Issue Summary: {issue_summary[:500] if issue_summary else 'N/A'}
+Error: {error_msg[:500] if error_msg else 'N/A'}
 
-Determine:
-1. Is this a feature request or enhancement?
-2. Does it have sufficient error information?
-3. Does it have reproduction steps?
-4. Is it a clear bug with complete information?
+Look at the issue description above and determine:
+- Has the maintainer already requested more information (reproduce steps, error details, performance data, etc.)?
+- OR does the issue have sufficient information to start debugging?
 
-Respond with ONE of:
-- "Ready to analyze" - with sufficient info to start debugging
-- "Need reproduce steps" - if a bug without clear repro steps
-- "Need more information - [specific missing info]" - if the comments requesting key details
-- "Feature Request - needs triage" - if it's a feature request
+Respond with EXACTLY one of:
+- "Need reproduce steps" - if maintainer needs reproduce steps from reporter
+- "Need more information" - if maintainer needs other info from reporter (accuracy data, version info, etc.)
+- "" (empty string) - if the issue already has sufficient information OR maintainer hasn't requested anything
 
 YOUR ANSWER:"""
 
@@ -700,21 +675,46 @@ YOUR ANSWER:"""
         if response.status_code == 200:
             result = response.json()
             content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
-            content = content.replace("[TO]", "").replace("[/TO]", "").replace("[:cn]", "").replace("]", "").strip()
+            # Clean up thinking tags - extract content after closing bracket
+            content = content.replace("[TO]", "").replace("[/TO]", "").replace("[:cn]", "").strip()
+            # Split by '>' or '>]' and take last part
+            parts = re.split(r'>\s*', content)
+            content = parts[-1].strip() if parts else content.strip()
+            # Clean up any remaining thinking tags patterns
+            content = re.sub(r'\[n?t\w*\]', '', content)
+            content = re.sub(r'\s+', ' ', content)
+            content = content.strip()
+            # Take first meaningful response
+            first_sentence = content.split('.')[0] if '.' in content else content
+            first_sentence = first_sentence.strip()
+            if len(first_sentence) < 5 or first_sentence.lower().startswith(('okay', 'let', '首先', '这个', '该')):
+                # Fall back to second sentence or just return need more info
+                sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', content) if s.strip()]
+                content = ''
+                for s in sentences:
+                    s_clean = re.sub(r'\[n?t\w*\]', '', s).strip()
+                    if s_clean and not s_clean.lower().startswith(('okay', 'let', '首先', '这个', '该')):
+                        content = s_clean
+                        break
+            if not content or len(content) < 5:
+                return ""
+            content = content[:100].strip()
+            if content.lower().startswith('okay') or content.lower().startswith('let'):
+                return ""
 
-            if "Ready to analyze" in content:
-                return "Ready to analyze"
-            elif "reproduce" in content.lower():
+            # Check if LLM indicates info was requested
+            if "reproduce" in content.lower():
                 return "Need reproduce steps"
-            elif "Feature" in content:
-                return "Feature Request"
+            elif "need more information" in content.lower():
+                return "Need more information"
             else:
-                return content.strip()[:60]
+                # No info requested - sufficient info provided
+                return ""
 
-        return "Need more information"
+        return ""
 
     except Exception as e:
-        return "Need more information"
+        return ""
 
 
 class ActionAnalyzer:
