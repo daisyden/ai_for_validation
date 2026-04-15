@@ -57,7 +57,7 @@ PRIORITY_REASON_MAP = {
 
 # Action Reason type patterns for categorizing "Need Investigation"
 ACTION_REASON_PATTERNS = [
-    (r'All test cases passed', 'All test cases passed on both XPU and stock'),
+    (r'All test cases passed', 'All test cases passed on both XPU and stock - Reporter'),
     (r'PR closed but tests? still failing', 'PR closed but tests still failing'),
     (r'PR closed but no failed tests', 'PR closed but no failed tests'),
     (r'No specific action identified', 'No specific action identified - needs investigation'),
@@ -176,13 +176,29 @@ def build_developer_action_types(issues: list) -> list:
     """Get unique Action Reason types from Need Investigation issues.
     
     Returns sorted list of (type_name, list_of_issues) tuples, sorted by count descending.
+    Excludes issues where extracted reason matches Reporter Action TBD values.
     """
+    # Reporter action TBD values that might appear in Action Reason extraction
+    reporter_action_tbd = [
+        'Awaiting response from reporter',
+        'Needs Upstream Skip PR',
+        'add to skiplist',
+        'Close fixed issue',
+        'Verify the issue',
+        'E2E accuracy issue',
+    ]
+    
     type_map = {}
     for issue in issues:
         action_tbd = issue.get('Action TBD', '') or ''
         if action_tbd == 'Need Investigation':
             action_reason = issue.get('Action Reason', '') or ''
             reason_type = extract_reason_type(action_reason)
+            
+            # Skip if this extracted type corresponds to a Reporter action
+            if reason_type in reporter_action_tbd:
+                continue
+            
             if reason_type not in type_map:
                 type_map[reason_type] = []
             type_map[reason_type].append(issue)

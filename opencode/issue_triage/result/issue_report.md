@@ -1,6 +1,6 @@
 # Torch XPU Ops Issue Report
 
-**Generated:** 2026-04-15 05:16:40
+**Generated:** 2026-04-15 06:35:08
 **Total Issues:** 384
 
 ---
