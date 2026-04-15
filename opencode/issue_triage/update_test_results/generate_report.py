@@ -51,6 +51,13 @@ def extract_action_type(action_reason):
     return 'Unknown Action'
 
 
+def clean_cell(text):
+    """Remove newlines and excess whitespace from cell content for markdown tables."""
+    if text is None:
+        return ''
+    return ' '.join(str(text).split())
+
+
 def generate_report():
     wb = openpyxl.load_workbook(os.path.join(RESULT_DIR, 'torch_xpu_ops_issues.xlsx'))
     ws_issues = wb['Issues']
@@ -209,13 +216,13 @@ def generate_report():
                 sub_idx = 1
                 for issue in type_issues:
                     issue_id = issue.get('id') or ''
-                    title = issue.get('title') or ''
-                    action_reason = issue.get('action_reason') or ''
-                    summary = issue.get('summary') or ''
-                    assignee = issue.get('assignee') or ''
-                    owner_transfer = issue.get('owner_transfer') or ''
-                    pr_status = issue.get('pr_status') or ''
-                    test_module = issue.get('test_module') or ''
+                    title = clean_cell(issue.get('title'))
+                    action_reason = clean_cell(issue.get('action_reason'))
+                    summary = clean_cell(issue.get('summary'))
+                    assignee = clean_cell(issue.get('assignee'))
+                    owner_transfer = clean_cell(issue.get('owner_transfer'))
+                    pr_status = clean_cell(issue.get('pr_status'))
+                    test_module = clean_cell(issue.get('test_module'))
                     
                     md += f"| {sub_idx} | {issue_id} | {title} | {action_reason} | {summary} | {assignee} | {owner_transfer} | {pr_status} | {test_module} |\n"
                     sub_idx += 1
@@ -230,13 +237,13 @@ def generate_report():
             
             for issue in cat_issues:
                 issue_id = issue.get('id') or ''
-                title = issue.get('title') or ''
-                action_reason = issue.get('action_reason') or ''
-                summary = issue.get('summary') or ''
-                assignee = issue.get('assignee') or ''
-                owner_transfer = issue.get('owner_transfer') or ''
-                pr_status = issue.get('pr_status') or ''
-                test_module = issue.get('test_module') or ''
+                title = clean_cell(issue.get('title'))
+                action_reason = clean_cell(issue.get('action_reason'))
+                summary = clean_cell(issue.get('summary'))
+                assignee = clean_cell(issue.get('assignee'))
+                owner_transfer = clean_cell(issue.get('owner_transfer'))
+                pr_status = clean_cell(issue.get('pr_status'))
+                test_module = clean_cell(issue.get('test_module'))
                 
                 md += f"| {thread_idx} | {issue_id} | {title} | {action_reason} | {summary} | {assignee} | {owner_transfer} | {pr_status} | {test_module} |\n"
                 thread_idx += 1
@@ -270,13 +277,13 @@ def generate_report():
         
         for issue in issues_list:
             issue_id = issue.get('id') or ''
-            title = issue.get('title') or ''
-            action_reason = issue.get('action_reason') or ''
-            summary = issue.get('summary') or ''
-            assignee = issue.get('assignee') or ''
-            owner_transfer = issue.get('owner_transfer') or ''
-            pr_status = issue.get('pr_status') or ''
-            test_module = issue.get('test_module') or ''
+            title = clean_cell(issue.get('title'))
+            action_reason = clean_cell(issue.get('action_reason'))
+            summary = clean_cell(issue.get('summary'))
+            assignee = clean_cell(issue.get('assignee'))
+            owner_transfer = clean_cell(issue.get('owner_transfer'))
+            pr_status = clean_cell(issue.get('pr_status'))
+            test_module = clean_cell(issue.get('test_module'))
             
             md += f"| {thread_idx} | {issue_id} | {title} | {action_reason} | {summary} | {assignee} | {owner_transfer} | {pr_status} | {test_module} |\n"
             thread_idx += 1
@@ -293,14 +300,14 @@ def generate_report():
     thread_idx = 1
     for issue in duplicated:
         issue_id = issue.get('id') or ''
-        title = issue.get('title') or ''
-        summary = issue.get('summary') or ''
-        assignee = issue.get('assignee') or ''
-        priority = issue.get('priority') or ''
-        root_cause = issue.get('root_cause') or ''
+        title = clean_cell(issue.get('title'))
+        summary = clean_cell(issue.get('summary'))
+        assignee = clean_cell(issue.get('assignee'))
+        priority = clean_cell(issue.get('priority'))
+        root_cause = clean_cell(issue.get('root_cause'))
         dependency = issue.get('dependency') or ''
         dup = issue.get('duplicated_issue') or ''
-        test_module = issue.get('test_module') or ''
+        test_module = clean_cell(issue.get('test_module'))
         
         md += f"| {thread_idx} | {issue_id} | {title} | {summary} | {assignee} | {priority} | {root_cause} | {dependency} | {dup} | {test_module} |\n"
         thread_idx += 1
@@ -317,15 +324,15 @@ def generate_report():
     thread_idx = 1
     for issue in with_dependency:
         issue_id = issue.get('id') or ''
-        title = issue.get('title') or ''
-        summary = issue.get('summary') or ''
-        assignee = issue.get('assignee') or ''
-        priority = issue.get('priority') or ''
-        root_cause = issue.get('root_cause') or ''
-        category = issue.get('category') or ''
+        title = clean_cell(issue.get('title'))
+        summary = clean_cell(issue.get('summary'))
+        assignee = clean_cell(issue.get('assignee'))
+        priority = clean_cell(issue.get('priority'))
+        root_cause = clean_cell(issue.get('root_cause'))
+        category = clean_cell(issue.get('category'))
         dependency = issue.get('dependency') or ''
-        pr_status = issue.get('pr_status') or ''
-        test_module = issue.get('test_module') or ''
+        pr_status = clean_cell(issue.get('pr_status'))
+        test_module = clean_cell(issue.get('test_module'))
         
         md += f"| {thread_idx} | {issue_id} | {title} | {summary} | {assignee} | {priority} | {root_cause} | {category} | {dependency} | {pr_status} | {test_module} |\n"
         thread_idx += 1
