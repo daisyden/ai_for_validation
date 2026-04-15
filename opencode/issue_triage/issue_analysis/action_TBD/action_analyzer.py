@@ -46,10 +46,13 @@ def action_close_fixed_issue(
     e2e_all_passed: bool,
     reporter: str,
     is_random: bool = False,
+    xpu_statuses: set = None,
+    stock_statuses: set = None,
+    has_failed: bool = False,
     is_model_issue: bool = False
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """
-    Action: Close fixed issue (all test cases passed).
+    Action: Close fixed issue (ALL test cases passed with no failures).
 
     Returns:
         Tuple of (owner_transfer, action_tbd, reason) or (None, None, None) if not applicable
@@ -57,16 +60,15 @@ def action_close_fixed_issue(
     if is_random:
         return (None, None, None)
 
-    if xpu_all_passed or stock_all_passed:
+    # Issue is closed fixed ONLY if:
+    # 1. BOTH XPU and Stock have passed status (not just one)
+    # 2. NO failures in ANY status set
+    # This ensures the issue is truly resolved on both platforms
+    
+    if xpu_all_passed and stock_all_passed and not has_failed:
         owner = reporter
         action = 'Close fixed issue'
-        reason = 'All test cases passed on XPU/stock - issue is resolved'
-        return (owner, action, reason)
-
-    if e2e_all_passed:
-        owner = reporter
-        action = 'Close fixed issue'
-        reason = 'All E2E test cases passed - issue is resolved'
+        reason = 'All test cases passed on both XPU and stock - issue is resolved'
         return (owner, action, reason)
 
     return (None, None, None)
@@ -97,6 +99,43 @@ def action_enable_test(
         action = 'add to skiplist'
         reason = 'Test cases cannot be enabled on XPU - marked for skiplist'
     return (owner, action, reason)
+
+
+def action_enable_test(
+    has_cuda_enabled_error: bool,
+    cuda_case_exists: bool,
+    xpu_case_missing: bool,
+    both_status_blank: bool,
+    reporter: str = None
+) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    return (None, None, None)
+
+
+def action_awaiting_reporter_response(
+    has_requested_info: bool,
+    is_bug_or_perf: bool,
+    reporter: str = None
+) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    Action: Awaiting response from reporter when info was requested.
+    
+    Conditions:
+    1. Maintainer has requested more information from reporter (has_requested_info=True)
+    2. Issue is a bug or performance issue
+    
+    Then action = 'Awaiting response from reporter', owner = reporter
+
+    Returns:
+        Tuple of (owner_transfer, action_tbd, reason) or (None, None, None)
+    """
+    if has_requested_info and is_bug_or_perf:
+        return (
+            reporter,
+            'Awaiting response from reporter',
+            'Maintainer has requested more information from reporter - waiting for response'
+        )
+    
+    return (None, None, None)
 
 
 def action_verify_issue(
@@ -302,17 +341,11 @@ def action_no_status_pending(
     Returns:
         Tuple of (owner_transfer, action_tbd, reason) or (None, None, None) if not applicable
     """
-    if is_public and all_statuses_empty:
-        if e2e_all_passed:
-            owner = reporter
-            action = 'Close fixed issue'
-            reason = 'All tests passed - issue is resolved'
-            return (owner, action, reason)
-        else:
-            owner = assignee
-            action = ''
-            reason = 'Issue needs investigation - no test status available'
-            return (owner, action, reason)
+    if all_statuses_empty:
+        owner = reporter
+        action = 'No Test Status in CI'
+        reason = 'No test status available - needs testing'
+        return (owner, action, reason)
 
     return (None, None, None)
 
@@ -363,7 +396,11 @@ def analyze_action_all(
     pr_status: str,
     test_cases_info: List[Dict[str, Any]],
     llm_info_action: str = None,
-    version_info: str = None
+    version_info: str = None,
+    error_msg: str = None,
+    test_case_cuda_exists: bool = False,
+    test_case_xpu_exists: bool = True,
+    has_cuda_enabled_error: bool = False
 ) -> Tuple[str, str, str]:
     """
     Comprehensive action analysis for an issue.
@@ -382,7 +419,7 @@ def analyze_action_all(
     is_wontfix = 'wont ' in labels_str or ' wont ' in labels_str or 'wontfix' in labels_str or 'not target' in labels_str.replace('nottarget', '')
     is_upstream = 'ut_upstream' in labels_str or 'inductor' in labels_str
 
-    is_e2e_issue = test_module == 'e2e'
+    is_e2e_issue = test_module == 'e2e' or 'e2e' in (test_module or '').lower()
     is_accuracy_issue = 'accuracy' in title_lower or 'accuracy' in summary_lower
 
     xpu_all_passed = xpu_statuses == {'passed'}
@@ -432,60 +469,102 @@ def analyze_action_all(
         owner_transfer, action_tbd, action_tbd_reason = result
         return (owner_transfer, action_tbd, action_tbd_reason)
 
-    # Priority 2: Close fixed issue (all tests passed)
-    result = action_close_fixed_issue(xpu_all_passed, stock_all_passed, e2e_all_passed, reporter, is_random)
+    # Priority 2: Close fixed issue (all tests passed - no failures)
+    result = action_close_fixed_issue(
+        xpu_all_passed, stock_all_passed, e2e_all_passed, reporter, is_random,
+        xpu_statuses=xpu_statuses, stock_statuses=stock_statuses, has_failed=has_failed
+    )
     if result[0] or result[1]:
         owner_transfer, action_tbd, action_tbd_reason = result
         return (owner_transfer, action_tbd, action_tbd_reason)
 
-    # Priority 3: Enable test (can_enable_true takes precedence over can_enable_false)
-    result = action_enable_test(can_enable_true, can_enable_false, reporter)
+    # Priority 2.5: Enable CUDA Test->XPU migration (CUDA enabled error case)
+    # ONLY triggers when: CUDA error + CUDA case exists + XPU case NOT exists + both status blank
+    result = action_enable_test(
+        has_cuda_enabled_error=has_cuda_enabled_error,
+        cuda_case_exists=test_case_cuda_exists,
+        xpu_case_missing=not test_case_xpu_exists,  # XPU test case does NOT exist
+        both_status_blank=all_statuses_empty,
+        reporter=reporter
+    )
     if result[0] and result[1]:
         owner_transfer, action_tbd, action_tbd_reason = result
         return (owner_transfer, action_tbd, action_tbd_reason)
 
-    # Priority 4: Verify the issue (PR closed, no failures)
-    result = action_verify_issue(pr_closed, has_failed, reporter, assignee)
+    # Priority 3: Verify the issue (has PR, no failures)
+    # Relaxed: trigger for ANY PR reported
+    pr_reported = pr_status and str(pr_status).strip().lower() not in ['none', '']
+    if pr_reported and not has_failed:
+        result = action_verify_issue(pr_reported, has_failed, reporter, assignee)
     if result[0] and result[1]:
         owner_transfer, action_tbd, action_tbd_reason = result
         return (owner_transfer, action_tbd, action_tbd_reason)
 
-    # Priority 5: Revisit PR as case failed (PR closed, still failing)
-    result = action_revisit_pr_failed(pr_closed, has_failed, assignee)
-    if result[0] and result[1]:
-        owner_transfer, action_tbd, action_tbd_reason = result
-        return (owner_transfer, action_tbd, action_tbd_reason)
-
-    # Priority 6: Needs Skip PR (combines upstream skip PR logic)
-    result = action_needs_skip_pr(is_wontfix, is_upstream, is_not_target, assignee)
-    if result[0] and result[1]:
-        owner_transfer, action_tbd, action_tbd_reason = result
-        return (owner_transfer, action_tbd, action_tbd_reason)
-
-    # Priority 7: E2E accuracy issue pending
-    if not action_tbd:
-        result = action_e2e_issue(is_e2e_issue, has_e2e_status, e2e_all_passed, is_accuracy_issue, reporter, assignee)
-        if result[0] is not None:
+    # Priority 5: Revisit PR as case failed (has PR, still failing)
+    if pr_reported and has_failed:
+        result = action_revisit_pr_failed(pr_reported, has_failed, assignee)
+        if result[0] and result[1]:
             owner_transfer, action_tbd, action_tbd_reason = result
             return (owner_transfer, action_tbd, action_tbd_reason)
 
+    # Priority 6: Needs Skip PR (wontfix/not_target only, NOT upstream)
+    if not action_tbd and (is_wontfix or is_not_target) and not is_upstream:
+        owner_transfer = assignee if assignee else reporter
+        action_tbd = 'Needs Skip PR'
+        action_tbd_reason = 'Issue marked as wontfix/not_target - needs skip PR'
+        return (owner_transfer, action_tbd, action_tbd_reason)
+
+    # Priority 6b: Needs Upstream Skip PR (upstream issues only)
+    if not action_tbd and is_upstream:
+        owner_transfer = assignee if assignee else reporter
+        action_tbd = 'Needs Upstream Skip PR'
+        action_tbd_reason = 'Issue is upstream - needs skip PR upstream'
+        return (owner_transfer, action_tbd, action_tbd_reason)
+
+    # Priority 6: E2E accuracy issue pending
+    if not action_tbd and is_e2e_issue and is_accuracy_issue:
+        owner_transfer = assignee if assignee else reporter
+        action_tbd = 'E2E accuracy issue'
+        action_tbd_reason = 'E2E accuracy issue pending - needs upstream investigation'
+        return (owner_transfer, action_tbd, action_tbd_reason)
+
+    # Priority 7: No Test Status in CI
+    if not action_tbd:
         result = action_no_status_pending(is_public, all_statuses_empty, e2e_all_passed, reporter, assignee)
         if result[0] is not None:
             owner_transfer, action_tbd, action_tbd_reason = result
             return (owner_transfer, action_tbd, action_tbd_reason)
 
-    # Priority 8: LLM suggestions
-    if not action_tbd and not is_feature_request and not is_e2e_issue:
-        has_already_requested = check_info_requested_to_reporter(title_raw + ' ' + summary_raw, title_raw, summary_raw)
+    # Priority 8: Awaiting response from reporter (is_bug/perf)
+    if not action_tbd and is_bug_or_perf and not has_failed:
+        owner_transfer = reporter
+        action_tbd = 'Awaiting response from reporter'
+        action_tbd_reason = 'Bug/Perf issue pending reporter response'
+        return (owner_transfer, action_tbd, action_tbd_reason)
 
-        result = action_need_reproduce_steps(llm_info_action, reporter)
-        if result[0] and result[1]:
-            owner_transfer, action_tbd, action_tbd_reason = result
+    # Priority 9: Need reproduce steps (keyword based)
+    if not action_tbd and not is_feature_request:
+        title_sum = (title_raw + ' ' + summary_raw).lower()
+        if any(kw in title_sum for kw in ['no error', 'cannot reproduce', 'reproduce', 'how to']):
+            owner_transfer = reporter
+            action_tbd = 'Need reproduce steps'
+            action_tbd_reason = 'Issue needs reproducible test case from reporter'
             return (owner_transfer, action_tbd, action_tbd_reason)
 
-        result = action_llm_suggestion(llm_info_action, reporter)
-        if result[0] and result[1]:
-            owner_transfer, action_tbd, action_tbd_reason = result
+    # Priority 10: Bug/Perf awaiting responses
+    if not action_tbd and is_bug_or_perf:
+        owner_transfer = reporter
+        action_tbd = 'Awaiting response'
+        action_tbd_reason = 'Bug/Perf issue awaiting reporter response'
+        return (owner_transfer, action_tbd, action_tbd_reason)
+
+    # Priority 11: Need more information (accuracy/performance keywords)
+    if not action_tbd and is_bug_or_perf and not has_failed:
+        title_sum = (str(title_raw) + ' ' + str(summary_raw)).lower()
+        if any(kw in title_sum for kw in ['accuracy', 'performance', 'regression', 'slow', 'wrong']):
+            owner_transfer = reporter
+            action_tbd = 'Need more information'
+            action_tbd_reason = 'Issue needs accuracy/performance data from reporter'
             return (owner_transfer, action_tbd, action_tbd_reason)
 
         result = action_bug_ready_for_upstream(
@@ -551,6 +630,17 @@ def check_info_requested_to_reporter(issue_content: str, title_raw: str = '', su
         'please run',
         'please check',
         'please verify',
+        'reproduce',
+        'reproduction steps',
+        'how to reproduce',
+        'provide the',
+        'please include',
+        'could you provide',
+        'can you also',
+        'is there a way',
+        'tell us more',
+        'elaborate',
+        'clarify',
     ]
 
     content_lower = issue_content.lower()
@@ -558,13 +648,6 @@ def check_info_requested_to_reporter(issue_content: str, title_raw: str = '', su
     
     if keyword_found:
         return True
-    
-    # Fallback to LLM if title/summary available
-    if title_raw and summary_raw:
-        llm_result = check_info_requested_to_reporter_llm(title_raw, summary_raw)
-        # If LLM suggests we need more info or reproduce steps, treat as if info was requested
-        if llm_result and ('more information' in llm_result.lower() or 'reproduce' in llm_result.lower()):
-            return True
     
     return False
 
@@ -743,7 +826,11 @@ class ActionAnalyzer:
         pr_status: str = None,
         test_cases_info: Optional[List[Dict]] = None,
         llm_info_action: str = None,
-        version_info: str = None
+        version_info: str = None,
+        error_msg: str = None,
+        test_case_cuda_exists: bool = False,
+        test_case_xpu_exists: bool = True,
+        has_cuda_enabled_error: bool = False
     ) -> Tuple[str, str, str]:
         """
         Analyze and determine appropriate action for an issue.
@@ -764,5 +851,9 @@ class ActionAnalyzer:
             xpu_statuses, stock_statuses, e2e_statuses,
             issue_can_enable, issue_duplicated_map,
             pr_status, test_cases_info, llm_info_action,
-            version_info
+            version_info,
+            error_msg=error_msg,
+            test_case_cuda_exists=test_case_cuda_exists,
+            test_case_xpu_exists=test_case_xpu_exists,
+            has_cuda_enabled_error=has_cuda_enabled_error
         )

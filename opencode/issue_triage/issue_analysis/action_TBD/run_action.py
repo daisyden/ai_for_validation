@@ -24,10 +24,7 @@ RESULT_DIR = os.environ.get('RESULT_DIR', os.path.join(ROOT_DIR, 'result'))
 
 sys.path.insert(0, ROOT_DIR)
 
-from issue_analysis.action_TBD.action_analyzer import (
-    analyze_action_all,
-    check_info_requested_to_reporter_llm
-)
+from issue_analysis.action_TBD.action_analyzer import analyze_action_all
 
 
 def get_column_by_header(ws, header_name):
@@ -85,6 +82,9 @@ def get_test_columns(ws):
         'xpu_status': get_column_by_header(ws, 'XPU Status'),
         'stock_status': get_column_by_header(ws, 'Stock Status'),
         'no_match_reason': get_column_by_header(ws, 'No Match Reason'),
+        'can_enable_on_xpu': get_column_by_header(ws, 'can_enable_on_xpu'),
+        'cuda_case_exist': get_column_by_header(ws, 'CUDA Case Exist'),
+        'xpu_case_exist': get_column_by_header(ws, 'XPU Case Exist'),
     }
 
 
@@ -112,12 +112,14 @@ def add_action_columns(excel_file, limit=None, force=False):
     issue_cols = get_issues_columns(ws_issues)
     test_cols = get_test_columns(ws_test)
 
-    # Verify required columns exist
-    required_issue_cols = ['issue_id', 'title', 'summary', 'labels', 'reporter', 'assignee', 'test_module', 'pr_status']
+    # Verify required columns exist (pr_status is optional)
+    required_issue_cols = ['issue_id', 'title', 'summary', 'labels', 'reporter', 'assignee', 'test_module']
     missing = [c for c in required_issue_cols if not issue_cols.get(c)]
     if missing:
         print(f"  Error: Missing required columns in Issues sheet: {missing}")
         return
+    if not issue_cols.get('pr_status'):
+        print(f"  Note: Missing 'PR Status' column - PR-based actions will be skipped")
 
     # Find existing Action columns or use first blank
     action_tbd_col = get_column_by_header(ws_issues, 'Action TBD')
@@ -173,7 +175,10 @@ def add_action_columns(excel_file, limit=None, force=False):
                 'error_msg': ws_test.cell(tr, test_cols['error_msg']).value if test_cols['error_msg'] else None,
                 'traceback': ws_test.cell(tr, test_cols['traceback']).value if test_cols['traceback'] else None,
                 'xpu_status': ws_test.cell(tr, test_cols['xpu_status']).value if test_cols['xpu_status'] else None,
-                'stock_status': ws_test.cell(tr, test_cols['stock_status']).value if test_cols['stock_status'] else None
+                'stock_status': ws_test.cell(tr, test_cols['stock_status']).value if test_cols['stock_status'] else None,
+                'can_enable_on_xpu': ws_test.cell(tr, test_cols.get('can_enable_on_xpu', 0)).value if test_cols.get('can_enable_on_xpu') else None,
+                'cuda_case_exist': ws_test.cell(tr, test_cols.get('cuda_case_exist', 0)).value if test_cols.get('cuda_case_exist') else None,
+                'xpu_case_exist': ws_test.cell(tr, test_cols.get('xpu_case_exist', 0)).value if test_cols.get('xpu_case_exist') else None,
             })
 
     # Process issues
@@ -203,13 +208,20 @@ def add_action_columns(excel_file, limit=None, force=False):
         reporter = ws_issues.cell(row_idx, issue_cols['reporter']).value or ''
         assignee = ws_issues.cell(row_idx, issue_cols['assignee']).value or ''
         test_module = ws_issues.cell(row_idx, issue_cols['test_module']).value or ''
-        pr_status = ws_issues.cell(row_idx, issue_cols['pr_status']).value or ''
+        pr_status = ws_issues.cell(row_idx, issue_cols['pr_status']).value if issue_cols.get('pr_status') else ''
 
         # Get test case info
         tc_list = test_case_map.get(issue_id, [])
         xpu_statuses = set()
         stock_statuses = set()
         e2e_statuses = set()
+        can_enable_list = []
+        
+        # For CUDA Enable Test logic: check first test case with blank status
+        has_cuda_enabled_error = False
+        cuda_case_exists = False
+        xpu_case_exists = False
+        error_msg = None
 
         for tc in tc_list:
             xpu_status = tc.get('xpu_status', '')
@@ -218,13 +230,38 @@ def add_action_columns(excel_file, limit=None, force=False):
                 xpu_statuses.add(str(xpu_status).lower())
             if stock_status:
                 stock_statuses.add(str(stock_status).lower())
+            can_enable_val = tc.get('can_enable_on_xpu')
+            if can_enable_val is not None:
+                can_enable_list.append(can_enable_val)
+            
+            # Check for CUDA enabled error and CUDA/XPU case existence
+            # Only use values from rows where BOTH XPU and Stock status are blank
+            tc_xpu = tc.get('xpu_status', '')
+            tc_stock = tc.get('stock_status', '')
+            if (tc_xpu is None or tc_xpu == '') and (tc_stock is None or tc_stock == ''):
+                # Both blank - this row qualifies for CUDA->XPU check
+                tc_error_msg = tc.get('error_msg', '')
+                if tc_error_msg and 'cuda enabled' in str(tc_error_msg).lower():
+                    has_cuda_enabled_error = True
+                    error_msg = tc_error_msg
+                
+                tc_cuda = tc.get('cuda_case_exist', '')
+                if tc_cuda == 'True':
+                    cuda_case_exists = True
+                
+                tc_xpu_exist = tc.get('xpu_case_exist', '')
+                if tc_xpu_exist == 'True':
+                    xpu_case_exists = True
 
-        # Get LLM info action for reproduce steps detection
-        error_msg = tc_list[0].get('error_msg', '') if tc_list else ''
-        traceback = tc_list[0].get('traceback', '') if tc_list else ''
-        llm_info_action = check_info_requested_to_reporter_llm(title, summary, error_msg, traceback)
+        # Format issue_can_enable for analyze_action_all
+        issue_can_enable = {
+            issue_id: {
+                'can_enable_list': can_enable_list,
+                'comments_list': []
+            }
+        }
 
-        # Run action analysis (note: issue_can_enable not used in current logic)
+        # Run action analysis with new CUDA Enable Test parameters
         owner_transfer, action_tbd, action_reason = analyze_action_all(
             issue_id=str(issue_id),
             labels=labels,
@@ -236,12 +273,16 @@ def add_action_columns(excel_file, limit=None, force=False):
             xpu_statuses=xpu_statuses,
             stock_statuses=stock_statuses,
             e2e_statuses=e2e_statuses,
-            issue_can_enable={},  # Not used in current action logic
+            issue_can_enable=issue_can_enable,
             issue_duplicated_map={},
             pr_status=pr_status,
             test_cases_info=tc_list,
-            llm_info_action=llm_info_action,
-            version_info=None
+            llm_info_action=None,
+            version_info=None,
+            error_msg=error_msg,
+            test_case_cuda_exists=cuda_case_exists,
+            test_case_xpu_exists=xpu_case_exists,
+            has_cuda_enabled_error=has_cuda_enabled_error
         )
 
         if not action_tbd:
