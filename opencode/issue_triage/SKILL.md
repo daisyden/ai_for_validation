@@ -190,4 +190,47 @@ python3 pr_extraction.py $RESULT_DIR/torch_xpu_ops_issues.xlsx
 # Step 4: Update test results (includes priority, category, root cause analysis)
 cd ~/ai_for_validation/opencode/issue_triage/update_test_results
 python3 update_test_results.py
+
+# Step 5: Generate Issue Report (Action Required section)
+cd ~/ai_for_validation/opencode/issue_triage/issue_analysis
+python3 generate_issue_report.py
 ```
+
+---
+
+## Issue Report Structure
+
+The `generate_issue_report.py` script creates `issue_report.md` with a structured Table of Contents:
+
+### Section 1: Summary
+Overview of issues by category
+
+### Section 2: Action Required
+Organized by assignee responsibility:
+
+**2.1 Developer AR (Need Investigation by Action Reason)**
+- Issues needing developer investigation
+- Grouped by type of Action Reason extracted from `Action Reason` column
+- Examples:
+  - "Missing XPU kernel implementation"
+  - "Test failure investigation needed"
+  - "Precision/dtype fix needed"
+
+**2.2 Reporter AR (Other Action TBD)**
+- Actions for reporters/community to take
+- Categories: Awaiting response, needs skiplist, E2E accuracy issue, etc.
+
+### Sections 3-8
+3. Issues by Category
+4. Last Week Issues
+5. Stale Issues
+6. Dependency Issues
+7. Duplicated Issues
+8. Statistics (Action TBD, Category, Test Module distributions)
+
+### Anchors
+All sections use `span id='anchor-name'` for cross-referencing:
+- `#2-action-required` - Action Required section
+- `#action-required-developer` - Developer AR subsection
+- `#action-required-reporter` - Reporter AR subsection
+- Section-specific anchors (e.g., `#2.1-1-missing-xpu-kernel-implementation`)

@@ -14,100 +14,91 @@ Analyzes PyTorch XPU issues to determine appropriate actions (Action TBD, Owner 
 4. Apply action rules from ActionAnalyzer in priority order
 5. Add columns: Action TBD, Owner Transfer, Action Reason
 
-## Usage
+## Usage to Generate Actions
 ```bash
-cd /home/daisydeng/ai_for_validation/opencode/issue_triage/issue_analysis/action_TBD
+cd ~/ai_for_validation/opencode/issue_triage/issue_analysis/action_TBD
 python3 run_action.py [--excel EXCEL_FILE] [--limit N] [--force]
 ```
 
-## Examples
+## Issue Report Generation
+Generate comprehensive Markdown report at `result/issue_report.md`:
 ```bash
-# Run full action analysis on all issues
-python3 run_action.py
-
-# Test with first 10 issues
-python3 run_action.py --limit 10
-
-# Force overwrite existing values
-python3 run_action.py --force
+cd ~/ai_for_validation/opencode/issue_triage/issue_analysis
+python3 generate_issue_report.py [EXCEL_FILE] [OUTPUT_FILE]
 ```
 
-## Action Types
+## Action Required Section Structure
 
-| Action | Condition |
-|--------|-----------|
-| **add to skiplist** | not_target/wontfix issues or tests that cannot be enabled |
-| **Close fixed issue** | All test cases passed on XPU/stock or all E2E accuracy passed |
-| **Enable test** | Test cases can be enabled on XPU (takes precedence over skiplist) |
-| **Verify the issue** | PR closed but no failed tests |
-| **Revisit the PR as case failed** | PR closed but tests still failing |
-| **Needs Upstream Skip PR (not_target + ut_upstream)** | Upstream issue with not_target label |
-| **Needs Skip PR (wontfix / not_target)** | wontfix or not_target issues |
-| **Awaiting response from reporter** | Info already requested from reporter |
-| **Need reproduce steps** | LLM suggests missing repro steps |
-| **LLM Suggestion: ...** | Other LLM-suggested actions |
-| **Need more information - ...** | Missing key details (accuracy data, perf numbers, etc.) |
-| **Need Investigation** | Fallback action - no specific action found OR E2E accuracy issue pending |
+Issues are categorized into two main sections based on who needs to take action:
 
-## Action Priority Order
+### 2.1 Developer AR (Reporter/Community action needed)
 
-1. **add to skiplist** - not_target/wontfix or cannot enable
-2. **Close fixed issue** - all tests passed
-3. **Enable test** - can_enable_true takes precedence over can_enable_false
-4. **Verify the issue** - PR closed, no failures
-5. **Revisit the PR as case failed** - PR closed, still failing
-6. **Needs Upstream Skip PR** - upstream + not_target (consolidated in action_needs_skip_pr)
-7. **Needs Skip PR** - wontfix/not_target
-8. **Awaiting response from reporter** - info requested
-9. **Need reproduce steps** - LLM suggests repro needed
-10. **LLM Suggestion** - other LLM recommendations
-11. **Need more information** - missing key details
+| # | Action | Owner | Current Count |
+|---|--------|-------|-------------|
+| 2.1.1 | Need Investigation | assignee | 89 |
+| 2.1.2 | Awaiting response | reporter | 53 |
+| 2.1.3 | Awaiting response from reporter | reporter | 143 |
+| 2.1.4 | E2E accuracy issue | assignee | 11 |
 
-## Key Updates (Recent Changes)
+### 2.2 Reporter AR (Other actions pending)
 
-### 1. Dynamic Column Detection by Header Names
-```python
-# OLD: Hardcoded column positions
-xpu_status = ws_test.cell(tr, 12).value  # Fixed column index
+| # | Action | Owner | Current Count |
+|---|--------|-------|-------------|
+| 2.2.5 | Needs Upstream Skip PR | assignee | 76 |
+| 2.2.6 | add to skiplist | varies | 5 |
+| 2.2.7 | Close fixed issue | reporter | 4 |
+| 2.2.8 | Verify the issue | reporter | 3 |
 
-# NEW: Detect by header name
-xpu_status_col = get_column_by_header(ws_test, 'XPU Status')
-xpu_status = ws_test.cell(tr, xpu_status_col).value
-```
+**Total Issues: 384**
 
-### 2. action_enable_test() Logic
-```python
-# Now properly checks both flags with precedence
-def action_enable_test(can_enable_true, can_enable_false, reporter):
-    if not can_enable_true and not can_enable_false:
-        return (None, None, None)
-    
-    if can_enable_true:
-        return (reporter, 'Enable test', 'Test cases can be enabled on XPU')
-    else:
-        return (reporter, 'add to skiplist', 'Test cases cannot be enabled on XPU')
-```
+## Priority Details
 
-### 3. Removed Duplicate Function
-- `action_needs_upstream_skip_pr()` was identical to logic inside `action_needs_skip_pr()`
-- Consolidated into single `action_needs_skip_pr()` function
-- The upstream skip PR logic is now handled within `action_needs_skip_pr()` as first condition
+### Priority 1: add to skiplist
+- Triggers: Issue has `not_target` or `wontfix` label
+- Owner: assignee or default
 
-## Output
-- **Action TBD column**: Action type (e.g., "Close fixed issue", "add to skiplist")
-- **Owner Transfer column**: Suggested owner to transfer
-- **Action Reason column**: Detailed explanation of the action
+### Priority 2: Close fixed issue
+- Triggers: BOTH XPU and Stock all passed AND NO failures
+- Owner: reporter
 
-## Key Features
-- **Rule-based analysis**: No LLM calls for main logic
-- **LLM fallback**: Uses Qwen3-32B for reproduce steps detection
-- **Dynamic column detection**: Finds columns by header names, not fixed positions
-- **Safe column addition**: Uses existing columns or adds at first blank
-- **Force mode**: Overwrite existing action values with `--force`
-- **Skip existing**: By default skips issues that already have action
+### Priority 3: Verify the issue
+- Triggers: Any PR reported AND no failures
+- Owner: reporter
 
-## Related Info
+### Priority 4: Need Investigation
+- Fallback when no other priority matches
+- Owner: assignee
+
+### Priority 5: Needs Upstream Skip PR
+- Triggers: Issue has upstream label
+- Owner: assignee
+
+### Priority 7: E2E accuracy issue
+- Triggers: E2E module AND accuracy keyword in title/summary
+- Owner: assignee
+
+### Priority 8: Awaiting response
+- Triggers: Bug/Perf type AND no failures
+- Owner: reporter
+
+### Priority 9: Awaiting response from reporter
+- Triggers: Maintainer asked for info in issue title/summary
+- Owner: reporter
+
+## Report Sections
+1. Summary (Dev AR + Reporter AR counts)
+2. Action Required (Detail tables for each action)
+3. Issues by Category
+4. Last Week Issues
+5. Stale Issues (>2 weeks)
+6. Dependency Issues
+7. Duplicated Issues
+8. Statistics
+
+## Related Files
 - Analyzer: `issue_analysis/action_TBD/action_analyzer.py`
 - Runner: `issue_analysis/action_TBD/run_action.py`
+- Report Generator: `issue_analysis/generate_issue_report.py`
 - Input: Issues sheet and Test Cases sheet (both require headers)
 - Output: Action columns at first blank column (preserves existing data)
+- Report: `result/issue_report.md`

@@ -336,17 +336,12 @@ def action_no_status_pending(
     assignee: str = None
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """
-    Action: No test status available - pending investigation.
+    DISABLED: No Test Status in CI action removed.
+    Issues with no test status will fall through to Need Investigation fallback.
 
     Returns:
-        Tuple of (owner_transfer, action_tbd, reason) or (None, None, None) if not applicable
+        Tuple of (None, None, None) - action disabled
     """
-    if all_statuses_empty:
-        owner = reporter
-        action = 'No Test Status in CI'
-        reason = 'No test status available - needs testing'
-        return (owner, action, reason)
-
     return (None, None, None)
 
 
