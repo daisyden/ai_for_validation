@@ -4,9 +4,7 @@ Generate issue_report.md
 
 Creates a comprehensive Markdown report with:
 1. Summary
-2. Action Required
-   2.1 Developer AR (Need Investigation by Action Reason type)
-   2.2 Reporter AR (other Action TBD values)
+2. Action Required (Need Investigation issues grouped by Action Reason type)
 3. Issues by Category
 4. Last Week Issues
 5. Stale Issues
@@ -55,26 +53,7 @@ PRIORITY_REASON_MAP = {
     99: 'No specific action identified',
 }
 
-# Action Reason type patterns for categorizing "Need Investigation"
-ACTION_REASON_PATTERNS = [
-    (r'All test cases passed', 'All test cases passed on both XPU and stock'),
-    (r'PR closed but tests? still failing', 'PR closed but tests still failing'),
-    (r'PR closed but no failed tests', 'PR closed but no failed tests'),
-    (r'No specific action identified', 'No specific action identified - needs investigation'),
-    (r'Bug/Perf issue awaiting reporter response', 'Bug/Perf issue awaiting reporter response'),
-    (r'Fix (distributed|Gloo|backend|initialization)', 'Backend/initialization fix needed'),
-    (r'Fix (precision|dtype|accuracy)', 'Precision/dtype fix needed'),
-    (r'Fix (memory|allocation|deallocation)', 'Memory management fix needed'),
-    (r'Fix (flash attention|torch\._decomp|sdpa)', 'Flash attention/op fix needed'),
-    (r'Fix (Inductor|lowering|decomposition)', 'Inductor compilation fix needed'),
-    (r'Implement XPU-specific kernel', 'Missing XPU kernel implementation'),
-    (r'Implement (distributed|backend)', 'Missing distributed backend'),
-    (r'Add test case to skiplist|xfail', 'Needs skiplist/xfail entry'),
-    (r'Optimize performance', 'Performance optimization needed'),
-    (r'Investigate|Fix error:', 'Test failure investigation needed'),
-    (r'Fix output mismatch', 'Output mismatch to fix'),
-    (r'needs investigation', 'needs investigation'),
-]
+
 
 # Column width limits
 TITLE_LEN = 65
@@ -144,82 +123,19 @@ def load_issues(excel_file: str) -> list:
         for col, header in enumerate(headers, 1):
             # Rename duplicate headers for clarity
             if header == 'Action Reason':
-                if col == 21:
-                    display_header = 'Action Reason'
-                elif col == 27:
-                    display_header = 'Action Reason Derived'
+                if col == 27:  # Second Action Reason column
+                    issue['Action Reason Derived'] = ws.cell(row, col).value
                 else:
-                    display_header = header
+                    issue[header] = ws.cell(row, col).value
             else:
-                display_header = header
-            issue[display_header] = ws.cell(row, col).value
+                issue[header] = ws.cell(row, col).value
         issues.append(issue)
     
     print(f"Loaded {len(issues)} issues")
     return issues
 
 
-def extract_reason_type(action_reason: str) -> str:
-    """Extract a categorization type from Action Reason text."""
-    if not action_reason:
-        return 'Needs investigation - general'
-    ar = str(action_reason)
-    for pattern, label in ACTION_REASON_PATTERNS:
-        if re.search(pattern, ar, re.IGNORECASE):
-            return label
-    if ':' in ar:
-        return ar.split(':')[0].strip()[:60]
-    return ar.strip()[:60]
 
-
-def build_developer_action_types(issues: list) -> list:
-    """Get unique Action Reason types from Need Investigation issues.
-    
-    Returns sorted list of (type_name, list_of_issues) tuples, sorted by count descending.
-    """
-    type_map = {}
-    for issue in issues:
-        action_tbd = issue.get('Action TBD', '') or ''
-        if action_tbd == 'Need Investigation':
-            action_reason = issue.get('Action Reason', '') or ''
-            reason_type = extract_reason_type(action_reason)
-            if reason_type not in type_map:
-                type_map[reason_type] = []
-            type_map[reason_type].append(issue)
-    
-    # Sort by count descending
-    sorted_types = sorted(type_map.items(), key=lambda x: -len(x[1]))
-    return sorted_types
-
-
-def build_reporter_action_types(issues: list) -> list:
-    """Get Action TBD values for Reporter AR (all except Need Investigation).
-    
-    Returns list of (action_tbd_name, list_of_issues) tuples.
-    """
-    reporter_types = [
-        'Needs Upstream Skip PR',
-        'add to skiplist',
-        'Close fixed issue',
-        'Verify the issue',
-        'Awaiting response',
-        'Awaiting response from reporter',
-        'E2E accuracy issue',
-    ]
-    type_map = {}
-    for issue in issues:
-        action_tbd = issue.get('Action TBD', '') or ''
-        if action_tbd and action_tbd != 'Need Investigation':
-            if action_tbd not in type_map:
-                type_map[action_tbd] = []
-            type_map[action_tbd].append(issue)
-    
-    # Return only types that have issues, in the defined order
-    result = []
-    for action in reporter_types:
-        if action in type_map and type_map[action]:
-            result.append((action, type_map[action]))
-    return result
 
 
 def build_categories() -> list:
@@ -322,45 +238,84 @@ def generate_table_row(idx: int, issue: dict, show_action: bool = False, use_dis
     return '| ' + ' | '.join(str(x) for x in row) + ' |'
 
 
+def extract_action_reason_type(action_reason: str) -> str:
+    """Extract action reason type from Action Reason text.
+    
+    Returns the text before ' - ' or ': ' that indicates the type of action needed,
+    e.g., 'Fix distributed operation on XPU', 'PR closed but tests still failing', etc.
+    If no clear delimiter, returns the first meaningful phrase.
+    """
+    if not action_reason:
+        return 'Others'
+    ar = str(action_reason).strip()
+    
+    # Find the first ' - ' or ':' delimiter
+    for delim in [' - ', ':']:
+        if delim in ar:
+            type_part = ar.split(delim)[0].strip()
+            if len(type_part) > 3:
+                return type_part
+    
+    # If starts with common action verbs, use first 50 chars
+    common_prefixes = ['Fix', 'PR closed', 'Add test', 'Implement', 'Investigate', 'Optimize', 'Update', 'Create', 'Enable']
+    for prefix in common_prefixes:
+        if ar.startswith(prefix):
+            # Take up to first sentence/delimiter
+            words = ar.split()
+            result = []
+            for word in words:
+                result.append(word)
+                if len(' '.join(result)) > 50 or word.endswith('.') or word.endswith(','):
+                    break
+            return ' '.join(result)[:60].rstrip()
+    
+    # Fallback: first meaningful portion
+    if len(ar) > 10:
+        return ar[:50].rstrip() + ('...' if len(ar) > 50 else '')
+    
+    return 'Others' if len(ar) < 5 else ar
+
+
+def build_action_reason_types(issues: list) -> dict:
+    """Get issues with 'Need Investigation' action_TBD, grouped by Action Reason type.
+    
+    Returns dict of {type_name: [list_of_issues]}, sorted by count descending.
+    """
+    type_map = {}
+    for issue in issues:
+        action_tbd = issue.get('Action TBD', '') or ''
+        if action_tbd == 'Need Investigation':
+            action_reason = issue.get('Action Reason', '') or ''
+            reason_type = extract_action_reason_type(action_reason)
+            if reason_type not in type_map:
+                type_map[reason_type] = []
+            type_map[reason_type].append(issue)
+    
+    # Sort by count descending
+    sorted_types = {k: type_map[k] for k in sorted(type_map.keys(), key=lambda x: -len(type_map[x]))}
+    return sorted_types
+
+
 def generate_action_required_section(issues: list) -> str:
-    """Generate section 2: Action Required with Developer and Reporter subsections."""
+    """Generate section 2: Action Required - Need Investigation issues grouped by Action Reason type."""
     lines = []
     lines.append('## <span id=\'2-action-required\'>2. Action Required</span>\n')
     
-    # 2.1 Developer AR - Need Investigation by Action Reason type
-    lines.append('### <span id=\'action-required-developer\'>2.1 Developer AR (Need Investigation by Action Reason)</span>\n')
-    lines.append('*Issues pending investigation, grouped by type of action needed - Developer*\n')
+    # Get Need Investigation issues grouped by Action Reason type
+    type_map = build_action_reason_types(issues)
     
-    dev_types = build_developer_action_types(issues)
+    if not type_map:
+        lines.append('No issues requiring investigation.\n')
+        return '\n'.join(lines)
     
-    # Separate feature requests from other issues
-    feature_requests = []
-    regular_dev_issues = []
-    small_type_issues = []  # For tables with < 3 issues
-    
-    for reason_type, type_issues in dev_types:
-        # Separate feature request typed issues from regular issues
-        non_feature_issues = [issue for issue in type_issues if 'feature request' not in str(issue.get('Type', '')).lower()]
-        feature_issues = [issue for issue in type_issues if 'feature request' in str(issue.get('Type', '')).lower()]
-        
-        # Add feature typed issues to feature_requests
-        feature_requests.extend(feature_issues)
-        
-        # Use non-feature issues for regular tables
-        if len(non_feature_issues) >= 3:
-            regular_dev_issues.append((reason_type, non_feature_issues))
-        elif len(non_feature_issues) > 0:
-            small_type_issues.extend(non_feature_issues)
-    
-    # Generate tables for regular dev types (>= 3 issues)
-    dev_idx = 1
-    for reason_type, type_issues in regular_dev_issues:
+    # Generate table for each type
+    idx = 1
+    for reason_type, type_issues in sorted(type_map.items(), key=lambda x: -len(x[1])):
         issue_list = sorted(type_issues, key=lambda x: x.get('Issue ID', 0), reverse=True)
         count = len(issue_list)
         
-        # Create anchor
-        anchor = f'2.1-{dev_idx}-' + reason_type.lower().replace(' ', '-').replace('/', '-').replace(',', '')[:40]
-        lines.append(f'#### <span id=\'{anchor}\'>2.1.{dev_idx} {reason_type} - Developer</span> ({count} issues)\n')
+        anchor = f'ar-{idx}-' + reason_type.lower().replace(' ', '-').replace('/', '-').replace(',', '')[:40]
+        lines.append(f'### <span id=\'{anchor}\'>{idx}. {reason_type}</span> ({count} issues)\n')
         lines.append(generate_table_header2())
         lines.append(generate_table_separator2())
         
@@ -368,59 +323,7 @@ def generate_action_required_section(issues: list) -> str:
             lines.append(generate_table_row(row_idx, issue, show_action=True, full_action_reason=True))
         
         lines.append('')
-        dev_idx += 1
-    
-    # Merge small tables (< 3 issues) into "Others"
-    if small_type_issues:
-        issue_list = sorted(small_type_issues, key=lambda x: x.get('Issue ID', 0), reverse=True)
-        count = len(issue_list)
-        
-        lines.append(f'#### <span id=\'2.1-{dev_idx}-others\'>2.1.{dev_idx} Others - Developer</span> ({count} issues)\n')
-        lines.append('*Tables merged due to low issue count (< 3 issues each)*\n')
-        lines.append(generate_table_header2())
-        lines.append(generate_table_separator2())
-        
-        for row_idx, issue in enumerate(issue_list, 1):
-            lines.append(generate_table_row(row_idx, issue, show_action=True, full_action_reason=True))
-        
-        lines.append('')
-        dev_idx += 1
-    
-    # Feature Requests Table
-    if feature_requests:
-        issue_list = sorted(feature_requests, key=lambda x: x.get('Issue ID', 0), reverse=True)
-        count = len(issue_list)
-        
-        lines.append(f'#### <span id=\'2.1-{dev_idx}-feature-requests\'>2.1.{dev_idx} Feature Requests - Developer</span> ({count} issues)\n')
-        lines.append(generate_table_header2())
-        lines.append(generate_table_separator2())
-        
-        for row_idx, issue in enumerate(issue_list, 1):
-            lines.append(generate_table_row(row_idx, issue, show_action=True, full_action_reason=True))
-        
-        lines.append('')
-    
-    # 2.2 Reporter AR - Other Action TBD values
-    lines.append('### <span id=\'action-required-reporter\'>2.2 Reporter AR (Other Action TBD)</span>\n')
-    lines.append('*Action TBD values requiring reporter/community response*\n')
-    
-    reporter_types = build_reporter_action_types(issues)
-    reporter_idx = 1
-    for action, action_issues in reporter_types:
-        issue_list = sorted(action_issues, key=lambda x: x.get('Issue ID', 0), reverse=True)
-        count = len(issue_list)
-        
-        # Create anchor
-        anchor = f'2.2-{reporter_idx}-' + action.lower().replace(' ', '-').replace('/', '-')[:40]
-        lines.append(f'#### <span id=\'{anchor}\'>2.2.{reporter_idx} {action} - Reporter</span> ({count} issues)\n')
-        lines.append(generate_table_header2())
-        lines.append(generate_table_separator2())
-        
-        for row_idx, issue in enumerate(issue_list, 1):
-            lines.append(generate_table_row(row_idx, issue, show_action=True, full_action_reason=True))
-        
-        lines.append('')
-        reporter_idx += 1
+        idx += 1
     
     return '\n'.join(lines)
 
@@ -451,9 +354,9 @@ def generate_summary_section(issues: list) -> str:
 
 
 def generate_category_section(issues: list) -> str:
-    """Generate section 3: Issues by Category."""
+    """Generate section 2: Issues by Category."""
     lines = []
-    lines.append('## <span id=\'3-issues-by-category\'>3. Issues by Category</span>\n')
+    lines.append('## <span id=\'2-issues-by-category\'>2. Issues by Category</span>\n')
     
     # Group by Category using normalized display names
     by_category = {}
@@ -496,9 +399,9 @@ def generate_category_section(issues: list) -> str:
 
 
 def generate_last_week_section(issues: list) -> str:
-    """Generate section 4: Last Week Issues."""
+    """Generate section 5: Last Week Issues."""
     lines = []
-    lines.append('## <span id=\'4-last-week-issues\'>4. Last Week Issues</span>\n')
+    lines.append('## <span id=\'5-last-week-issues\'>5. Last Week Issues</span>\n')
     
     # Calculate date 7 days ago
     seven_days_ago = datetime.now() - timedelta(days=7)
@@ -545,7 +448,7 @@ def generate_last_week_section(issues: list) -> str:
 def generate_stale_section(issues: list) -> str:
     """Generate section 5: Stale Issues."""
     lines = []
-    lines.append('## <span id=\'4-stale-issues\'>4. Stale Issues - No Update 2+ Weeks</span>\n')
+    lines.append('## <span id=\'5-stale-issues\'>5. Stale Issues - No Update 2+ Weeks</span>\n')
     
     # Calculate date 14 days ago
     fourteen_days_ago = datetime.now() - timedelta(days=14)
@@ -674,7 +577,7 @@ def generate_duplicated_section(issues: list) -> str:
 
 
 def generate_statistics_section(issues: list) -> str:
-    """Generate section 7: Statistics."""
+    """Generate section 8: Statistics."""
     lines = []
     lines.append('## <span id=\'8-statistics\'>8. Statistics</span>\n')
     
@@ -724,58 +627,19 @@ def generate_index(issues: list) -> str:
     lines = []
     lines.append('## Index\n')
     
-    # Action Required count
-    action_counts = {}
-    for issue in issues:
-        action = issue.get('Action TBD', '') or 'Need Investigation'
-        action_counts[action] = action_counts.get(action, 0) + 1
-    ni_count = action_counts.get('Need Investigation', 0)
-    
     lines.append(f'- [1. Summary](#1-summary) - {len(issues)} issues')
-    lines.append('- [2. Action Required](#2-action-required)')
     
-    # Developer AR - Need Investigation by type
-    dev_types = build_developer_action_types(issues)
+    # Action Required - Need Investigation by Action Reason type
+    ar_count = sum(1 for issue in issues if issue.get('Action TBD', '') == 'Need Investigation')
+    lines.append(f'- [2. Action Required](#2-action-required) - {ar_count} Need Investigation issues')
     
-    # Separate feature requests and small tables
-    feature_requests = []
-    small_type_issues = []
-    regular_dev_issues = []
-    
-    for reason_type, type_issues in dev_types:
-        # Separate feature request typed issues from regular issues
-        non_feature_issues = [issue for issue in type_issues if 'feature request' not in str(issue.get('Type', '')).lower()]
-        feature_issues = [issue for issue in type_issues if 'feature request' in str(issue.get('Type', '')).lower()]
-        
-        # Add feature typed issues to feature_requests
-        feature_requests.extend(feature_issues)
-        
-        # Use non-feature issues for regular tables
-        if len(non_feature_issues) >= 3:
-            regular_dev_issues.append((reason_type, non_feature_issues))
-        elif len(non_feature_issues) > 0:
-            small_type_issues.extend(non_feature_issues)
-    
-    # Index for regular dev types
-    for idx, (reason_type, type_issues) in enumerate(regular_dev_issues, 1):
-        anchor = f'2.1-{idx}-' + reason_type.lower().replace(' ', '-').replace('/', '-').replace(',', '')[:40]
-        lines.append(f'    - [2.1.{idx}. {reason_type} - Developer](#{anchor}) - {len(type_issues)}')
-    
-    # Index for merged "Others"
-    if small_type_issues:
-        lines.append(f'    - [2.1.{len(regular_dev_issues) + 1}. Others - Developer](#2.1-{len(regular_dev_issues) + 1}-others) - {len(small_type_issues)}')
-    
-    # Index for Feature Requests - use correct numbering
-    if feature_requests:
-        # Feature index = regular_dev_issues count + (1 if Others exists) + 1 for Feature
-        feature_idx = len(regular_dev_issues) + (1 if small_type_issues else 0) + 1
-        lines.append(f'    - [2.1.{feature_idx}. Feature Requests - Developer](#2.1-{feature_idx}-feature-requests) - {len(feature_requests)}')
-    
-    # Reporter AR - Other actions
-    reporter_types = build_reporter_action_types(issues)
-    for idx, (action, action_issues) in enumerate(reporter_types, 1):
-        anchor = f'2.2-{idx}-' + action.lower().replace(' ', '-').replace('/', '-')[:40]
-        lines.append(f'    - [2.2.{idx}. {action} - Reporter](#{anchor}) - {len(action_issues)}')
+    # Action Required sub-entries
+    type_map = build_action_reason_types(issues)
+    idx = 1
+    for reason_type, type_issues in sorted(type_map.items(), key=lambda x: -len(x[1])):
+        anchor = f'ar-{idx}-' + reason_type.lower().replace(' ', '-').replace('/', '-').replace(',', '')[:40]
+        lines.append(f'    - [2.{idx}. {reason_type}](#{anchor}) ({len(type_issues)} issues)')
+        idx += 1
     
     # Category count
     cat_counts = {}
@@ -783,7 +647,7 @@ def generate_index(issues: list) -> str:
         cat = issue.get('Category', 'unknown') or 'unknown'
         cat_counts[cat] = cat_counts.get(cat, 0) + 1
     total_cat = sum(cat_counts.values())
-    lines.append(f'- [3. Issues by Category](#3-issues-by-category) - {total_cat} issues')
+    lines.append(f'- [3. Issues by Category](#3-issues-by-category)')
     
     # Last week
     seven_days_ago = datetime.now() - timedelta(days=7)
@@ -797,6 +661,44 @@ def generate_index(issues: list) -> str:
             try:
                 if datetime.strptime(created[:10], '%Y-%m-%d') >= seven_days_ago:
                     last_week_count += 1
+            except ValueError:
+                pass
+    lines.append(f'- [3. Last Week Issues](#3-last-week-issues) - {last_week_count} issues')
+    
+    # Stale
+    stale_count = 0
+    fourteen_days_ago = datetime.now() - timedelta(days=14)
+    for issue in issues:
+        status = str(issue.get('Status', '')).lower()
+        if 'closed' in status:
+            continue
+        updated = issue.get('Updated Time')
+        if updated and isinstance(updated, datetime):
+            if updated < fourteen_days_ago:
+                stale_count += 1
+        elif isinstance(updated, str) and len(updated) >= 10:
+            try:
+                if datetime.strptime(updated[:10], '%Y-%m-%d') < fourteen_days_ago:
+                    stale_count += 1
+            except ValueError:
+                pass
+    lines.append(f'- [4. Last Week Issues](#3-last-week-issues) - {last_week_count} issues')
+    
+    # Stale
+    stale_count = 0
+    fourteen_days_ago = datetime.now() - timedelta(days=14)
+    for issue in issues:
+        status = str(issue.get('Status', '')).lower()
+        if 'closed' in status:
+            continue
+        updated = issue.get('Updated Time')
+        if updated and isinstance(updated, datetime):
+            if updated < fourteen_days_ago:
+                stale_count += 1
+        elif isinstance(updated, str) and len(updated) >= 10:
+            try:
+                if datetime.strptime(updated[:10], '%Y-%m-%d') < fourteen_days_ago:
+                    stale_count += 1
             except ValueError:
                 pass
     lines.append(f'- [4. Last Week Issues](#4-last-week-issues) - {last_week_count} issues')
@@ -828,7 +730,7 @@ def generate_index(issues: list) -> str:
     dupe_count = sum(1 for issue in issues if issue.get('duplicated_issue', '') and str(issue.get('duplicated_issue', '')).strip())
     lines.append(f'- [7. Duplicated Issues](#7-duplicated-issues) - {dupe_count} issues')
     
-    lines.append('- [8. Statistics](#8-statistics)\n')
+    lines.append(f'- [8. Statistics](#8-statistics)')
     
     return '\n'.join(lines)
 

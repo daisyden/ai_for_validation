@@ -139,11 +139,21 @@ def copy_action_reason(
     
     print(f"Target: Issue ID at col {target_issue_col}, Action Reason at col {target_action_col}")
     
-    # Update Action Reason in target for EXACT Issue ID matches only
+    # Find Action TBD column in target
+    target_action_tbd_col = None
+    for i, cell in enumerate(ws_target[1], 1):
+        if cell.value == 'Action TBD':
+            target_action_tbd_col = i
+            break
+
+    print(f"Target: Action TBD at col {target_action_tbd_col}")
+
+    # Update Action Reason in target for EXACT Issue ID matches only (when Action TBD = 'Need Investigation')
     updated_count = 0
     skipped_count = 0
     not_found_count = 0
     empty_source_count = 0
+    skipped_wrong_action = 0
     
     for row_idx, row in enumerate(ws_target.iter_rows(min_row=2), start=2):
         target_issue_id = row[target_issue_col - 1].value
@@ -153,6 +163,13 @@ def copy_action_reason(
             continue
         if isinstance(target_issue_id, str) and target_issue_id.strip() == '':
             continue
+
+        # Check Action TBD - only copy if 'Need Investigation'
+        if target_action_tbd_col:
+            action_tbd = row[target_action_tbd_col - 1].value
+            if action_tbd != 'Need Investigation':
+                skipped_wrong_action += 1
+                continue
             
         # ONLY copy if Issue ID EXACTLY matches AND source has Action Reason
         if target_issue_id in source_data:
@@ -184,6 +201,7 @@ def copy_action_reason(
     print(f"  Skipped (same value): {skipped_count}")
     print(f"  Not found in source: {not_found_count}")  
     print(f"  Empty in source: {empty_source_count}")
+    print(f"  Skipped (wrong Action TBD): {skipped_wrong_action}")
     print(f"{'='*60}")
     
     # Save target workbook (ONLY Action Reason column modified)

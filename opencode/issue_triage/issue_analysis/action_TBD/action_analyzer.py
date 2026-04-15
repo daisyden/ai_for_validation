@@ -183,7 +183,8 @@ def action_needs_skip_pr(
     is_wontfix: bool,
     is_upstream: bool,
     is_not_target: bool,
-    assignee: str = None
+    assignee: str = None,
+    reporter: str = None
 ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """
     Action: Needs Skip PR (wontfix / not_target + upstream).
@@ -193,15 +194,15 @@ def action_needs_skip_pr(
         Tuple of (owner_transfer, action_tbd, reason) or (None, None, None) if not applicable
     """
     is_not_target_upstream = is_not_target and is_upstream
+    owner = assignee if assignee else reporter
 
     if is_not_target_upstream:
-        owner = assignee
-        action = 'Needs Upstream Skip PR (not_target + ut_upstream)'
+        action = 'action_needs_skip_pr'
         reason = 'Issue has not_target label and is upstream - needs skip PR upstream'
         return (owner, action, reason)
-    elif is_wontfix:
-        owner = assignee
-        action = 'Needs Skip PR (wontfix / not_target)'
+
+    if is_wontfix:
+        action = 'action_needs_skip_pr'
         reason = 'Issue marked as wontfix or not_target - needs skip PR'
         return (owner, action, reason)
 
@@ -511,10 +512,10 @@ def analyze_action_all(
 
     # Priority 6b: Needs Upstream Skip PR (upstream issues only)
     if not action_tbd and is_upstream:
-        owner_transfer = assignee if assignee else reporter
-        action_tbd = 'Needs Upstream Skip PR'
-        action_tbd_reason = 'Issue is upstream - needs skip PR upstream'
-        return (owner_transfer, action_tbd, action_tbd_reason)
+        result = action_needs_skip_pr(is_wontfix, is_upstream, is_not_target, assignee, reporter)
+        if result[0] is not None:
+            owner_transfer, action_tbd, action_tbd_reason = result
+            return (owner_transfer, action_tbd, action_tbd_reason)
 
     # Priority 6: E2E accuracy issue pending
     if not action_tbd and is_e2e_issue and is_accuracy_issue:
@@ -530,52 +531,52 @@ def analyze_action_all(
             owner_transfer, action_tbd, action_tbd_reason = result
             return (owner_transfer, action_tbd, action_tbd_reason)
 
-    # Priority 8: Awaiting response from reporter (is_bug/perf)
-    if not action_tbd and is_bug_or_perf and not has_failed:
-        owner_transfer = reporter
-        action_tbd = 'Awaiting response from reporter'
-        action_tbd_reason = 'Bug/Perf issue pending reporter response'
-        return (owner_transfer, action_tbd, action_tbd_reason)
+#    # Priority 8: Awaiting response from reporter (is_bug/perf)
+#    if not action_tbd and is_bug_or_perf and not has_failed:
+#        owner_transfer = reporter
+#        action_tbd = 'Awaiting response from reporter'
+#        action_tbd_reason = 'Bug/Perf issue pending reporter response'
+#        return (owner_transfer, action_tbd, action_tbd_reason)
 
-    # Priority 9: Need reproduce steps (keyword based)
-    if not action_tbd and not is_feature_request:
-        title_sum = (title_raw + ' ' + summary_raw).lower()
-        if any(kw in title_sum for kw in ['no error', 'cannot reproduce', 'reproduce', 'how to']):
-            owner_transfer = reporter
-            action_tbd = 'Need reproduce steps'
-            action_tbd_reason = 'Issue needs reproducible test case from reporter'
-            return (owner_transfer, action_tbd, action_tbd_reason)
+#    # Priority 9: Need reproduce steps (keyword based)
+#    if not action_tbd and not is_feature_request:
+#        title_sum = (title_raw + ' ' + summary_raw).lower()
+#        if any(kw in title_sum for kw in ['no error', 'cannot reproduce', 'reproduce', 'how to']):
+#            owner_transfer = reporter
+#            action_tbd = 'Need reproduce steps'
+#            action_tbd_reason = 'Issue needs reproducible test case from reporter'
+#            return (owner_transfer, action_tbd, action_tbd_reason)
 
-    # Priority 10: Bug/Perf awaiting responses
-    if not action_tbd and is_bug_or_perf:
-        owner_transfer = reporter
-        action_tbd = 'Awaiting response'
-        action_tbd_reason = 'Bug/Perf issue awaiting reporter response'
-        return (owner_transfer, action_tbd, action_tbd_reason)
+#    # Priority 10: Bug/Perf awaiting responses
+#    if not action_tbd and is_bug_or_perf:
+#        owner_transfer = reporter
+#        action_tbd = 'Awaiting response'
+#        action_tbd_reason = 'Bug/Perf issue awaiting reporter response'
+#        return (owner_transfer, action_tbd, action_tbd_reason)
 
     # Priority 11: Need more information (accuracy/performance keywords)
     if not action_tbd and is_bug_or_perf and not has_failed:
         title_sum = (str(title_raw) + ' ' + str(summary_raw)).lower()
-        if any(kw in title_sum for kw in ['accuracy', 'performance', 'regression', 'slow', 'wrong']):
-            owner_transfer = reporter
-            action_tbd = 'Need more information'
-            action_tbd_reason = 'Issue needs accuracy/performance data from reporter'
-            return (owner_transfer, action_tbd, action_tbd_reason)
+        #if any(kw in title_sum for kw in ['accuracy', 'performance', 'regression', 'slow', 'wrong']):
+        #    owner_transfer = reporter
+        #    action_tbd = 'Need more information'
+        #    action_tbd_reason = 'Issue needs accuracy/performance data from reporter'
+        #    return (owner_transfer, action_tbd, action_tbd_reason)
 
-        result = action_bug_ready_for_upstream(
-            any(tc.get('test_file') and tc.get('test_case') for tc in test_cases_info),
-            is_bug_or_perf,
-            has_already_requested,
-            reporter
-        )
-        if result[0] is not None:
-            owner_transfer, action_tbd, action_tbd_reason = result
-            return (owner_transfer, action_tbd, action_tbd_reason)
+        #result = action_bug_ready_for_upstream(
+        #    any(tc.get('test_file') and tc.get('test_case') for tc in test_cases_info),
+        #    is_bug_or_perf,
+        #    has_already_requested,
+        #    reporter
+        #)
+        #if result[0] is not None:
+        #    owner_transfer, action_tbd, action_tbd_reason = result
+        #    return (owner_transfer, action_tbd, action_tbd_reason)
 
-        result = action_awaiting_response_from_reporter(has_already_requested, is_bug_or_perf, reporter)
-        if result[0] and result[1]:
-            owner_transfer, action_tbd, action_tbd_reason = result
-            return (owner_transfer, action_tbd, action_tbd_reason)
+        #result = action_awaiting_response_from_reporter(has_already_requested, is_bug_or_perf, reporter)
+        #if result[0] and result[1]:
+        #    owner_transfer, action_tbd, action_tbd_reason = result
+        #    return (owner_transfer, action_tbd, action_tbd_reason)
 
         result = action_need_more_information(
             is_feature_request, is_bug_or_perf, is_e2e_issue,
