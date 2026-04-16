@@ -17,13 +17,15 @@ import re
 ROOT_DIR = "/home/daisydeng"
 RESULT_DIR = os.environ.get("RESULT_DIR", "/home/daisydeng/ai_for_validation/opencode/issue_triage/result")
 
+GITHUB_REPO_BASE = "https://github.com/intel/torch-xpu-ops/issues"
+
 UPSTREAM_UT_ISSUE_IDS = [
-    1893, 1962, 1972, 2015, 2024, 2164, 2169, 2214, 2229, 2244, 2245, 2253, 2255, 2270,
-    2283, 2285, 2287, 2295, 2301, 2309, 2329, 2376, 2436, 2442, 2482, 2512, 2531, 2532,
-    2536, 2541, 2554, 2578, 2609, 2611, 2613, 2615, 2620, 2694, 2697, 2698, 2715, 2720,
-    2783, 2800, 2802, 2806, 2810, 2853, 2888, 2891, 2958, 2997, 2999, 3004, 3006, 3007,
-    3033, 3126, 3127, 3128, 3129, 3131, 3132, 3133, 3136, 3137, 3140, 3141, 3142, 3143,
-    3163, 3166, 3170, 3177, 3187, 3238
+    1893, 2015, 2024, 2164, 2169, 2214, 2229, 2244, 2245, 2253, 2255, 2270, 2283,
+    2285, 2287, 2295, 2301, 2309, 2329, 2376, 2436, 2442, 2482, 2512, 2531, 2532,
+    2536, 2541, 2554, 2578, 2609, 2611, 2613, 2615, 2694, 2697, 2698, 2715, 2720,
+    2783, 2800, 2802, 2806, 2853, 2888, 2891, 2958, 2997, 2999, 3006, 3033, 3126,
+    3127, 3128, 3129, 3131, 3132, 3133, 3136, 3137, 3140, 3141, 3142, 3143, 3163,
+    3166, 3170, 3177, 3187, 3238
 ]
 
 
@@ -132,6 +134,11 @@ def days_since_update(updated_time):
     except:
         return None
     return None
+
+
+def make_issue_link(issue_id):
+    """Create GitHub issue link."""
+    return f"[#{issue_id}]({GITHUB_REPO_BASE}/{issue_id})"
 
 
 def generate_report_content(issues, report_title, upstream_only=False):
@@ -249,7 +256,7 @@ def generate_report_content(issues, report_title, upstream_only=False):
                 
                 sub_idx = 1
                 for issue in sort_by_priority(type_issues):
-                    issue_id = issue.get('id') or ''
+                    issue_id = make_issue_link(issue.get('id') or '')
                     title = clean_cell(issue.get('title'))
                     priority = clean_cell(issue.get('priority'))
                     priority_reason = clean_cell(issue.get('priority_reason'))
@@ -267,10 +274,10 @@ def generate_report_content(issues, report_title, upstream_only=False):
         else:
             md += f"### <span id='{anchor}'>{cat}</span> ({len(cat_issues)} issues)\n\n"
             md += "| # | ID | Title | Priority | Priority Reason | Action Reason | Summary | Assignee | Test Module | Related PR |\n"
-            md += "|--:|----|-------|----------|---------------|---------------|---------|----------|-------------|-------------|\n"
+            md += "|--:|----|-------|----------|---------------|---------------|-----------|----------|-------------|-------------|\n"
             
             for issue in sort_by_priority(cat_issues):
-                issue_id = issue.get('id') or ''
+                issue_id = make_issue_link(issue.get('id') or '')
                 title = clean_cell(issue.get('title'))
                 priority = clean_cell(issue.get('priority'))
                 priority_reason = clean_cell(issue.get('priority_reason'))
@@ -310,7 +317,7 @@ def generate_report_content(issues, report_title, upstream_only=False):
         md += "|--:|----|-------|----------|---------------|---------------|---------|----------|-------------|-------------|\n"
         
         for issue in sort_by_priority(issues_list):
-            issue_id = issue.get('id') or ''
+            issue_id = make_issue_link(issue.get('id') or '')
             title = clean_cell(issue.get('title'))
             priority = clean_cell(issue.get('priority'))
             priority_reason = clean_cell(issue.get('priority_reason'))
@@ -334,7 +341,7 @@ def generate_report_content(issues, report_title, upstream_only=False):
         md += "|--:|----|-------|----------|---------------|---------------|---------|----------|--------------|-------------|\n"
         
         for issue in sort_by_priority(last_week):
-            issue_id = issue.get('id') or ''
+            issue_id = make_issue_link(issue.get('id') or '')
             title = clean_cell(issue.get('title'))
             priority = clean_cell(issue.get('priority'))
             priority_reason = clean_cell(issue.get('priority_reason'))
@@ -362,7 +369,7 @@ def generate_report_content(issues, report_title, upstream_only=False):
         md += "|--:|----|-------|----------|---------------|---------------|---------|----------|---------------|-------------------|-------------|\n"
         
         for issue in sort_by_priority(stale_issues):
-            issue_id = issue.get('id') or ''
+            issue_id = make_issue_link(issue.get('id') or '')
             title = clean_cell(issue.get('title'))
             priority = clean_cell(issue.get('priority'))
             priority_reason = clean_cell(issue.get('priority_reason'))
@@ -389,7 +396,7 @@ def generate_report_content(issues, report_title, upstream_only=False):
     md += "|--:|----|-------|----------|---------------|---------|----------|---------|-----------|----------------|-------------|-------------|\n"
     
     for issue in sort_by_priority(duplicated):
-        issue_id = issue.get('id') or ''
+        issue_id = make_issue_link(issue.get('id') or '')
         title = clean_cell(issue.get('title'))
         priority = clean_cell(issue.get('priority'))
         priority_reason = clean_cell(issue.get('priority_reason'))
@@ -413,7 +420,7 @@ def generate_report_content(issues, report_title, upstream_only=False):
     md += "|--:|----|-------|----------|---------------|---------|----------|---------|----------|------------|-------------|-------------|\n"
     
     for issue in sort_by_priority(with_dependency):
-        issue_id = issue.get('id') or ''
+        issue_id = make_issue_link(issue.get('id') or '')
         title = clean_cell(issue.get('title'))
         priority = clean_cell(issue.get('priority'))
         priority_reason = clean_cell(issue.get('priority_reason'))
