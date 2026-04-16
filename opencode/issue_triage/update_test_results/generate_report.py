@@ -64,6 +64,22 @@ def extract_action_type(action_reason):
     return 'Unknown Action'
 
 
+def get_priority_key(issue):
+    """Get sort key for priority. P0=0, P1=1, P2=2, etc."""
+    priority = issue.get('priority') or ''
+    if priority.startswith('P'):
+        try:
+            return int(priority[1:])
+        except ValueError:
+            pass
+    return 99
+
+
+def sort_by_priority(issues_list):
+    """Sort issues by priority (P0 first), then by ID ascending."""
+    return sorted(issues_list, key=lambda x: (get_priority_key(x), -int(x.get('id', 0))))
+
+
 def clean_cell(text):
     """Remove newlines and excess whitespace from cell content for markdown tables."""
     if text is None:
@@ -228,43 +244,45 @@ def generate_report_content(issues, report_title, upstream_only=False):
             for action_type, type_issues in sorted(need_inv_by_action_type.items(), key=lambda x: -len(x[1])):
                 type_anchor = f"{anchor}-{slugify(action_type)}"
                 md += f"#### <span id='{type_anchor}'>{action_type}</span> ({len(type_issues)} issues)\n"
-                md += "| # | ID | Title | Action Reason | Summary | Assignee | Owner Transfer | PR Status | Test Module |\n"
-                md += "|--:|----|-------|---------------|---------|----------|----------------|-----------|-------------|\n"
+                md += "| # | ID | Title | Priority | Priority Reason | Action Reason | Summary | Assignee | Test Module | Related PR |\n"
+                md += "|--:|----|-------|----------|---------------|---------------|---------|----------|-------------|-------------|\n"
                 
                 sub_idx = 1
-                for issue in type_issues:
+                for issue in sort_by_priority(type_issues):
                     issue_id = issue.get('id') or ''
                     title = clean_cell(issue.get('title'))
+                    priority = clean_cell(issue.get('priority'))
+                    priority_reason = clean_cell(issue.get('priority_reason'))
                     action_reason = clean_cell(issue.get('action_reason'))
                     summary = clean_cell(issue.get('summary'))
                     assignee = clean_cell(issue.get('assignee'))
-                    owner_transfer = clean_cell(issue.get('owner_transfer'))
-                    pr_status = clean_cell(issue.get('pr_status'))
                     test_module = clean_cell(issue.get('test_module'))
+                    pr = clean_cell(issue.get('pr'))
                     
-                    md += f"| {sub_idx} | {issue_id} | {title} | {action_reason} | {summary} | {assignee} | {owner_transfer} | {pr_status} | {test_module} |\n"
+                    md += f"| {sub_idx} | {issue_id} | {title} | {priority} | {priority_reason} | {action_reason} | {summary} | {assignee} | {test_module} | {pr} |\n"
                     sub_idx += 1
-                md += f"| | | **Subtotal: {len(type_issues)} issues** | | | | | |\n\n"
+                md += f"| | | **Subtotal: {len(type_issues)} issues** | | | | | | | |\n\n"
             md += f"| | | **Category Total: {len(cat_issues)} issues** | | | | | |\n\n"
         
         else:
             md += f"### <span id='{anchor}'>{cat}</span> ({len(cat_issues)} issues)\n\n"
-            md += "| # | ID | Title | Action Reason | Summary | Assignee | Owner Transfer | PR Status | Test Module |\n"
-            md += "|--:|----|-------|---------------|---------|----------|----------------|-----------|-------------|\n"
+            md += "| # | ID | Title | Priority | Priority Reason | Action Reason | Summary | Assignee | Test Module | Related PR |\n"
+            md += "|--:|----|-------|----------|---------------|---------------|---------|----------|-------------|-------------|\n"
             
-            for issue in cat_issues:
+            for issue in sort_by_priority(cat_issues):
                 issue_id = issue.get('id') or ''
                 title = clean_cell(issue.get('title'))
+                priority = clean_cell(issue.get('priority'))
+                priority_reason = clean_cell(issue.get('priority_reason'))
                 action_reason = clean_cell(issue.get('action_reason'))
                 summary = clean_cell(issue.get('summary'))
                 assignee = clean_cell(issue.get('assignee'))
-                owner_transfer = clean_cell(issue.get('owner_transfer'))
-                pr_status = clean_cell(issue.get('pr_status'))
                 test_module = clean_cell(issue.get('test_module'))
+                pr = clean_cell(issue.get('pr'))
                 
-                md += f"| {thread_idx} | {issue_id} | {title} | {action_reason} | {summary} | {assignee} | {owner_transfer} | {pr_status} | {test_module} |\n"
+                md += f"| {thread_idx} | {issue_id} | {title} | {priority} | {priority_reason} | {action_reason} | {summary} | {assignee} | {test_module} | {pr} |\n"
                 thread_idx += 1
-            md += f"| | | **Subtotal: {len(cat_issues)} issues** | | | | | |\n\n"
+            md += f"| | | **Subtotal: {len(cat_issues)} issues** | | | | | | | |\n\n"
     
     md += "[Back to Index](#toc) |\n\n"
     
@@ -286,25 +304,25 @@ def generate_report_content(issues, report_title, upstream_only=False):
         if not issues_list:
             continue
         
-        issues_list.sort(key=lambda x: x.get('id', 0))
         anchor = slugify(action)
         md += f"### <span id='{anchor}'>{action}</span> ({len(issues_list)} issues)\n\n"
-        md += "| # | ID | Title | Action Reason | Summary | Assignee | Owner Transfer | PR Status | Test Module |\n"
-        md += "|--:|----|-------|---------------|---------|----------|----------------|-----------|-------------|\n"
+        md += "| # | ID | Title | Priority | Priority Reason | Action Reason | Summary | Assignee | Test Module | Related PR |\n"
+        md += "|--:|----|-------|----------|---------------|---------------|---------|----------|-------------|-------------|\n"
         
-        for issue in issues_list:
+        for issue in sort_by_priority(issues_list):
             issue_id = issue.get('id') or ''
             title = clean_cell(issue.get('title'))
+            priority = clean_cell(issue.get('priority'))
+            priority_reason = clean_cell(issue.get('priority_reason'))
             action_reason = clean_cell(issue.get('action_reason'))
             summary = clean_cell(issue.get('summary'))
             assignee = clean_cell(issue.get('assignee'))
-            owner_transfer = clean_cell(issue.get('owner_transfer'))
-            pr_status = clean_cell(issue.get('pr_status'))
             test_module = clean_cell(issue.get('test_module'))
+            pr = clean_cell(issue.get('pr'))
             
-            md += f"| {thread_idx} | {issue_id} | {title} | {action_reason} | {summary} | {assignee} | {owner_transfer} | {pr_status} | {test_module} |\n"
+            md += f"| {thread_idx} | {issue_id} | {title} | {priority} | {priority_reason} | {action_reason} | {summary} | {assignee} | {test_module} | {pr} |\n"
             thread_idx += 1
-        md += f"| | | **Subtotal: {len(issues_list)} issues** | | | | | |\n\n"
+        md += f"| | | **Subtotal: {len(issues_list)} issues** | | | | | | | |\n\n"
     
     md += "[Back to Index](#toc) |\n\n"
     
@@ -312,24 +330,25 @@ def generate_report_content(issues, report_title, upstream_only=False):
     md += f"**Total: {last_week_count} issues** - Issues created in the last 7 days\n\n"
     
     if last_week:
-        md += "| # | ID | Title | Action Reason | Summary | Category | Created Time |\n"
-        md += "|--:|----|-------|---------------|---------|----------|--------------|\n"
+        md += "| # | ID | Title | Priority | Priority Reason | Action Reason | Summary | Category | Created Time | Related PR |\n"
+        md += "|--:|----|-------|----------|---------------|---------------|---------|----------|--------------|-------------|\n"
         
-        last_week.sort(key=lambda x: x.get('id', 0))
-        thread_idx = 1
-        for issue in last_week:
+        for issue in sort_by_priority(last_week):
             issue_id = issue.get('id') or ''
             title = clean_cell(issue.get('title'))
+            priority = clean_cell(issue.get('priority'))
+            priority_reason = clean_cell(issue.get('priority_reason'))
             action_reason = clean_cell(issue.get('action_reason'))
             summary = clean_cell(issue.get('summary'))
             category = clean_cell(issue.get('category'))
             created_time = issue.get('created_time') or ''
             if isinstance(created_time, datetime):
                 created_time = created_time.strftime('%Y-%m-%d')
+            pr = clean_cell(issue.get('pr'))
             
-            md += f"| {thread_idx} | {issue_id} | {title} | {action_reason} | {summary} | {category} | {created_time} |\n"
+            md += f"| {thread_idx} | {issue_id} | {title} | {priority} | {priority_reason} | {action_reason} | {summary} | {category} | {created_time} | {pr} |\n"
             thread_idx += 1
-        md += f"| | | **Subtotal: {thread_idx-1} issues** | | | | |\n\n"
+        md += f"| | | **Subtotal: {thread_idx-1} issues** | | | | | | | |\n\n"
     else:
         md += "No issues created in the last 7 days.\n\n"
     
@@ -339,14 +358,14 @@ def generate_report_content(issues, report_title, upstream_only=False):
     md += f"**Total: {stale_count} issues** - Issues not updated in 2+ weeks\n\n"
     
     if stale_issues:
-        md += "| # | ID | Title | Action Reason | Summary | Category | Updated Time | Days Since Update |\n"
-        md += "|--:|----|-------|---------------|---------|----------|---------------|-------------------|\n"
+        md += "| # | ID | Title | Priority | Priority Reason | Action Reason | Summary | Category | Updated Time | Days Since Update | Related PR |\n"
+        md += "|--:|----|-------|----------|---------------|---------------|---------|----------|---------------|-------------------|-------------|\n"
         
-        stale_issues.sort(key=lambda x: x.get('id', 0))
-        thread_idx = 1
-        for issue in stale_issues:
+        for issue in sort_by_priority(stale_issues):
             issue_id = issue.get('id') or ''
             title = clean_cell(issue.get('title'))
+            priority = clean_cell(issue.get('priority'))
+            priority_reason = clean_cell(issue.get('priority_reason'))
             action_reason = clean_cell(issue.get('action_reason'))
             summary = clean_cell(issue.get('summary'))
             category = clean_cell(issue.get('category'))
@@ -354,10 +373,11 @@ def generate_report_content(issues, report_title, upstream_only=False):
             if isinstance(updated_time, datetime):
                 updated_time = updated_time.strftime('%Y-%m-%d')
             days = days_since_update(issue.get('updated_time')) or 'N/A'
+            pr = clean_cell(issue.get('pr'))
             
-            md += f"| {thread_idx} | {issue_id} | {title} | {action_reason} | {summary} | {category} | {updated_time} | {days} |\n"
+            md += f"| {thread_idx} | {issue_id} | {title} | {priority} | {priority_reason} | {action_reason} | {summary} | {category} | {updated_time} | {days} | {pr} |\n"
             thread_idx += 1
-        md += f"| | | **Subtotal: {thread_idx-1} issues** | | | | | |\n\n"
+        md += f"| | | **Subtotal: {thread_idx-1} issues** | | | | | | | | |\n\n"
     else:
         md += "No stale issues.\n\n"
     
@@ -365,50 +385,49 @@ def generate_report_content(issues, report_title, upstream_only=False):
     
     md += "## <span id='6-duplicated-issues'>6. Duplicated Issues</span>\n\n"
     md += f"**Total: {dup_count} issues** - Issues sharing test cases with other issues\n\n"
-    md += "| # | ID | Title | Summary | Assignee | Priority | Root Cause | Dependency | Duplicated With | Test Module |\n"
-    md += "|--:|----|-------|---------|----------|---------|-----------|-----------|----------------|-------------|\n"
+    md += "| # | ID | Title | Priority | Priority Reason | Summary | Assignee | Root Cause | Dependency | Duplicated With | Test Module | Related PR |\n"
+    md += "|--:|----|-------|----------|---------------|---------|----------|---------|-----------|----------------|-------------|-------------|\n"
     
-    duplicated.sort(key=lambda x: x.get('id', 0))
-    thread_idx = 1
-    for issue in duplicated:
+    for issue in sort_by_priority(duplicated):
         issue_id = issue.get('id') or ''
         title = clean_cell(issue.get('title'))
+        priority = clean_cell(issue.get('priority'))
+        priority_reason = clean_cell(issue.get('priority_reason'))
         summary = clean_cell(issue.get('summary'))
         assignee = clean_cell(issue.get('assignee'))
-        priority = clean_cell(issue.get('priority'))
         root_cause = clean_cell(issue.get('root_cause'))
         dependency = issue.get('dependency') or ''
         dup = issue.get('duplicated_issue') or ''
         test_module = clean_cell(issue.get('test_module'))
+        pr = clean_cell(issue.get('pr'))
         
-        md += f"| {thread_idx} | {issue_id} | {title} | {summary} | {assignee} | {priority} | {root_cause} | {dependency} | {dup} | {test_module} |\n"
+        md += f"| {thread_idx} | {issue_id} | {title} | {priority} | {priority_reason} | {summary} | {assignee} | {root_cause} | {dependency} | {dup} | {test_module} | {pr} |\n"
         thread_idx += 1
-    md += f"| | | **Subtotal: {thread_idx-1} issues** | | | | | | |\n\n"
+    md += f"| | | **Subtotal: {thread_idx-1} issues** | | | | | | | | |\n\n"
     
     md += "[Back to Index](#toc) |\n\n"
     
     md += "## <span id='7-issues-with-dependency'>7. Issues with Dependency</span>\n\n"
     md += f"**Total: {dep_count} issues** - Issues with external dependencies\n\n"
-    md += "| # | ID | Title | Summary | Assignee | Priority | Root Cause | Category | Dependency | PR Status | Test Module |\n"
-    md += "|--:|----|-------|---------|----------|---------|-----------|----------|------------|-----------|-------------|\n"
+    md += "| # | ID | Title | Priority | Priority Reason | Summary | Assignee | Root Cause | Category | Dependency | Test Module | Related PR |\n"
+    md += "|--:|----|-------|----------|---------------|---------|----------|---------|----------|------------|-------------|-------------|\n"
     
-    with_dependency.sort(key=lambda x: x.get('id', 0))
-    thread_idx = 1
-    for issue in with_dependency:
+    for issue in sort_by_priority(with_dependency):
         issue_id = issue.get('id') or ''
         title = clean_cell(issue.get('title'))
+        priority = clean_cell(issue.get('priority'))
+        priority_reason = clean_cell(issue.get('priority_reason'))
         summary = clean_cell(issue.get('summary'))
         assignee = clean_cell(issue.get('assignee'))
-        priority = clean_cell(issue.get('priority'))
         root_cause = clean_cell(issue.get('root_cause'))
         category = clean_cell(issue.get('category'))
         dependency = issue.get('dependency') or ''
-        pr_status = clean_cell(issue.get('pr_status'))
         test_module = clean_cell(issue.get('test_module'))
+        pr = clean_cell(issue.get('pr'))
         
-        md += f"| {thread_idx} | {issue_id} | {title} | {summary} | {assignee} | {priority} | {root_cause} | {category} | {dependency} | {pr_status} | {test_module} |\n"
+        md += f"| {thread_idx} | {issue_id} | {title} | {priority} | {priority_reason} | {summary} | {assignee} | {root_cause} | {category} | {dependency} | {test_module} | {pr} |\n"
         thread_idx += 1
-    md += f"| | | **Subtotal: {thread_idx-1} issues** | | | | | | | |\n\n"
+    md += f"| | | **Subtotal: {thread_idx-1} issues** | | | | | | | | |\n\n"
     
     md += "[Back to Index](#toc) |\n\n"
     
