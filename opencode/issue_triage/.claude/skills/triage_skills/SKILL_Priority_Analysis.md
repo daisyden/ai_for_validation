@@ -269,16 +269,21 @@ def count_test_failures(error_log: str, issue_body: str) -> dict:
     }
 ```
 
-### 4. Custom Model Detector
+### 4. Custom Model Detector (with Benchmark Reference)
 ```python
 def detect_custom_model_impact(issue_body: str, comments: list) -> dict:
     """
     Detect if issue impacts custom models (not benchmarks).
     
+    Uses BENCHMARK_MODELS.py for accurate benchmark model detection:
+    - HuggingFace: gemma, llama, mistral, qwen, opt, gpt, etc.
+    - Timm: resnet, vit, efficientnet, convnext, swin, etc.
+    - TorchBench: bert_pytorch, resnet18, resnet50, vgg, etc.
+    
     Custom model indicators:
-    - Specific model names not in [Timm, HuggingFace, TorchBench]
-    - User application references
-    - Production environment mentions
+    - Production/customer/enterprise mentions
+    - "our model", "internal model"
+    - NOT matching benchmark patterns
     
     Returns:
         {
@@ -289,38 +294,76 @@ def detect_custom_model_impact(issue_body: str, comments: list) -> dict:
         }
     """
     
-    BENCHMARK_MODELS = [
-        "timm", "huggingface", "torchbench",
-        "resnet", "bert", "gpt", "llama", "vit",
-        "transformers", "diffusers", "stable diffusion",
-        "whisper", "sam", "clip"
+    import re
+    
+    # Load benchmark patterns from external reference
+    # Reference: BENCHMARK_MODELS.py
+    
+    # HuggingFace model patterns
+    HF_PATTERNS = [
+        r"Albert[A-Z]\w*", r"Bart[A-Z]\w*", r"Bert[A-Z]\w*",
+        r"Blenderbot[A-Z]\w*", r"CamemBert[A-Z]\w*", r"Deberta[A-Z]\w*",
+        r"Distil[A-Z]\w*", r"Electra[A-Z]\w*", r"GPT2[A-Z]\w*",
+        r"GPTJ[A-Z]\w*", r"GPTNeo[A-Z]\w*", r"LayoutLM[A-Z]\w*",
+        r"LLama[A-Z]\w*", r"Megatron[A-Z]\w*", r"Mobile[A-Z]\w*",
+        r"OPT[A-Z]\w*", r"Roberta[A-Z]\w*", r"T5[A-Z]\w*",
+        r"google/gemma", r"meta-llama/Llama", r"mistralai/Mistral",
+        r"openai/gpt", r"openai/whisper", r"Qwen/AwQ", r"XGLM",
     ]
     
+    # Timm model patterns
+    TIMM_PATTERNS = [
+        r"adv_inception", r"beit", r"botnet", r"cait", r"coat",
+        r"deit", r"dla", r"dm_nfnet", r"eca_", r"ese_vovnet",
+        r"fbnet", r"gernet", r"ghostnet", r"gmixer", r"gmlp",
+        r"hrnet", r"inception", r"lcnet", r"levit", r"mixer_b",
+        r"mixnet", r"mnasnet", r"mobilenet", r"mobilevit", r"nfnet",
+        r"pnasnet", r"poolformer", r"regnety", r"repvgg", r"res2net",
+        r"sebotnet", r"selecsls", r"spnasnet", r"swin",
+        r"tf_efficientnet", r"tinynet", r"tnt_", r"twins",
+        r"vit_", r"volo", r"xcit",
+    ]
+    
+    # TorchBench patterns
+    TORCHBENCH_PATTERNS = [
+        r"BERT_pytorch", r"Background_Matting", r"LearningToPaint",
+        r"dcgan", r"densenet", r"mobilenet_v", r"nvidia_deeprecommender",
+        r"resnet\d*", r"resnext", r"shufflenet", r"squeezenet",
+    ]
+    
+    # Check if it's a benchmark model
+    all_bm_patterns = HF_PATTERNS + TIMM_PATTERNS + TORCHBENCH_PATTERNS
+    combined_bm = "|".join(f"({p})" for p in all_bm_patterns)
+    
+    is_benchmark = bool(re.search(combined_bm, issue_body, re.IGNORECASE))
+    
+    # Custom indicators
     CUSTOM_INDICATORS = [
         "production", "customer", "custom application",
         "our model", "our application", "internal model",
         "specific model", "enterprise", "deployment"
     ]
     
-    body_lower = issue_body.lower()
-    
     # Check for custom impact
-    is_custom = any(ind in body_lower for ind in CUSTOM_INDICATORS)
-    
-    # Check if it's a benchmark model
-    is_benchmark = any(bm in body_lower for bm in BENCHMARK_MODELS)
+    is_custom = any(ind in issue_body.lower() for ind in CUSTOM_INDICATORS)
     
     model_type = "Unknown"
     if is_custom and not is_benchmark:
         model_type = "Custom"
+        confidence = 0.9  # High confidence - explicit custom context
     elif is_benchmark:
         model_type = "Benchmark"
+        confidence = 0.95  # Very high - matches benchmark patterns
+    else:
+        model_type = "Unknown"
+        confidence = 0.3
     
     return {
-        "has_custom_impact": is_custom,
+        "has_custom_impact": is_custom and not is_benchmark,
         "model_type": model_type,
-        "confidence": 0.8 if is_custom else (0.5 if is_benchmark else 0.3),
-        "priority_boost": 1 if is_custom else 0  # P0 for custom, else no boost
+        "confidence": confidence,
+        "priority_boost": 1 if (is_custom and not is_benchmark) else 0,
+        "matched_benchmark_patterns": re.findall(combined_bm, issue_body, re.IGNORECASE) if is_benchmark else []
     }
 ```
 
