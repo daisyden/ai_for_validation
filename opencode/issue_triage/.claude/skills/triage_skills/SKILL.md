@@ -453,10 +453,55 @@ bash(command="source ~/miniforge3/bin/activate pytorch_opencode_env && python -c
 # Step 6: Generate comprehensive report
 ```
 
+## Category Analysis
+
+Add SKILL_Category_Analysis.md to the triage workflow for automatic issue categorization:
+
+```python
+# Step X: Category Analysis
+task(description="category_analysis",
+     prompt="Analyze issue for category classification:\n\nCategories:\n1. Distributed - XCCL, NCCL, DDP, FSDP\n2. TorchAO - torchao, quantize_, int4/int8\n3. PT2E - torch.export(), Dynamo, fake_tensor\n4. Flash Attention - flash_attention, SDPA, attention\n5. Sparse - sparse tensor, BSR, CSR, COO\n6. Inductor - torch.compile(), Triton, codegen\n7. Torch Runtime - OOM, kernel launch, memory\n8. Torch Operations - aten::, native ops\n9. Others\n\nAnalyze issue text, stack trace, and code patterns\nto determine primary and secondary categories.",
+     subagent_type="explore")
+
+# Integrate with triage report
+CATEGORIES = {
+    "Flash Attention/Transformer": ["scaled_dot_product", "sdpa", "flash_attention"],
+    "Torch Runtime": ["OOM", "page fault", "drm_neo"],
+    "Torch Operations": ["linalg.cond", "aten::"],
+    "Distributed": ["ProcessGroup", "NCCL", "XCCL"],
+    "Sparse": ["sparse", "BSR", "CSR"],
+}
+```
+
+## Priority Analysis
+
+Add SKILL_Priority_Analysis.md for automatic priority classification:
+
+```python
+# Step Y: Priority Analysis
+# Uses weighted scoring across multiple dimensions:
+# - Error type (40%): Fatal/Error/Warning
+# - Test failures (30%): Many/few failures
+# - Regression (20%): Was passing, now failing
+# - Performance (20%): >5% = P0
+# - Custom impact (40%): Production model
+
+# Priority levels:
+# - P0: Critical (crash, segfault, >5% perf, custom model)
+# - P1: High (UT >20 failures, regression)
+# - P2: Medium (E2E issues, few failures)
+# - P3: Low (minor, cosmetic)
+
+# Example: SDPA crash would be P0
+# Example: Warning mismatch would be P3
+```
+
 ## Related Skills
 
 | Skill | File | Purpose |
 |-------|------|---------|
+| Priority Analysis | SKILL_Priority_Analysis.md | Automatic priority classification |
+| Category Analysis | SKILL_Category_Analysis.md | Automatic issue categorization |
 | Deep Analysis | SKILL_Deep_Analysis_Patterns.md | Multi-dimension analysis logic |
 | Domain Patterns | SKILL_Domain_Patterns.md | Quick reference & tools |
 | Issue Extraction | SKILL.md (in parent) | Basic issue collection |
