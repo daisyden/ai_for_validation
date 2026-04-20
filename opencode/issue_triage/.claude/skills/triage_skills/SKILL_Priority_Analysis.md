@@ -21,7 +21,7 @@ This skill provides automatic priority assessment of torch-xpu-ops issues based 
 
 | Condition | Reason | Examples |
 |-----------|--------|----------|
-| UT > 20 failed cases | Major test suite failure | Large test class failures |
+| UT > 6 failed cases | Major test suite failure | Large test class failures |
 
 ### P2 - Medium
 
@@ -30,7 +30,7 @@ This skill provides automatic priority assessment of torch-xpu-ops issues based 
 | Benchmark functionality | E2E benchmark errors | Assertion failures, runtime errors |
 | Benchmark accuracy | Precision issues | Numerical accuracy degradation |
 | Benchmark performance | Performance degradation | <5% slower, acceptable |
-| UT few failures | Minor test failures | 1-20 related failures |
+| UT few failures | Minor test failures | 1-6 related failures |
 
 ### P3 - Low
 
