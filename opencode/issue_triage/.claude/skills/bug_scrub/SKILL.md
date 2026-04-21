@@ -38,8 +38,9 @@ Phase 4: Collect AR (close_or_skip → get_AR_from_issue [with check_pr_status] 
 
 ### 1.3 Create Not Applicable Sheet
 - **Skill**: `prepare_data/create-not-applicable-sheet/`
-- **Steps**: Filter wontfix/not_target labeled issues
-- **Output**: "Not Applicable" sheet in Excel
+- **Steps**: Filter wontfix/not_target labeled issues → Deep analysis of each via Explore Agent
+- **Output**: "Not Applicable" sheet in Excel (Operation/API, Category, Technical Details)
+- **Note**: Uses Explore Agent deep analysis instead of script/pattern matching to identify torch operations/not targeted reasons
 
 ### 1.4 PyTorch XPU Backend Analysis
 - **Skill**: `prepare_data/pytorch_xpu_backend_analysis/`

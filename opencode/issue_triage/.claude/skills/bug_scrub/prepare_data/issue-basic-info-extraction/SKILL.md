@@ -5,8 +5,8 @@
 Relative paths from this file location (`bug_scrub/prepare_data/issue-basic-info-extraction/`):
 ```
 ../../../                    → issue_triage root
-../../../data/                → JSON data directory
-../../../result/             → Excel results directory
+../../../data/              → JSON data directory
+../../../result/            → Excel results directory
 ..                          → WORKDIR (SCRIPT_DIR here)
 ```
 
@@ -44,8 +44,7 @@ Three sheets:
 2. **Test Cases**: Issue ID, Test Reproducer, Test Type, Test File, Origin Test File, Test Class, Test Case
 3. **E2E Test Cases**: Issue ID, Test Reproducer, Benchmark, Model, Phase, Dtype, AMP, Backend, Test Type, Cudagraph
 
-### Step 6: Add Not Applicable Sheet
-After creating the main sheets, automatically adds "Not Appliable" sheet with wontfix/not_target issues.
+**Note**: After this step, use `create-not-applicable-sheet` skill (Step 1.3) to add "Not Appliable" sheet.
 
 ## Usage
 ```bash
@@ -54,7 +53,7 @@ python3 generate_excel.py
 ```
 
 ## Output
-- `../../../result/torch_xpu_ops_issues.xlsx` (Issues, Test Cases, E2E Test Cases, Not Appliable sheets)
+- `../../../result/torch_xpu_ops_issues.xlsx` (Issues, Test Cases, E2E Test Cases sheets)
 
 ## Prerequisites
 - GitHub token with repo access (set GITHUB_TOKEN env var)
@@ -68,7 +67,7 @@ python3 generate_excel.py
 ### Fresh extraction (clears and re-fetches from GitHub)
 ```bash
 cd ..
-rm -f ../data/torch_xpu_ops_issues.json  # Optional: clear cache
+rm -f ../../../data/torch_xpu_ops_issues.json  # Optional: clear cache
 python3 generate_excel.py
 ```
 
@@ -91,5 +90,7 @@ Total test case rows: 1931
 Total e2e case rows: 72
 
 Saved to ../../../result/torch_xpu_ops_issues.xlsx
-Created Not Appliable sheet with 10 issues
 ```
+
+## Next Step
+After running this skill, proceed to Phase 1.3: Execute `create-not-applicable-sheet` skill to add "Not Appliable" sheet with wontfix/not_target issues.
