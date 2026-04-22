@@ -128,6 +128,88 @@ def wrap_cell(s, width: int = 80) -> str:
     )
 
 
+# Patterns for Fix Approach beautification.
+# Match file paths with common source/config extensions.
+_PATH_RE = re.compile(
+    r"(?<![`\w/.])"                               # not preceded by backtick or path char
+    r"([\w./-]+\.(?:py|cpp|cmake|h|hpp|cu|cuh|xml|md|rst|yaml|yml|json))"
+    r"(?![\w/.])"                                 # not followed by path char
+)
+# Sentence boundary: period+space before an uppercase ASCII letter, OR "; ".
+# Avoids splitting on "e.g.", "vs.", "i.e." because they end with a period+space+lowercase.
+_SPLIT_RE = re.compile(r"(?:\.\s+(?=[A-Z])|;\s+)")
+
+
+def format_fix_approach(s, width: int = 80) -> str:
+    """Bulletize Fix Approach text and wrap paths / quoted identifiers in
+    backticks for readability.
+
+    Pipeline:
+      1. Clean & normalise whitespace.
+      2. Wrap `'…'` single-quoted tokens and file paths in backticks
+         (skipping content already inside backticks).
+      3. Split on sentence boundaries ('. ' before uppercase, '; ').
+      4. Soft-wrap each bullet to `width`; join with '<br>• '.
+    """
+    s = clean(s).replace("\r", " ").replace("\n", " ").replace("|", "\\|")
+    s = re.sub(r"\s+", " ", s).strip()
+    if not s:
+        return ""
+
+    # Pass 1: protect existing backtick spans so we don't double-wrap.
+    spans: list[str] = []
+    def _save(m):
+        spans.append(m.group(0))
+        return f"\x00{len(spans)-1}\x00"
+    s = re.sub(r"`[^`]+`", _save, s)
+
+    # Pass 2: wrap single-quoted identifiers → backticks.
+    s = re.sub(r"'([^'\s][^']{0,120}?)'", r"`\1`", s)
+
+    # Pass 3: wrap file paths in backticks.
+    s = _PATH_RE.sub(r"`\1`", s)
+
+    # Restore protected spans.
+    s = re.sub(r"\x00(\d+)\x00", lambda m: spans[int(m.group(1))], s)
+
+    # Split into bullets on sentence boundaries. Preserve trailing '.' on
+    # each bullet except those produced by '; ' splits.
+    bullets: list[str] = []
+    buf = s
+    while True:
+        m = _SPLIT_RE.search(buf)
+        if not m:
+            if buf.strip():
+                bullets.append(buf.strip())
+            break
+        head = buf[:m.start()].strip()
+        sep = m.group(0)
+        if head:
+            # If the split was on '. ', restore the period.
+            if sep.startswith("."):
+                head = head + "."
+            bullets.append(head)
+        buf = buf[m.end():]
+
+    if not bullets:
+        return ""
+
+    # Wrap each bullet; prefix '• '; join with '<br>'.
+    lines: list[str] = []
+    for b in bullets:
+        wrapped = textwrap.wrap(b, width=width - 2,   # -2 for '• ' prefix
+                                break_long_words=False,
+                                break_on_hyphens=False)
+        if not wrapped:
+            continue
+        lines.append("• " + wrapped[0])
+        # Continuation lines of the same bullet: indent with 2 spaces so
+        # they visually align under the bullet glyph.
+        for cont in wrapped[1:]:
+            lines.append("&nbsp;&nbsp;" + cont)
+    return "<br>".join(lines)
+
+
 DUP_TOKEN = re.compile(r"#?(\d+)")
 
 
@@ -245,10 +327,10 @@ recent_rows = [r for r in rows
 
 # -------- render -----------------------------------------------------------
 def render_table(row_list) -> str:
-    """Standard table: Issue | Priority | Title | Owner | Fix Approach | action_TBD | action_reason | Reporter | Labels"""
+    """Standard table: Issue | Title | Owner | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels"""
     if not row_list:
         return "_No issues._\n"
-    head = "| Issue | Priority | Title | Owner | Fix Approach | action_TBD | action_reason | Reporter | Labels |"
+    head = "| Issue | Title | Owner | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |"
     sep  = "|---|---|---|---|---|---|---|---|---|"
     out = [head, sep]
     sorted_rows = sorted(row_list, key=lambda r: (
@@ -257,11 +339,11 @@ def render_table(row_list) -> str:
     for r in sorted_rows:
         out.append("| " + " | ".join([
             issue_link(r[C["Issue ID"]]),
-            esc(clean(r[C["Priority"]]), 6),
             esc(clean(r[C["Title"]]), 50),
             esc(owner(r), 25),
-            wrap_cell(r[C["Fix Approach"]], 80),
             esc(fmt_list(r[C["action_TBD"]]), 100),
+            format_fix_approach(r[C["Fix Approach"]], 80),
+            esc(clean(r[C["Priority"]]), 6),
             esc(fmt_list(r[C["action_reason"]]), 140),
             esc(clean(r[C["Reporter"]]), 20),
             esc(clean(r[C["Labels"]]), 40),
@@ -301,7 +383,7 @@ def render_section_by_category(row_list, section_num: str, cat_prefix: str) -> l
 
 
 def render_dep_table(row_list) -> str:
-    head = "| Issue | Dependency | Priority | Title | Owner | Fix Approach | action_TBD | action_reason | Reporter | Labels |"
+    head = "| Issue | Dependency | Title | Owner | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |"
     sep  = "|---|---|---|---|---|---|---|---|---|---|"
     out = [head, sep]
     sorted_rows = sorted(row_list, key=lambda r: (
@@ -311,11 +393,11 @@ def render_dep_table(row_list) -> str:
         out.append("| " + " | ".join([
             issue_link(r[C["Issue ID"]]),
             esc(clean(r[C["Dependency"]]), 30),
-            esc(clean(r[C["Priority"]]), 6),
             esc(clean(r[C["Title"]]), 50),
             esc(owner(r), 25),
-            wrap_cell(r[C["Fix Approach"]], 80),
             esc(fmt_list(r[C["action_TBD"]]), 100),
+            format_fix_approach(r[C["Fix Approach"]], 80),
+            esc(clean(r[C["Priority"]]), 6),
             esc(fmt_list(r[C["action_reason"]]), 140),
             esc(clean(r[C["Reporter"]]), 20),
             esc(clean(r[C["Labels"]]), 40),
@@ -324,7 +406,7 @@ def render_dep_table(row_list) -> str:
 
 
 def render_recent(row_list) -> str:
-    head = "| Issue | Created | Priority | Title | Owner | Fix Approach | action_TBD | action_reason | Reporter | Labels |"
+    head = "| Issue | Created | Title | Owner | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |"
     sep  = "|---|---|---|---|---|---|---|---|---|---|"
     out = [head, sep]
     sorted_rows = sorted(
@@ -337,11 +419,11 @@ def render_recent(row_list) -> str:
         out.append("| " + " | ".join([
             issue_link(r[C["Issue ID"]]),
             created,
-            esc(clean(r[C["Priority"]]), 6),
             esc(clean(r[C["Title"]]), 50),
             esc(owner(r), 25),
-            wrap_cell(r[C["Fix Approach"]], 80),
             esc(fmt_list(r[C["action_TBD"]]), 100),
+            format_fix_approach(r[C["Fix Approach"]], 80),
+            esc(clean(r[C["Priority"]]), 6),
             esc(fmt_list(r[C["action_reason"]]), 140),
             esc(clean(r[C["Reporter"]]), 20),
             esc(clean(r[C["Labels"]]), 40),
@@ -354,7 +436,7 @@ def render_dup_table(row_list) -> str:
     parsed from `duplicated_issue` (fallback: 'duplicate of …' clause in action_TBD)."""
     if not row_list:
         return "_No issues._\n"
-    head = "| Issue | Duplicates | Priority | Title | Owner | Fix Approach | action_TBD | action_reason | Reporter | Labels |"
+    head = "| Issue | Duplicates | Title | Owner | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |"
     sep  = "|---|---|---|---|---|---|---|---|---|---|"
     out = [head, sep]
     sorted_rows = sorted(row_list, key=lambda r: (
@@ -369,11 +451,11 @@ def render_dup_table(row_list) -> str:
         out.append("| " + " | ".join([
             issue_link(r[C["Issue ID"]]),
             dup_cell,
-            esc(clean(r[C["Priority"]]), 6),
             esc(clean(r[C["Title"]]), 50),
             esc(owner(r), 25),
-            wrap_cell(r[C["Fix Approach"]], 80),
             esc(fmt_list(r[C["action_TBD"]]), 100),
+            format_fix_approach(r[C["Fix Approach"]], 80),
+            esc(clean(r[C["Priority"]]), 6),
             esc(fmt_list(r[C["action_reason"]]), 140),
             esc(clean(r[C["Reporter"]]), 20),
             esc(clean(r[C["Labels"]]), 40),
