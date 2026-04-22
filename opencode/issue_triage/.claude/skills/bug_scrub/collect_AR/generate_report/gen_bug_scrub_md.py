@@ -16,11 +16,28 @@ REPO  = "intel/torch-xpu-ops"
 TODAY = datetime(2026, 4, 21, tzinfo=timezone.utc)
 RECENT_CUTOFF = TODAY - timedelta(days=7)
 
-# display order for the two macro-groups
-DEV_SECTIONS = ["NEED_ACTION", "NEEDS_OWNER", "TRACK_PR", "IMPLEMENT",
-                "RETRIAGE_PRS", "ROOT_CAUSE"]
-QA_SECTIONS  = ["CLOSE", "VERIFY_AND_CLOSE", "AWAIT_REPLY", "SKIP",
-                "MONITOR", "NOT_TARGET_CLOSE", "CHECK_CASES"]
+# display order for the two macro-groups (merged buckets — see MERGE below)
+DEV_SECTIONS = ["NEED PR", "TRACK PR", "NEEDS_OWNER"]
+QA_SECTIONS  = ["CLOSE or SKIP", "AWAIT_REPLY", "MONITOR", "CHECK_CASES"]
+
+# Raw-atom → merged-bucket mapping. Atoms not listed map to themselves.
+# The action_Type column in the Excel stays atomic; merging is display-only.
+MERGE = {
+    "NEED_ACTION":      "NEED PR",
+    "ROOT_CAUSE":       "NEED PR",
+    "IMPLEMENT":        "NEED PR",
+    "TRACK_PR":         "TRACK PR",
+    "RETRIAGE_PRS":     "TRACK PR",
+    "CLOSE":            "CLOSE or SKIP",
+    "VERIFY_AND_CLOSE": "CLOSE or SKIP",
+    "SKIP":             "CLOSE or SKIP",
+    "NOT_TARGET_CLOSE": "CLOSE or SKIP",
+}
+
+def merged(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    return MERGE.get(raw, raw)
 
 # priority ordering for "primary category" selection when a row has combos
 PRIMARY_ORDER = [
@@ -32,18 +49,14 @@ PRIMARY_ORDER = [
 ]
 
 SECTION_TITLES = {
-    "NEED_ACTION":      "NEED_ACTION — no PR and no decision; owner must start investigation",
+    # merged buckets
+    "NEED PR":          "NEED PR — a PR must be produced or continued (no PR yet, or owner actively debugging root cause, or new code needed)",
+    "TRACK PR":         "TRACK PR — a PR is identified; track it to merge, or re-evaluate if prior PRs are dead / unverified",
+    "CLOSE or SKIP":    "CLOSE or SKIP — terminal QA action (close fixed, verify merged fix, skip not-target/wontfix, or label not_target and close)",
+    # unmerged buckets
     "NEEDS_OWNER":      "NEEDS_OWNER — awaiting triage-lead to assign an owner",
-    "TRACK_PR":         "TRACK_PR — identified PR is open; wait for / push to merge",
-    "IMPLEMENT":        "IMPLEMENT — new code / new PR must be written",
-    "RETRIAGE_PRS":     "RETRIAGE_PRS — prior PRs dead or cross-refs unverified; re-evaluate path",
-    "ROOT_CAUSE":       "ROOT_CAUSE — owner actively debugging this specific failure",
-    "CLOSE":            "CLOSE — terminal close (CI passing, duplicate, or confirmed gap acceptable)",
-    "VERIFY_AND_CLOSE": "VERIFY_AND_CLOSE — fix merged; validate then close",
     "AWAIT_REPLY":      "AWAIT_REPLY — open questions in thread; owner must respond",
-    "SKIP":             "SKIP — labeled not-target/wontfix at intake",
     "MONITOR":          "MONITOR — long-running tracker / maintenance / scoping",
-    "NOT_TARGET_CLOSE": "NOT_TARGET_CLOSE — authoritative not-target decision (full or partial)",
     "CHECK_CASES":      "CHECK_CASES — XPU test case missing in repo; QA must verify case existence before action",
     "UNCLASSIFIED":     "UNCLASSIFIED — Phase 4b produced no verdict; needs manual triage",
 }
@@ -163,8 +176,9 @@ def parse_dt(s) -> datetime | None:
 
 # -------- bucket rows into sections ---------------------------------------
 by_section: dict[str, list] = defaultdict(list)
-per_cat = Counter()       # multi-label category counts
-per_primary = Counter()   # primary-only category counts
+per_cat = Counter()         # multi-label raw-atom category counts
+per_primary = Counter()     # primary raw-atom category counts
+per_primary_merged = Counter()  # primary counts after MERGE remap
 per_prio = Counter()
 per_status = Counter()
 per_category_col = Counter()
@@ -181,13 +195,16 @@ for r in rows:
             per_cat[c] += 1
         prim = primary(at)
         per_primary[prim] += 1
-        if prim in DEV_SECTIONS + QA_SECTIONS:
-            # Exclude issues labeled 'random' from the CLOSE bucket — they are
-            # flaky tests that happened to pass in one CI run, not true fixes.
+        mprim = merged(prim)
+        per_primary_merged[mprim] += 1
+        if mprim in DEV_SECTIONS + QA_SECTIONS:
+            # Exclude issues labeled 'random' from the CLOSE-or-SKIP bucket —
+            # they are flaky tests that happened to pass in one CI run, not
+            # true fixes. Applies only when raw primary was CLOSE.
             if prim == "CLOSE" and "random" in clean(r[C["Labels"]]).lower():
                 pass
             else:
-                by_section[prim].append(r)
+                by_section[mprim].append(r)
         if "CHECK_CASES" in parts:
             check_cases_ids.append(r[C["Issue ID"]])
             check_cases_rows.append(r)
@@ -391,8 +408,8 @@ w("**Headline counts (primary category):**")
 w()
 w("| Bucket | Categories | Issues |")
 w("|---|---|---:|")
-dev_total = sum(per_primary[c] for c in DEV_SECTIONS)
-qa_total  = sum(per_primary[c] for c in QA_SECTIONS)
+dev_total = sum(per_primary_merged[c] for c in DEV_SECTIONS)
+qa_total  = sum(per_primary_merged[c] for c in QA_SECTIONS)
 w(f"| Developer action required | {', '.join(DEV_SECTIONS)} | {dev_total} |")
 w(f"| QA action required | {', '.join(QA_SECTIONS)} | {qa_total} |")
 w(f"| Duplicated | — | {len(dup_rows)} |")
@@ -534,9 +551,23 @@ w("### 8.1 Primary action_Type distribution (exclusive — one bucket per issue)
 w()
 w(BACK)
 w()
+w("Merged buckets (as rendered in §3 and §4):")
+w()
+w("| Bucket | Issues |")
+w("|---|---:|")
+for c in DEV_SECTIONS + QA_SECTIONS:
+    if per_primary_merged[c]:
+        w(f"| {c} | {per_primary_merged[c]} |")
+w()
+w("Raw atoms (pre-merge, for reference):")
+w()
 w("| Category | Issues |")
 w("|---|---:|")
-for c in DEV_SECTIONS + QA_SECTIONS + ["WAIT_EXTERNAL","FILE_ISSUE","CHECK_CASES"]:
+_seen = set()
+for c in PRIMARY_ORDER + ["WAIT_EXTERNAL","FILE_ISSUE","CHECK_CASES"]:
+    if c in _seen:
+        continue
+    _seen.add(c)
     if per_primary[c]:
         w(f"| {c} | {per_primary[c]} |")
 w()
