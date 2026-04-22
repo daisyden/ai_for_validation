@@ -1,6 +1,18 @@
-"""Generate bug_scrub.md from Issues sheet + action_Type classification."""
+"""Generate bug_scrub.md from Issues sheet + action_Type classification.
+
+Usage:
+    # default full report
+    python3 gen_bug_scrub_md.py
+
+    # filtered report (e.g. UT-scoped)
+    python3 gen_bug_scrub_md.py \\
+        --issues-file ut_issues.txt \\
+        --out opencode/issue_triage/result/bug_scrub_ut.md \\
+        --title-suffix " — UT scope"
+"""
 from __future__ import annotations
 
+import argparse
 import re
 import textwrap
 from collections import Counter, defaultdict
@@ -10,8 +22,27 @@ from pathlib import Path
 import openpyxl
 
 REPO_ROOT = Path(__file__).resolve().parents[7]
+
+_p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+_p.add_argument("--issues-file", type=Path, default=None,
+                help="Optional path to a file with whitespace/newline-"
+                     "separated issue IDs. When given, only those issues "
+                     "are included in the report.")
+_p.add_argument("--out", type=Path, default=None,
+                help="Output .md path (relative paths resolve against "
+                     "the repo root). Defaults to "
+                     "opencode/issue_triage/result/bug_scrub.md.")
+_p.add_argument("--title-suffix", default="",
+                help="String appended to the report's top-level heading.")
+_args = _p.parse_args()
+
 EXCEL = REPO_ROOT / "opencode/issue_triage/result/torch_xpu_ops_issues.xlsx"
-OUT   = REPO_ROOT / "opencode/issue_triage/result/bug_scrub.md"
+if _args.out is None:
+    OUT = REPO_ROOT / "opencode/issue_triage/result/bug_scrub.md"
+elif _args.out.is_absolute():
+    OUT = _args.out
+else:
+    OUT = REPO_ROOT / _args.out
 REPO  = "intel/torch-xpu-ops"
 TODAY = datetime(2026, 4, 21, tzinfo=timezone.utc)
 RECENT_CUTOFF = TODAY - timedelta(days=7)
@@ -77,6 +108,21 @@ C = {k: col(k) for k in [
 
 rows = [tuple(c.value for c in r) for r in ws.iter_rows(min_row=2)]
 print(f"loaded {len(rows)} rows")
+
+if _args.issues_file is not None:
+    ifile = _args.issues_file
+    if not ifile.is_absolute():
+        # resolve relative to the script's directory first, then CWD
+        cand = Path(__file__).resolve().parent / ifile
+        ifile = cand if cand.exists() else ifile
+    wanted = {int(tok.lstrip("#")) for tok in ifile.read_text().split()
+              if tok.strip().lstrip("#").isdigit()}
+    _iid = C["Issue ID"]
+    rows = [r for r in rows if r[_iid] is not None and int(r[_iid]) in wanted]
+    found_ids = {int(r[_iid]) for r in rows}
+    missing = sorted(wanted - found_ids)
+    print(f"filtered to {len(rows)} rows matching {len(wanted)} requested IDs"
+          f"{' (missing: ' + ', '.join(str(m) for m in missing) + ')' if missing else ''}")
 
 
 # -------- helpers ----------------------------------------------------------
@@ -467,7 +513,7 @@ def render_dup_table(row_list) -> str:
 lines: list[str] = []
 def w(s=""): lines.append(s)
 
-w(f"# XPU Ops Bug Scrub Report")
+w(f"# XPU Ops Bug Scrub Report{_args.title_suffix}")
 w()
 w(f"- **Repository**: `{REPO}`")
 w(f"- **Generated**: {TODAY.strftime('%Y-%m-%d')} (cutoff for Section 7: {RECENT_CUTOFF.strftime('%Y-%m-%d')})")
