@@ -122,62 +122,235 @@ read(filePath="~/ai_for_validation/opencode/issue_triage/.claude/skills/triage_s
 
 ### Step 1: Find Related PR from Issue
 
-**IMPORTANT**: Always use `gh pr view` with known PR numbers. Avoid unreliable search patterns.
+PR discovery uses **multiple complementary vectors** because no single
+vector catches every fix PR. In particular, Copilot- or bot-authored PRs
+frequently solve an issue without ever referencing the issue number, so
+the timeline alone misses them.
 
-**Method 1: Via Timeline API (RECOMMENDED)**
+#### Excluded sources — do NOT extract PR numbers from these
+
+The following content is environment metadata, not fix references.
+Strip these before any text scan:
+
+- `### Versions` section of GitHub bug-report templates (and any
+  `Versions:` / `## Versions` heading variant). Contents typically
+  include: framework repo URLs, commit SHAs, dependency versions,
+  driver versions, OS info — none of these are fix PRs even when they
+  resemble PR-style numbers.
+- Stack-trace lines, log excerpts inside fenced code blocks, and `pip`
+  / `conda` `freeze`-style output.
+- Anything inside `<!-- ... -->` HTML comments.
+
+A PR number that appears **only** inside an excluded section is not a
+candidate; the fact that it appears elsewhere in the body is required
+to elevate it.
+
+#### Vector 0: GitHub linked PRs (highest authority — auto-verifies)
+
+GitHub's "Development" sidebar (and the Copilot agent UI) records
+explicit issue↔PR links that do **not** require any "Fixes #N" text in
+the PR body. These links are GitHub-managed metadata and represent the
+strongest possible intent signal — a PR returned by this vector is
+auto-VERIFIED in Step 2 with `verdict_source: "github_linked"`.
+
+This data is available **only via GraphQL**; REST and `gh issue view`
+do not surface it. Always query both directions for completeness.
+
 ```bash
-# Get timeline events referencing cross-referenced PRs
-# This finds PRs that explicitly mention this issue in the timeline
+# From the issue side: PRs that GitHub will close on merge
+gh api graphql -f query='{
+  repository(owner:"intel", name:"torch-xpu-ops") {
+    issue(number: {issue_number}) {
+      closedByPullRequestsReferences(first: 20, includeClosedPrs: true) {
+        nodes {
+          number title state author { login }
+          repository { nameWithOwner }
+          createdAt mergedAt
+        }
+      }
+    }
+  }
+}'
+```
+
+For each candidate from any subsequent vector (A–D below), it is also
+worth checking the reverse direction to confirm the same link exists:
+
+```bash
+# From the PR side: issues this PR will close on merge
+gh api graphql -f query='{
+  repository(owner:"<repo_owner>", name:"<repo_name>") {
+    pullRequest(number: {pr_number}) {
+      closingIssuesReferences(first: 10) {
+        nodes { number title repository { nameWithOwner } }
+      }
+    }
+  }
+}'
+```
+
+A PR appearing on either list is treated as VERIFIED in Step 2 even
+when its body has no `#<issue>` text and its files don't overlap.
+
+#### Vector A: Timeline cross-references
+
+```bash
 gh api repos/intel/torch-xpu-ops/issues/{issue_number}/timeline --paginate --jq \
-  '.items[] | select(.event == "cross-referenced") | .source.issue | {number: .number, title: .title, state: .state, url: .html_url}'
+  '.[] | select(.event == "cross-referenced") |
+   {number: .source.issue.number,
+    title:  .source.issue.title,
+    state:  .source.issue.state,
+    pull_request: (.source.issue.pull_request != null),
+    repo_url: .source.issue.repository_url,
+    url:    .source.issue.html_url}'
 ```
 
-**Method 2: Via Timeline - Event Type Check**
+This catches PRs whose body or commit message says `#<issue>` /
+`Fixes #<issue>` / `intel/torch-xpu-ops#<issue>`.
+
+#### Vector B: Issue body explicit references (after excluded-source strip)
+
+After stripping excluded sources, scan the remaining issue body for:
+- `#<digits>` mentions
+- Full PR URLs: `https?://github.com/[^/]+/[^/]+/pull/\d+`
+- Cross-repo refs: `<owner>/<repo>#\d+`
+
+Each surviving number/URL is a candidate. Note the surrounding text so
+the verification step can judge intent (e.g., "ToDo: PR #N" is a
+strong fix signal; "broken since PR #N" is a regression source, not
+the fix).
+
+#### Vector C: Title-keyword search via `gh pr list`
+
+Required when Vectors A and B return zero candidates, **and**
+recommended as a sanity check even when they do return candidates
+(catches Copilot-authored PRs).
+
+1. Extract distinctive technical keywords from the issue title:
+   prefer multi-word phrases, error names, build flags, op names,
+   file fragments. Discard generic tokens like `[Bug]`, `bug`, `XPU`,
+   `error`, `failed`.
+2. Run `gh pr list` over both states with each keyword phrase:
+
+   ```bash
+   gh pr list --repo intel/torch-xpu-ops --state all \
+              --search "<keyword phrase>" \
+              --json number,title,state,author,createdAt
+   ```
+
+3. Bound the search by issue creation date — only PRs created within a
+   reasonable window around the issue (typically issue creation date
+   ± 90 days) are plausible fixes.
+
+#### Vector D: File-path search (when issue cites specific files)
+
+If the issue body or stack trace identifies specific source files
+(e.g., `src/BuildOnWindows.cmake`, `src/ATen/native/xpu/sycl/Atomics.h`):
+
 ```bash
-# Alternative: Get all cross-reference types
-gh api repos/intel/torch-xpu-ops/issues/{issue_number}/timeline --paginate --jq \
-  '.items[] | select(.event == "cross-referenced") | {source_type: .source_type, source_issue: .source.issue}'
+gh pr list --repo intel/torch-xpu-ops --state all \
+           --search "<filename>" \
+           --json number,title,state
 ```
 
-**Method 3: Via PR Body Check (Direct PR Number Reference)**
-```bash
-# Safely check PR body for issue reference
-# NOTE: Body can be null, handle gracefully with (.... // "")
-gh api repos/intel/torch-xpu-ops/pulls/{pr_number} --jq \
-  'select((.body // "") | contains("{issue_number}")) | {number: .number, title: .title, state: .state}'
-```
-
-**Method 4: Via Body Extraction and Regex**
-```bash
-# Extract issue body for manual pattern matching
-gh issue view {issue_number} --repo intel/torch-xpu-ops --json body
-# Then grep for patterns like "Fixes #N", "Closes #N", PR URLs
-```
-
-### Step 2: CRITICAL Verification of PR Data
-
-**MANDATORY**: After finding a PR number, ALWAYS verify the actual PR content using `gh pr view` with the discovered number. Do NOT assume PR is related based on search results alone.
+Then for each candidate, inspect changed files:
 
 ```bash
-# VERIFY: Fetch PR with discovered number to confirm
-gh pr view {pr_number} --repo intel/torch-xpu-ops --json number,title,body,state,author
-
-# CRITICAL CHECKS:
-# 1. Title context - does it match issue theme?
-# 2. Body contains - explicit "Fix #issue_number" or related reference
-# 3. Author alignment - expected author for this fix
+gh pr view <pr_number> --repo intel/torch-xpu-ops --json files \
+  --jq '.files[].path'
 ```
 
-**Verification Checklist**:
-- [ ] PR title mentions related operator/feature from issue
-- [ ] PR body contains the issue number (exact match)
-- [ ] PR state is OPEN or MERGED (not closed without merge)
-- [ ] Author is expected for this fix area
+A PR that touches the same file(s) named in the issue is a strong
+candidate even without an issue-number reference.
 
-**If verification FAILS**:
-- No valid PR found
-- Document "No related PR identified"
-- Do NOT proceed with false PR data
+#### Aggregation
+
+Run Vector 0 first; if it returns any candidate, that candidate is
+already auto-VERIFIED and Vectors A–D become a sanity check rather
+than the primary discovery path. Always run Vectors A–D anyway to
+catch additional related PRs (e.g., follow-up fixes). Union all
+candidates from Vectors 0 + A–D, dedupe by `(repo, pr_number)`, and
+pass each through Step 2 verification. Inner-source / private repo
+PRs (e.g., `intel-innersource/...`) cannot be verified through the
+public API — flag them as `unverifiable_private` in the output and
+treat them as informational only.
+
+### Step 2: PR Verification (content-match aware)
+
+**MANDATORY**: every candidate from Step 1 must be verified before
+being treated as a fix PR. Verification produces one of three verdicts
+per candidate: **VERIFIED**, **REJECTED**, or **UNVERIFIABLE_PRIVATE**.
+
+A candidate is **VERIFIED** if any of the following holds (in priority
+order):
+
+0. **GitHub-linked** (Vector 0): the PR appears in the issue's
+   `closedByPullRequestsReferences` list, or the issue appears in the
+   PR's `closingIssuesReferences` list. This is GitHub-managed
+   metadata and auto-verifies regardless of body text or file overlap.
+   Record `verdict_source: "github_linked"`.
+
+1. **Explicit reference**: PR body or commit message contains a clean
+   reference to the issue (`#<N>`, `Fixes #<N>`, `Closes #<N>`,
+   `<owner>/<repo>#<N>`, or full issue URL). The reference must NOT
+   appear only inside an excluded section (per Step 1) of the PR body.
+   Record `verdict_source: "explicit_reference"`.
+
+2. **Content match (no explicit reference required)**: an explore-agent
+   review of the PR concludes that the PR addresses the same problem
+   the issue describes. Required evidence:
+   - **Same surface**: PR-modified files overlap with files named in
+     the issue body or stack trace, OR PR-modified files are the
+     ones implicated by the issue's error path.
+   - **Same symptom**: PR title/body describes the same error /
+     behaviour / build flag / op / dtype as the issue.
+   - **Plausible timing**: PR created on or after the issue (or in a
+     plausible window before, if the PR predates the issue and the
+     issue is a "regression caused by …" report).
+
+   The agent must explicitly justify the match in
+   `verification_details.match_reasoning`. Loose topical similarity is
+   **not** sufficient — require concrete file or symptom overlap.
+   Record `verdict_source: "content_match"`.
+
+A candidate is **REJECTED** if:
+- It fails both criteria above.
+- The PR's body explicitly references a different issue and is scoped
+  there.
+- Title/files are clearly unrelated to the issue's domain.
+
+A candidate is **UNVERIFIABLE_PRIVATE** if it lives in a private /
+inner-source repo accessible only to the issue's owners — record it
+as evidence requiring human follow-up, do not treat as a verified fix.
+
+```bash
+# Fetch full PR data for verification
+gh pr view {pr_number} --repo {repo} \
+  --json number,title,body,state,author,createdAt,mergedAt,files,commits
+
+# For content-match, inspect changed files
+gh pr view {pr_number} --repo {repo} --json files --jq '.files[].path'
+```
+
+**Verification output schema** (per candidate):
+
+```json
+{
+  "pr_number": <int>,
+  "repo": "<owner/name>",
+  "verdict": "VERIFIED" | "REJECTED" | "UNVERIFIABLE_PRIVATE",
+  "verification_details": {
+    "explicit_reference": true | false,
+    "reference_excerpt": "<quoted snippet, if any>",
+    "content_match": true | false,
+    "match_reasoning": "<agent's justification: which files / symptoms overlap>",
+    "files_overlap": [ "<path>", ... ]
+  }
+}
+```
+
+If **all** candidates are REJECTED or UNVERIFIABLE_PRIVATE, Part 1
+yields no fix PR and downstream AR comes from Part 2 (comments) only.
 
 ### Step 3: Deep PR Analysis Using check_pr_status
 
@@ -787,28 +960,40 @@ def get_AR_from_issue(issue_number: int, repo: str = "intel/torch-xpu-ops") -> d
             "blocking": False
         })
     
-    # Step 1: Find related PR
-    potential_prs = find_related_prs_via_timeline(issue_number, repo)
-    
-    # Step 2: VERIFY each potential PR  <-- MANDATORY
+    # Step 1: Find related PR via Vectors A-D (timeline + body refs +
+    # title-keyword search + file-path search). See Part 1 Step 1.
+    potential_prs = find_related_prs_multivector(issue_number, repo)
+
+    # Step 2: VERIFY each potential PR (content-match aware)
     verified_prs = []
+    unverifiable_prs = []
     for pr_candidate in potential_prs:
-        # ALWAYS fetch and verify actual PR content
-        verified = verify_pr_linkage(pr_candidate["number"], issue_number)
-        if verified["is_valid"]:
+        verified = verify_pr_linkage(
+            pr_candidate["number"], issue_number,
+            repo=pr_candidate.get("repo", repo),
+        )
+        if verified["verdict"] == "VERIFIED":
             verified_prs.append(verified["pr_data"])
-        else:
-            # Log but skip invalid candidates
-            log_warning(f"Skipping invalid PR candidate #{pr_candidate['number']}")
-    
+        elif verified["verdict"] == "UNVERIFIABLE_PRIVATE":
+            unverifiable_prs.append(pr_candidate)
+        else:  # REJECTED
+            log_warning(f"Rejected PR candidate #{pr_candidate['number']}: "
+                        f"{verified['verification_details']}")
+
     ar_result["validation_status"] = "PASS" if verified_prs else "NO_VALID_PR"
-    
+    if unverifiable_prs:
+        ar_result["unverifiable_private_prs"] = unverifiable_prs
+
     # Exit if no valid PRs found
     if not verified_prs:
+        msg = "No valid related PR identified - Issue needs owner assignment"
+        if unverifiable_prs:
+            msg += (f"; {len(unverifiable_prs)} inner-source candidate(s) "
+                    "flagged for human verification")
         ar_result["combined_ar"].append({
             "source": "system",
             "owner": "Triage",
-            "content": "No valid related PR identified - Issue needs owner assignment",
+            "content": msg,
             "priority": "P1",
             "blocking": True
         })
@@ -877,39 +1062,129 @@ def not_target_check(issue_number: int, repo: str) -> dict:
     """
     ...
 
-def verify_pr_linkage(pr_number: int, issue_number: int) -> dict:
+def verify_pr_linkage(pr_number: int, issue_number: int,
+                      repo: str = "intel/torch-xpu-ops",
+                      github_linked_set: set = frozenset()) -> dict:
     """
-    MUST BE CALLED: Verify discovered PR actually links to this issue.
-    
-    Returns:
-    {
-        "is_valid": bool,
-        "pr_data": {...} or None,
-        "verification_details": {...}
-    }
+    Verify a discovered PR per Part 1 Step 2 (3-tier).
+
+    Acceptance paths (priority order):
+      0. github_linked  — PR is in the issue's
+                          closedByPullRequestsReferences (or vice
+                          versa). Auto-VERIFIED. Pass the precomputed
+                          set via github_linked_set for O(1) lookup.
+      1. explicit       — PR body / commit messages reference the
+                          issue (excluded sections stripped).
+      2. content_match  — explore agent confirms files / symptoms /
+                          timing overlap.
     """
-    # Step 1: Fetch actual PR data
-    pr_data = gh_api(f"repos/intel/torch-xpu-ops/pulls/{pr_number}")
-    
-    # Step 2: Verify title context
-    title_valid = True  # Add domain-specific checks
-    
-    # Step 3: Verify body contains explicit issue reference
-    body = pr_data.get("body", "") or ""
-    issue_ref_in_body = f"#{issue_number}" in body or f"/issues/{issue_number}" in body
-    
-    # Step 4: Make determination
-    is_valid = title_valid and issue_ref_in_body
-    
-    return {
-        "is_valid": is_valid,
-        "pr_data": pr_data if is_valid else None,
-        "verification_details": {
-            "title_valid": title_valid,
-            "issue_ref_in_body": issue_ref_in_body,
-            "body_excerpt": body[:200] if body else ""
+    # Inner-source / private repo? Cannot fetch via public API.
+    if repo.startswith("intel-innersource/") or repo.startswith("frameworks.ai."):
+        return {
+            "verdict": "UNVERIFIABLE_PRIVATE",
+            "verdict_source": None,
+            "pr_data": None,
+            "verification_details": {
+                "reason": "Inner-source PR; cannot verify via public API. "
+                          "Treat as informational; flag for human follow-up.",
+            },
         }
+
+    # Path 0: GitHub-managed link (highest authority).
+    if (repo, pr_number) in github_linked_set:
+        pr_data = gh_api(f"repos/{repo}/pulls/{pr_number}")
+        return {
+            "verdict": "VERIFIED",
+            "verdict_source": "github_linked",
+            "pr_data": pr_data,
+            "verification_details": {
+                "github_linked": True,
+                "explicit_reference": False,
+                "content_match": False,
+                "match_reasoning": "PR appears in issue's "
+                    "closedByPullRequestsReferences (GraphQL); "
+                    "GitHub-managed intent link is sufficient.",
+            },
+        }
+
+    pr_data = gh_api(f"repos/{repo}/pulls/{pr_number}")
+    body = strip_excluded_sections(pr_data.get("body") or "")
+    commit_msgs = "\n".join(c["commit"]["message"]
+                            for c in gh_api(f"repos/{repo}/pulls/{pr_number}/commits"))
+
+    # Path 1: explicit reference.
+    explicit = (
+        f"#{issue_number}" in body
+        or f"/issues/{issue_number}" in body
+        or f"#{issue_number}" in commit_msgs
+    )
+    if explicit:
+        return {
+            "verdict": "VERIFIED",
+            "verdict_source": "explicit_reference",
+            "pr_data": pr_data,
+            "verification_details": {
+                "github_linked": False,
+                "explicit_reference": True,
+                "reference_excerpt": body[:200],
+                "content_match": False,
+            },
+        }
+
+    # Path 2: content match (delegated to explore agent).
+    agent = explore_agent_content_match(pr_number, issue_number, repo)
+    if agent["content_match"]:
+        return {
+            "verdict": "VERIFIED",
+            "verdict_source": "content_match",
+            "pr_data": pr_data,
+            "verification_details": {
+                "github_linked": False,
+                "explicit_reference": False,
+                "content_match": True,
+                "match_reasoning": agent["reasoning"],
+                "files_overlap": agent["files_overlap"],
+            },
+        }
+
+    return {
+        "verdict": "REJECTED",
+        "verdict_source": None,
+        "pr_data": None,
+        "verification_details": {
+            "github_linked": False,
+            "explicit_reference": False,
+            "content_match": False,
+            "match_reasoning": agent["reasoning"],
+        },
     }
+
+
+def fetch_github_linked_prs(issue_number: int, repo: str) -> list[dict]:
+    """Vector 0 helper. Returns the list of PRs GitHub considers linked
+    to this issue via the Development sidebar / Copilot link / 'Fixes
+    #N' parser. Available only via GraphQL; not exposed in REST."""
+    owner, name = repo.split("/", 1)
+    q = (
+        f'{{ repository(owner:"{owner}", name:"{name}") {{ '
+        f'  issue(number: {issue_number}) {{ '
+        f'    closedByPullRequestsReferences(first:20, includeClosedPrs:true) {{ '
+        f'      nodes {{ number title state author {{ login }} '
+        f'              repository {{ nameWithOwner }} '
+        f'              createdAt mergedAt }} }} }} }} }}'
+    )
+    nodes = gh_graphql(q)["data"]["repository"]["issue"][
+        "closedByPullRequestsReferences"]["nodes"]
+    return [{"number": n["number"], "repo": n["repository"]["nameWithOwner"],
+             "title": n["title"], "state": n["state"]}
+            for n in nodes]
+
+
+def strip_excluded_sections(text: str) -> str:
+    """Remove `### Versions` (and variants), HTML comments, and fenced
+    code blocks before scanning for issue/PR references. Used by both
+    Step 1 issue-body scanning and Step 2 PR-body scanning."""
+    ...
 ```
 
 ### Combined Output Template
@@ -1051,8 +1326,10 @@ Used unreliable `select(.body | test("2442"))` pattern matching which returned w
 
 ## Skill Metadata
 
-- **Version**: 1.2.0
+- **Version**: 1.4.0
 - **Created**: 2026-04-20
+- **Updated**: 2026-04-21 v1.4 (Part 1 Vector 0: GitHub linked PRs via GraphQL `closedByPullRequestsReferences` — auto-verifies; highest authority)
+- **Updated**: 2026-04-21 v1.3 (Part 1 PR discovery rewritten: exclude `### Versions` section, add title-keyword + file-path search vectors, content-match verification path)
 - **Updated**: 2026-04-21 v1.2 (added Part 3 not-target check — explore-agent-driven, no pattern matching)
 - **Related Skills**: check_pr_status
 - **Repository**: intel/torch-xpu-ops
