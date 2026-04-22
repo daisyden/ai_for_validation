@@ -206,6 +206,33 @@ For each Issue:
 
 ---
 
+## Phase 5: Generate Report
+
+- **Skill**: `collect_AR/generate_report/`
+- **Trigger**: After Phase 4c, once the Issues sheet is stable.
+
+Classifies each row's free-text `action_TBD` into a 17-category
+`action_Type` column, then renders the human-readable
+`result/bug_scrub.md` grouped by action_Type with per-section
+back-to-index anchors and a Duplicates column.
+
+**Execution Order**:
+```
+run_action_type.py     # populate action_Type
+        ↓
+gen_bug_scrub_md.py    # render result/bug_scrub.md
+```
+
+| Output | Description |
+|---|---|
+| `action_Type` column | 17-leaf taxonomy (`+`-joined in priority order) |
+| `result/bug_scrub.md` | Section-per-category report |
+
+See `collect_AR/generate_report/SKILL.md` for the full taxonomy and
+script details.
+
+---
+
 ## Phase 4 Column Summary
 
 | Phase | Column | Description |
@@ -252,4 +279,5 @@ For each Issue:
 ---
 
 ## Version
+v3.3 - April 22, 2026 - Reorganized helper scripts into skill-colocated folders (`analyze_issue/get_AR_from_issue/`, `analyze_issue/triage_skills/`, `collect_AR/generate_report/`) with `__file__`-anchored paths. Added Phase 5 (generate_report) section.
 v3.2 - April 21, 2026 - All paths updated to relative paths, directory renamed (case-duplication-detection)

@@ -9,8 +9,9 @@ from pathlib import Path
 
 import openpyxl
 
-EXCEL = Path("opencode/issue_triage/result/torch_xpu_ops_issues.xlsx")
-OUT   = Path("opencode/issue_triage/result/bug_scrub.md")
+REPO_ROOT = Path(__file__).resolve().parents[7]
+EXCEL = REPO_ROOT / "opencode/issue_triage/result/torch_xpu_ops_issues.xlsx"
+OUT   = REPO_ROOT / "opencode/issue_triage/result/bug_scrub.md"
 REPO  = "intel/torch-xpu-ops"
 TODAY = datetime(2026, 4, 21, tzinfo=timezone.utc)
 RECENT_CUTOFF = TODAY - timedelta(days=7)

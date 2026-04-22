@@ -6,10 +6,12 @@ Rules:
   real owner + IMPLEMENT+NEEDS_OWNER     → drop NEEDS_OWNER (keep IMPLEMENT)
 """
 import json
+from pathlib import Path
 
 import openpyxl
 
-EXCEL = "opencode/issue_triage/result/torch_xpu_ops_issues.xlsx"
+REPO = Path(__file__).resolve().parents[7]
+EXCEL = str(REPO / "opencode/issue_triage/result/torch_xpu_ops_issues.xlsx")
 STUB_OWNERS = {"triage", "unassigned", "none"}
 
 

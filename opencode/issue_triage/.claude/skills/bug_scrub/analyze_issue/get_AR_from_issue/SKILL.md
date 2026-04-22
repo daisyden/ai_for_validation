@@ -1324,6 +1324,23 @@ Used unreliable `select(.body | test("2442"))` pattern matching which returned w
 
 ---
 
+## Scripts (in this folder)
+
+Helper scripts co-located with this skill. All use `Path(__file__).resolve().parents[7]` to locate the repo root, so they are safe to run from any CWD.
+
+| Script | Purpose |
+|---|---|
+| [`run_phase4b_merge.py`](./run_phase4b_merge.py) | Merge Phase 4b per-issue AR JSON results (from `agent_space/phase4b/wave*/`) into the Issues sheet of `result/torch_xpu_ops_issues.xlsx`. Populates `action_TBD`, `action_reason`, `owner_transferred`. |
+| [`run_pass_backfill.py`](./run_pass_backfill.py) | Backfill Phase 4b rows whose AR columns came back blank by classifying them from existing signals (all tests PASS → `VERIFY_AND_CLOSE`; open linked PR → `TRACK_PR`; merged but still-failing → `RETRIAGE_PRS`). |
+
+Typical run:
+```bash
+python3 opencode/issue_triage/.claude/skills/bug_scrub/analyze_issue/get_AR_from_issue/run_phase4b_merge.py
+python3 opencode/issue_triage/.claude/skills/bug_scrub/analyze_issue/get_AR_from_issue/run_pass_backfill.py
+```
+
+---
+
 ## Skill Metadata
 
 - **Version**: 1.4.0

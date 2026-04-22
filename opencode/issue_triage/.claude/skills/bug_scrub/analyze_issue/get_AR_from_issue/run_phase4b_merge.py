@@ -14,7 +14,7 @@ from collections import defaultdict
 
 import openpyxl
 
-REPO   = Path("/home/daisydeng/ai_for_validation")
+REPO   = Path(__file__).resolve().parents[7]
 EXCEL  = REPO / "opencode/issue_triage/result/torch_xpu_ops_issues.xlsx"
 WAVES  = REPO / "agent_space/phase4b"
 

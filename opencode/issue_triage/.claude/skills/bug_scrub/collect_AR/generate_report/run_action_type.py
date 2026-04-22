@@ -11,10 +11,12 @@ Category taxonomy (see session notes):
 """
 import re
 from collections import Counter
+from pathlib import Path
 
 import openpyxl
 
-EXCEL = "opencode/issue_triage/result/torch_xpu_ops_issues.xlsx"
+REPO = Path(__file__).resolve().parents[7]
+EXCEL = str(REPO / "opencode/issue_triage/result/torch_xpu_ops_issues.xlsx")
 
 PRIORITY = [
     "CLOSE", "NOT_TARGET_CLOSE", "VERIFY_AND_CLOSE", "TRACK_PR",

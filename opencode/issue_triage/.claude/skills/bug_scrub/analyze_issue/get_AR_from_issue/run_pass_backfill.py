@@ -11,11 +11,13 @@ Rule (per-issue, apply first that matches):
 """
 import glob
 import json
+from pathlib import Path
 
 import openpyxl
 
-EXCEL = "opencode/issue_triage/result/torch_xpu_ops_issues.xlsx"
-RESULTS_GLOB = "/home/daisydeng/ai_for_validation/agent_space/phase4b/wave*/result_*.json"
+REPO = Path(__file__).resolve().parents[7]
+EXCEL = str(REPO / "opencode/issue_triage/result/torch_xpu_ops_issues.xlsx")
+RESULTS_GLOB = str(REPO / "agent_space/phase4b/wave*/result_*.json")
 
 
 def pr_ref(pr: dict) -> str:

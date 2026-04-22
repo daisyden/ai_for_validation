@@ -603,6 +603,19 @@ Add SKILL_Priority_Analysis.md for automatic priority classification:
 | Domain Patterns | SKILL_Domain_Patterns.md | Quick reference & tools |
 | Issue Extraction | SKILL.md (in parent) | Basic issue collection |
 
+## Scripts (in this folder)
+
+| Script | Purpose |
+|---|---|
+| [`run_needs_owner_fix.py`](./run_needs_owner_fix.py) | Post-triage repair: for rows tagged `NEEDS_OWNER` that actually have an Assignee, reclassify to `ROOT_CAUSE` (or drop from IMPLEMENT combos). Uses `Path(__file__).resolve().parents[7]` to anchor on the repo root, so it runs from any CWD. |
+
+Typical run:
+```bash
+python3 opencode/issue_triage/.claude/skills/bug_scrub/analyze_issue/triage_skills/run_needs_owner_fix.py
+```
+
+---
+
 ## Skill Metadata
 
 - **Version**: 1.1.0
