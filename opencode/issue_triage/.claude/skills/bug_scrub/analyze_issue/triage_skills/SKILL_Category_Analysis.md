@@ -3,125 +3,113 @@
 ## Overview
 This skill provides automatic categorization of torch-xpu-ops issues based on deep analysis of issue description, error logs, running output, and code investigation.
 
+**Authoritative Category column values** (used in tracking Excel) are the 8 buckets below. Treat these as an enum — no other values are permitted in the Excel "Category" column.
+
+Older revisions of this doc listed 9 categories including "PT2E", "Inductor/Compilation", "Feature Gap", and "Build/Compilation"/"Test Infrastructure"/"Numerical Accuracy"/"CI/CD" as separate categories. Those names are **deprecated as Category values** and now map into the 8 buckets below. They remain valid as *sub-type descriptions* in `root_cause` / `fix_approach` prose.
+
 ---
 
-## Category Definitions
+## Canonical Category Taxonomy (8 buckets)
 
-### 1. Distributed
-**Keywords**: distributed, XCCL, NCCL, Gloo, ProcessGroup, DDP, FSDP, collective, all_reduce, all_gather, scatter, gather
+### Decision Priority Order
 
-**Indicators**:
-- `ProcessGroup` in error/stack
-- `NCCL` or `XCCL` mentioned
-- `DDP` or `DistributedDataParallel`
-- `FSDP` or `FullyShardedDataParallel`
-- Collective communication patterns
+When an issue matches multiple categories, apply in this order (first match wins):
 
-**Related Files**:
-- `torch/distributed/`
-- `torch/csrc/distributed/`
-- `third_party/torch-xpu-ops/src/comm/`
+1. `Distributed` — anything tagged `[distributed]` or using XCCL/ProcessGroup/DDP/FSDP/DTensor/symm_mem
+2. `Flash Attention` — SDPA / flash / efficient attention (unless already claimed by Distributed)
+3. `Inductor` — torch.compile / Dynamo / AOTAutograd / Triton codegen / benchmark via inductor
+4. `TorchAO` — quantization (int4/int8/fp8/PT2E quant/torchao)
+5. `Sparse` — sparse tensor formats/ops
+6. `Torch Operations` — ATen/native operator issues (including numerical accuracy on a specific op)
+7. `Torch Runtime` — torch.xpu.* runtime, memory/OOM, profiler, RNG, streams, IPC
+8. `Others` — CI/infra/tracking/build/doc/test-harness/meta — the catch-all
 
-### 2. TorchAO
-**Keywords**: torchao, quantize_, int4_weight_only, int8_dynamic_activation, fp8, int_quant, weight_only, uint4, NF4
+### 1. `Distributed`
 
-**Indicators**:
-- `torchao` imports or usage
-- `quantize_` calls
-- `int4`, `int8` dtype mentions
-- `weight_only` pattern
-- `fp8` computation
+**Trigger**: `[distributed]` title tag OR any of ProcessGroup, XCCL, NCCL, Gloo, DDP, FSDP, DTensor, symm_mem, fused_all_gather_*, fused_matmul_reduce_scatter, collective ops.
 
-**Related Files**:
-- `torch/ao/`
-- `third_party/torch-xpu-ops/src/ATen/native/quantization/`
+**Examples** (from production):
+- #1571 `PREMUL_SUM with XCCL` → Distributed
+- #1556 `[distributed] _scaled_dot_product_fused_attention DTensor` → Distributed (overrides Flash Attention per priority order)
+- #1574 `_grouped_mm` → `Torch Operations` (no distributed tag, pure op gap)
 
-### 3. PT2E (PyTorch 2 Export)
-**Keywords**: torch.export(), Dynamo, fake_tensor, ExportedProgram, AOT, export, dynamo, _inductor
+**Related files**: `torch/distributed/`, `torch/csrc/distributed/`, `torch-xpu-ops/src/comm/`, `test/distributed/`.
 
-**Indicators**:
-- `torch.export` in context
-- `ExportedProgram` mentions
-- `fake_tensor` or `FakeTensor` in stack
-- `torch.compile` related errors
-- AOT (Ahead-of-Time) compilation
+### 2. `Flash Attention`
 
-**Related Files**:
-- `torch/_export/`
-- `torch/_dynamo/`
-- `torch/_inductor/`
+**Trigger**: scaled_dot_product_attention, SDPA, `_flash_attention`, `_efficient_attention`, `mha_fwd` / `mha_bwd`, `MultiheadAttention`, TransformerEncoderLayer attention path.
 
-### 4. Flash Attention/Transformer
-**Keywords**: flash_attention, SDPA, scaled_dot_product_attention, attention mask, transformer, MultiHeadAttention
+**Related files**: `aten/src/ATen/native/transformers/`, `torch-xpu-ops/src/ATen/native/transformers/sycl/AttentionKernels.cpp`, `mha_fwd.cpp`, `mha_bwd.cpp`, `FlashAttention.cpp`, `AttentionEfficient.cpp`.
 
-**Indicators**:
-- `scaled_dot_product_attention` or `sdpa`
-- `flash_attention`
-- ` aten._scaled_dot_product_efficient_attention`
-- `aten._flash_attention`
-- `MultiheadAttention`
+### 3. `Inductor`
 
-**Related Files**:
-- `aten/src/ATen/native/transformers/`
-- `third_party/torch-xpu-ops/src/ATen/native/transformers/sycl/AttentionKernels.cpp`
+**Trigger**: torch.compile, Dynamo, AOTAutograd, `_dynamo`, `_inductor`, Triton codegen, FakeTensor/MetadataMismatch, ExportedProgram, AOTInductor, torchbench model failures via inductor path.
 
-### 5. Sparse
-**Keywords**: sparse, BSR, CSR, CSC, COO, sparse tensor, sparse quantized
+**Examples**:
+- #2128 speech_transformer accuracy under inductor → Inductor
+- #1877 squeezenet1_1 / functorch_dp_cifar10 fail_accuracy under inductor → Inductor
+- #1963 FakeTensor MetadataMismatchError → Inductor
+- #1505 timm models fail_accuracy on ARC-WSL → Inductor (benchmark is inductor path)
 
-**Indicators**:
-- `torch.sparse` in tensor creation
-- `BSR`, `CSR`, `CSC`, `COO` formats
-- Sparse tensor operation errors
-- `sparse_dim`, `nnz` mentions
+### 4. `TorchAO`
 
-**Related Files**:
-- `aten/src/ATen/native/sparse/`
-- `torch/sparse/`
+**Trigger**: torchao imports, `quantize_`, `int4_weight_only`, `int8_dynamic_activation`, fp8, NF4, PT2E int8/int4 quantization, `_weight_int4pack_mm`, QLinear/QConv, fake quant, quant observer.
 
-### 6. Inductor/Compilation
-**Keywords**: torch.compile(), Inductor, Triton, codegen, kernel, AOTInductor
+### 5. `Sparse`
 
-**Indicators**:
-- `torch.compile` related
-- Triton kernel errors
-- codegen issues
-- `inductor` in stack
-- `TritonKernel`
+**Trigger**: `torch.sparse`, BSR/CSR/CSC/COO formats, `sparse_csr_tensor`, `sparse_coo_tensor`, `SparseTensorImpl`, `SparseCsrTensorMath*`, nnz, sparse_dim.
 
-**Related Files**:
-- `torch/_inductor/`
-- `third_party/torch-xpu-ops/src/ATen/native/xpu/sycl/`
+### 6. `Torch Operations`
 
-### 7. Torch Runtime
-**Keywords**: runtime, OOM, out of memory, device kernel launch, stream sync, memory allocation
+**Trigger**: ATen/native operator issue NOT covered above — conv, linalg (non-SDPA), reduce, batchnorm, indexing, pointwise, distributions, pooling, loss, range, upsample, foreach, scatter/gather, compare, binary ops, etc.
 
-**Indicators**:
-- `OutOfMemoryError` or `OOM`
-- GPU memory allocation failures
-- `cuda kernel launch` or `xpu kernel launch`
-- Device stream synchronization issues
-- Page fault errors
+**Also covers**: numerical accuracy bugs on a specific operator; missing XPU op implementations (CPU fallback); op-specific precision tuning.
 
-**Related Files**:
-- `aten/src/ATen/Context.cpp`
-- `third_party/torch-xpu-ops/src/comm/`
+**Examples**:
+- #2022 std/var/sum accuracy → Torch Operations
+- #1951 BatchNorm test_out → Torch Operations
+- #1936 `linalg.cholesky` not implemented → Torch Operations
+- #1893 addmv/mv precision → Torch Operations
 
-### 8. Torch Operations
-**Keywords**: aten::, native::, custom op, operator dispatch, DispatchKey, registration
+### 7. `Torch Runtime`
 
-**Indicators**:
-- `aten::` in function calls
-- `native::` functions
-- Custom op registration errors
-- `DispatchKey` issues
-- Operator not implemented
+**Trigger**: torch.xpu.* device-management APIs, memory allocation/OOM, profiler, RNG helpers, streams/events, IPC / share_memory, device-query APIs, driver error-message surface, SYCL context init.
 
-**Related Files**:
-- `aten/src/ATen/native/`
-- `third_party/torch-xpu-ops/src/ATen/native/xpu/`
+**Examples**:
+- #2089 torch.xpu.is_available non-initializing probe → Torch Runtime
+- #1986 / #1727 `torch.xpu._sleep` missing → Torch Runtime (unless `[distributed]` tag)
+- #1784 XPU profiler unreliable → Torch Runtime
+- #1324 UR Error on OOM → Torch Runtime
+- #1678 `model.share_memory()` (IPC) → Torch Runtime
 
-### 9. Others
-**Category**: Any issue that doesn't match the above categories
+### 8. `Others`
+
+**Trigger**: catch-all for anything not matching above — CI/CD trackers, release checklists, build-warning housekeeping, path-coverage meta-issues, documentation/term cleanup, upstream benchmark harness bugs, test-infra meta-tracking (`[DONT CLOSE]` ledgers), upstream HuggingFace bugs, ATen utility refactors.
+
+**Examples**:
+- #2127 path coverage enhancement → Others
+- #2063 out-of-date doc terms → Others
+- #1866 vision_maskrcnn benchmark harness → Others (CUDA also fails, not XPU-specific)
+- #1729 release validation checklist → Others
+- #1159 Deberta HF upstream bug → Others
+
+---
+
+## Quick Mapping: Old Categories → Canonical
+
+| Old label (deprecated as Category value) | Canonical target |
+|---|---|
+| Test Infrastructure | `Others` (unless it's testing a specific op → that op's bucket) |
+| Operator Implementation | `Torch Operations` |
+| Build/Compilation | `Others` |
+| Performance | same bucket as the affected component (e.g., kernel perf → `Torch Operations`, profiler → `Torch Runtime`) |
+| Numerical Accuracy | same bucket as the affected op (usually `Torch Operations`) |
+| Feature Gap | same bucket as the feature (Distributed collective gap → `Distributed`; missing linalg op → `Torch Operations`; missing runtime API → `Torch Runtime`) |
+| Documentation | `Others` |
+| CI/CD | `Others` |
+| Environment/Driver | `Torch Runtime` |
+| PT2E | `Inductor` (or `TorchAO` if it's PT2E quantization) |
+| Inductor/Compilation | `Inductor` |
 
 ---
 

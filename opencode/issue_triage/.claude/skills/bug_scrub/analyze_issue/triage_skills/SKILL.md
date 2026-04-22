@@ -10,6 +10,103 @@ This skill provides comprehensive tooling for triaging GitHub issues from intel/
 - Version compatibility checking
 - Environment verification for reproducible results
 
+---
+
+## Authoritative Reference (read this first)
+
+This section is the **single source of truth** for per-issue triage output when populating the tracking Excel. All wave/batch agents must conform to these taxonomies and the JSON schema below. Anything else in this skill is guidance only.
+
+### Canonical Output JSON Schema
+
+Each triaged issue MUST be emitted as one object in a JSON array. Required keys — no wrapping (`{"results": [...]}` is forbidden):
+
+```json
+{
+  "row":           <int>,      // Excel row (2..N). REQUIRED.
+  "issue_id":      <int>,      // GitHub issue number. REQUIRED.
+  "category":      "<string>", // From Category Taxonomy below. REQUIRED.
+  "priority":      "P0|P1|P2|P3",
+  "dependency":    "<string>", // From Dependency Taxonomy below. Use "" for blank.
+  "root_cause":    "<string>", // 2-4 sentences, cite file:line.
+  "fix_approach":  "<string>"  // Actionable next steps.
+}
+```
+
+Output the JSON array directly. No markdown fences, no prose, no trailing commentary.
+
+### Category Taxonomy (8 buckets — authoritative)
+
+This is the production taxonomy used in the tracking Excel column "Category". Pick **exactly one**. See `SKILL_Category_Analysis.md` for detailed rubric + examples.
+
+| Category | Use when |
+|---|---|
+| `Torch Operations` | aten/native operator issue (conv, linalg, reduce, batchnorm, indexing, pointwise, distributions, etc.) including numerical accuracy on a specific op |
+| `Inductor` | torch.compile / Dynamo / AOTAutograd / Triton codegen / FakeTensor / ExportedProgram / benchmark suites running via inductor |
+| `Distributed` | ProcessGroup/XCCL/DDP/FSDP/DTensor/symm_mem/collective ops; anything tagged `[distributed]` in title |
+| `Flash Attention` | SDPA / `scaled_dot_product_attention` / flash/efficient attention kernels / MultiheadAttention |
+| `Torch Runtime` | torch.xpu.* runtime APIs, memory management/OOM, device context, profiler, RNG, streams, IPC/share_memory |
+| `TorchAO` | quantization paths: int4/int8 weight-only/dynamic, fp8, PT2E quant, torchao integration |
+| `Sparse` | sparse tensors (COO/CSR/CSC/BSR), sparse ops, `sparse_csr_tensor` APIs |
+| `Others` | CI/infra/tracking issues, build/doc/test-harness bugs, upstream benchmark harness gaps, release checklists, meta-tracking — the catch-all |
+
+**Decision order** (resolve overlaps): `Distributed` > `Flash Attention` > `Inductor` > `TorchAO` > `Sparse` > `Torch Operations` > `Torch Runtime` > `Others`. Example: a `[distributed]` SDPA issue → `Distributed` (not Flash Attention).
+
+Notes:
+- "Feature Gap" is a *sub-type* surfaced in `fix_approach` text, NOT a Category value.
+- "PT2E" rolls into `Inductor` (or `TorchAO` for PT2E quantization).
+- "Build/Compilation", "Documentation", "CI/CD", "Test Infrastructure", "Numerical Accuracy" are descriptive sub-types; map them to the bucket above using the domain of the failing component (e.g., Numerical Accuracy on Conv3d → `Torch Operations`; CI infra → `Others`).
+
+### Dependency Taxonomy (authoritative)
+
+Pick **exactly one** value. Populates Excel column "Dependency".
+
+| Value | Use when |
+|---|---|
+| `driver` | ocloc / IGC / libigc / intel-igc-cm / level-zero / compute-runtime / drm_neo / SYCL runtime bug / GPU segfault at driver layer |
+| `xccl` | ProcessGroupXCCL / WorkXCCL / FlightRecorderXCCL / torch.xpu.xccl / oneCCL |
+| `triton` | intel-xpu-backend-for-triton codegen/compile/lowering |
+| `oneDNN` | oneDNN-backed op (conv*, SDPA, linear, quantized int8, _grouped_mm, etc.) |
+| `oneMKL` | oneMKL-backed op (linalg.svd/qr/pinv/cholesky, BLAS paths) |
+| `oneAPI` | oneAPI compiler/runtime version mismatch or compiler regression (CMPLRLLVM-*) |
+| `CPU fallback` | XPU operator missing; CPU fallback registered in torch-xpu-ops |
+| `SYCL kernel: <FileName.cpp>` | Bug in a specific SYCL kernel under `torch-xpu-ops/src/ATen/native/xpu/sycl/` — cite the file name |
+| `upstream-pytorch` | Bug lives in pytorch/pytorch (Dynamo/Inductor logic, AOTAutograd, `_prims_common`, test-list sync, benchmark harness); fix PR goes to pytorch repo |
+| `""` (blank) | Pure torch-xpu-ops internal issue (not an external dep, not upstream) — e.g., test-list maintenance, meta-tracking, doc cleanup inside torch-xpu-ops |
+
+**Lookup for operator-based dependency**: `/home/daisydeng/ai_for_validation/opencode/issue_triage/xpu_supported_operators_complete_list.md`
+- Part I (~L33): Implementation File Index by dependency (Native SYCL / oneMKL / oneDNN)
+- Part II (~L136): Operator Registry
+- Part IV (~L1143): CPU Fallback Operators
+
+### Priority Taxonomy
+
+P0 = crash/segfault/>5% perf regression/custom-model blocker · P1 = UT >20 failures or regression · P2 = E2E issues, few failures · P3 = minor/cosmetic. See `SKILL_Priority_Analysis.md`.
+
+### Standard Investigation Pattern (per issue)
+
+1. **Fetch**: `gh issue view <id> --repo intel/torch-xpu-ops --json title,body,labels,comments,state`
+   - Fallback: `webfetch(url="https://github.com/intel/torch-xpu-ops/issues/<id>", format="markdown")`
+2. **Locate** test/code/error — read relevant files, grep for the failing symbol.
+3. **Cite** file:line evidence (torch-xpu-ops source and/or pytorch source).
+4. **Classify** using the four taxonomies above and write the JSON entry.
+
+### Pinned Reference Paths
+
+| Purpose | Path |
+|---|---|
+| torch-xpu-ops source | `/home/daisydeng/pytorch/third_party/torch-xpu-ops/` |
+| PyTorch source | `/home/daisydeng/pytorch/` |
+| Operator → dependency lookup | `/home/daisydeng/ai_for_validation/opencode/issue_triage/xpu_supported_operators_complete_list.md` |
+| CI op_ut XML logs | `/home/daisydeng/ai_for_validation/opencode/issue_triage/ci_results/torch-xpu-ops/Inductor-XPU-UT-Data-*/op_ut/*.xml` |
+| Tracking Excel | `/home/daisydeng/ai_for_validation/opencode/issue_triage/result/torch_xpu_ops_issues.xlsx` |
+| Agent workspace (scratch) | `/home/daisydeng/pytorch/agent_space/phase3_triage/` |
+
+### For large-scale triage (many issues)
+
+See `SKILL_Batch_Orchestration.md` for the wave-based parallel pattern (5 issues per batch × 5 parallel explore agents per wave × N waves → merge → single Excel write).
+
+---
+
 ## Workflow Summary
 
 ```
