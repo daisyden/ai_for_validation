@@ -525,16 +525,220 @@ BLOCKING_KEYWORDS = {
 
 ---
 
+## Part 3: Not-Target Check
+
+### Purpose
+Some issues are filed against features/test cases that the XPU team has explicitly decided NOT to support (won't-fix / out-of-scope / not a target feature). When an authoritative owner communicates such a decision in an issue comment, the triage action is to **label the issue `not_target`** (and close it if the decision covers every test case in the issue).
+
+This check runs **before** the PR-based AR extraction (Part 1) and comment-based AR extraction (Part 2): if the issue is determined to be entirely not-target, downstream AR extraction is short-circuited.
+
+### Detection Philosophy — READ THIS FIRST
+
+**Not-target detection is a reasoning task, not a matching task.** Do NOT use regex, substring search, or a fixed phrase list to classify comments. Whether a comment expresses a binding not-target decision depends on:
+
+- **Who said it** (authority of the commenter),
+- **What they mean** (deny-the-feature vs. defer-the-fix vs. workaround-via-skip-list),
+- **What scope it covers** (all cases in the issue, a specific subset, or just one case).
+
+All three judgements require full-thread context. Accordingly, this check is implemented as a **single explore-agent invocation** that reads the entire issue (body + every comment, with `authorAssociation`) and returns a structured verdict. The local Python wrapper only gathers inputs and parses the agent's JSON output — it performs no classification itself.
+
+### Step 1: Identify Authoritative Owners
+
+Gather the set of logins whose comments can bind a not-target decision. This is the **only** mechanical step; the explore agent does everything else.
+
+| Role | How to obtain |
+|---|---|
+| Issue assignees | `gh issue view <id> --repo intel/torch-xpu-ops --json assignees --jq '.assignees[].login'` |
+| Accounts whose comments carry `authorAssociation = OWNER` | from comment metadata (returned by the fetch in Step 2) |
+| Accounts whose comments carry `authorAssociation = COLLABORATOR` **and** appear in the triage-owner allowlist | allowlist is repo-specific; pass it into the agent |
+
+Comments from `CONTRIBUTOR` / `MEMBER` / `NONE` authors are **never** binding not-target decisions; if they contain request-like content, they are handled by Part 2 (comment AR) instead.
+
+### Step 2: Fetch Full Issue + Comment Thread
+
+```bash
+gh issue view {issue_number} --repo intel/torch-xpu-ops \
+  --json number,title,body,assignees,comments \
+  --jq '{number, title, body,
+         assignees: [.assignees[].login],
+         comments: [.comments[] | {author: .author.login,
+                                   assoc: .authorAssociation,
+                                   created: .createdAt,
+                                   url: .url,
+                                   body: .body}]}'
+```
+
+Pass the full result to the explore agent verbatim. Do **not** pre-filter comments by substring; the agent must see the entire thread to reason about scope, superseding statements, and reversals.
+
+### Step 3: Delegate Classification to the Explore Agent (primary mechanism)
+
+```python
+task(description="not_target_check",
+     subagent_type="explore",
+     prompt=f"""
+NOT-TARGET CHECK — Issue #{{issue_number}} in {{repo}}
+
+You are classifying whether this issue has been declared not-target
+(won't-fix / out-of-scope / not a supported feature on XPU) by an
+authoritative owner. This is a *reasoning* task. Do not rely on keyword
+matching; read every comment in context and judge intent.
+
+INPUTS
+- Issue title, body, assignees, and full comment thread (with
+  authorAssociation, author login, timestamp, and URL per comment):
+{{issue_json}}
+- Authoritative owner set (only these authors can issue binding
+  not-target decisions):
+    - issue assignees
+    - comment authors with authorAssociation in {{OWNER, COLLABORATOR (if
+      in allowlist)}}
+  Allowlist: {{owner_allowlist}}
+
+PROCEDURE
+1. Enumerate the test cases / sub-features the issue is about. Sources:
+   issue title, issue body (tables, bullet lists, code blocks listing
+   failing tests), and any comments from the reporter that add cases.
+   Output the enumerated list as `all_cases`.
+   - If the issue is a single-bug report with one test name, `all_cases`
+     has one entry.
+   - If cases are grouped (e.g., "all complex128 reductions"), preserve
+     that grouping semantically — do not expand it into a fabricated
+     list.
+
+2. For every comment authored by a member of the authoritative owner
+   set, decide: does this comment express a binding decision that the
+   feature / test / sub-feature will not be supported on XPU?
+
+   A binding not-target decision means the author is denying the
+   feature itself on XPU (permanently, as a scope decision). Judge by
+   meaning, not phrasing. Examples of shapes this can take — use them
+   as illustrations, NOT as a match list:
+     • "This op / dtype / path is not a target for XPU."
+     • "We will not support this on XPU."
+     • "Out of scope for XPU."
+     • "Deprecated upstream; we are not picking it up on XPU."
+
+   The following are explicitly NOT not-target — classify them as
+   deferral / workaround / suggestion instead:
+     • "Skip it in the skip list" (workaround; issue still open for
+       eventual fix).
+     • "Won't fix for this release / 2.x / until Triton supports it"
+       (priority / deferral, feature is still in scope long-term).
+     • "Skip for now" / "disable temporarily" (workaround).
+     • A non-owner echoing a won't-fix sentiment.
+     • An owner asking a question or speculating ("might not be
+       targetable?") — only firm statements count.
+
+3. For each binding not-target comment, determine which case(s) from
+   `all_cases` it covers. Three shapes:
+     • EXPLICIT: comment names the case(s).
+     • BLANKET: comment refers to a whole class that subsumes listed
+       cases (e.g., "complex128 reductions are not target" covers every
+       complex128 reduction in `all_cases`).
+     • SCOPE-LIMITED: comment covers only a subset (e.g., only Windows).
+   Record the mapping per comment.
+
+4. Compute:
+     • covered_cases = union of cases covered across all binding
+       not-target comments.
+     • remaining_cases = all_cases − covered_cases.
+     • If `covered_cases` is empty → no not-target decision exists.
+     • If `remaining_cases` is empty → all cases are not-target (close).
+     • Otherwise → partial not-target (label, do not close).
+
+5. Pick `owner_transferred`: the login of the EARLIEST comment (by
+   createdAt) that issued a binding not-target decision.
+
+OUTPUT — return exactly this JSON, no prose:
+{{
+  "action_TBD": "label not_target"
+                | "label not_target and close"
+                | null,
+  "owner_transferred": "<login>" | null,
+  "all_cases": [ "<case>", ... ],
+  "covered_cases": [ "<case>", ... ],
+  "remaining_cases": [ "<case>", ... ],
+  "evidence": [
+    {{
+      "comment_url": "...",
+      "author": "<login>",
+      "author_assoc": "OWNER|COLLABORATOR|ASSIGNEE",
+      "created": "<iso8601>",
+      "quoted_phrase": "<short excerpt for the triager's eyes, not a
+                        matcher input>",
+      "scope_shape": "EXPLICIT" | "BLANKET" | "SCOPE-LIMITED",
+      "cases_covered": [ "<case>", ... ],
+      "reasoning": "<1-3 sentences explaining why this is binding
+                    not-target rather than deferral/workaround>"
+    }}
+  ]
+}}
+
+If no binding not-target decision exists, return `action_TBD: null`
+with empty `covered_cases` / `evidence` / `remaining_cases`, and
+`all_cases` still populated.
+""")
+```
+
+### Step 4: Interpret the Agent's Verdict
+
+The wrapper does three things only: map the agent's JSON onto `action_TBD`, pick the short-circuit branch, and attach evidence. No further classification is performed locally.
+
+| Agent verdict | `action_TBD` | Downstream behaviour |
+|---|---|---|
+| `action_TBD: null` | *(skip Part 3 output; proceed to Part 1 / Part 2 normally)* | — |
+| `action_TBD: "label not_target"` (partial) | `label not_target` | Run Part 1 and Part 2 restricted to `remaining_cases`. Tag AR items for covered cases as `superseded-by-not-target`. |
+| `action_TBD: "label not_target and close"` (all covered) | `label not_target and close` | **Skip** Part 1 and Part 2. Emit a single combined-AR entry recording the decision. |
+
+### Step 5: Output Template
+
+```markdown
+## Not-Target Check
+
+### Enumerated Cases
+1. `test_case_1`
+2. `test_case_2`
+3. ...
+
+### Owner Determination
+- Assignees: @{assignee_list}
+- Owner allowlist: [...]
+
+### Not-Target Evidence
+| Comment Date | Author (assoc) | Scope | Quoted Phrase | Cases Covered | Reasoning |
+|---|---|---|---|---|---|
+| {date} | @{author} ({OWNER}) | BLANKET | "...not a target for XPU..." | [case_1, case_2] | Firm feature-denial, not a deferral |
+
+### Decision
+- `remaining_cases`: [case_3]        ← non-empty → partial
+- `action_TBD`: **label not_target**
+- `owner_transferred`: @{earliest_owner}
+
+*(or, if remaining_cases is empty:)*
+- `action_TBD`: **label not_target and close**
+- `owner_transferred`: @{earliest_owner}
+```
+
+### Integration with AR Extraction
+
+When `action_TBD` is set:
+- Include it at the top of the combined AR output so triagers see the short-circuit decision immediately.
+- If `... and close`, the combined AR list collapses to a single entry: `{source: "not_target_check", owner: <owner_transferred>, content: "Label not_target and close", priority: "P3", blocking: false}`.
+- If just `label not_target`, add the entry AND continue with Part 1/Part 2 for `remaining_cases`.
+
+---
+
 ## Complete AR Extraction Workflow
 
 ```python
 def get_AR_from_issue(issue_number: int, repo: str = "intel/torch-xpu-ops") -> dict:
     """
-    Extract complete AR from issue including PR and comments.
+    Extract complete AR from issue including not-target check, PR, and comments.
     
     Steps:
+    0. NOT-TARGET CHECK: owner-issued won't-fix / out-of-scope decision
     1. Find related PRs via timeline
-    2. VERIFY each PR before use   <-- CRITICAL ADDITION
+    2. VERIFY each PR before use
     3. Analyze validated PR status using check_pr_status logic
     4. If PR merged, mark issue verified
     5. Extract unresolved requests from comments
@@ -543,11 +747,45 @@ def get_AR_from_issue(issue_number: int, repo: str = "intel/torch-xpu-ops") -> d
     
     ar_result = {
         "issue_number": issue_number,
+        "action_TBD": None,              # set by not-target check if triggered
+        "owner_transferred": None,       # set by not-target check if triggered
+        "not_target_evidence": [],
+        "remaining_cases": None,
         "pr_ar": {},
         "comment_ar": {},
         "combined_ar": [],
         "validation_status": "PENDING"
     }
+    
+    # Step 0: Not-Target check (see Part 3)
+    not_target = not_target_check(issue_number, repo)
+    if not_target["action_TBD"] is not None:
+        ar_result["action_TBD"]         = not_target["action_TBD"]
+        ar_result["owner_transferred"]  = not_target["owner_transferred"]
+        ar_result["not_target_evidence"] = not_target["evidence"]
+        ar_result["remaining_cases"]    = not_target["remaining_cases"]
+        
+        # Short-circuit if all cases are not-target
+        if not_target["action_TBD"] == "label not_target and close":
+            ar_result["combined_ar"].append({
+                "source": "not_target_check",
+                "owner": not_target["owner_transferred"],
+                "content": "Label not_target and close — owner decision covers all cases",
+                "priority": "P3",
+                "blocking": False
+            })
+            ar_result["validation_status"] = "NOT_TARGET_ALL"
+            return ar_result
+        
+        # Partial: continue Part 1/2 but only for remaining_cases
+        ar_result["combined_ar"].append({
+            "source": "not_target_check",
+            "owner": not_target["owner_transferred"],
+            "content": f"Label not_target (partial: {len(not_target['evidence'])} "
+                       f"case(s) covered); continue AR for remaining_cases",
+            "priority": "P3",
+            "blocking": False
+        })
     
     # Step 1: Find related PR
     potential_prs = find_related_prs_via_timeline(issue_number, repo)
@@ -605,6 +843,39 @@ def get_AR_from_issue(issue_number: int, repo: str = "intel/torch-xpu-ops") -> d
         })
     
     return ar_result
+
+
+def not_target_check(issue_number: int, repo: str) -> dict:
+    """
+    Thin wrapper over the explore-agent invocation in Part 3 Step 3.
+
+    This function performs NO classification of its own:
+      1. Collect the authoritative-owner inputs (assignees + allowlist).
+      2. Fetch the full issue + comment thread via `gh issue view`.
+      3. Invoke the explore agent with the Part 3 Step 3 prompt.
+      4. Parse and return the agent's JSON verdict verbatim.
+
+    Do not add substring/regex prefilters here — the agent must see the
+    entire thread to reason about scope, supersession, and intent.
+
+    Returns:
+    {
+        "action_TBD": "label not_target" | "label not_target and close" | None,
+        "owner_transferred": str | None,     # login of earliest binding owner
+        "all_cases": [str, ...],
+        "covered_cases": [str, ...],
+        "remaining_cases": [str, ...],       # empty => close
+        "evidence": [
+            {
+                "comment_url", "author", "author_assoc", "created",
+                "quoted_phrase", "scope_shape", "cases_covered", "reasoning"
+            }, ...
+        ]
+    }
+
+    Returns action_TBD=None when no binding not-target decision exists.
+    """
+    ...
 
 def verify_pr_linkage(pr_number: int, issue_number: int) -> dict:
     """
@@ -780,9 +1051,9 @@ Used unreliable `select(.body | test("2442"))` pattern matching which returned w
 
 ## Skill Metadata
 
-- **Version**: 1.1.0
+- **Version**: 1.2.0
 - **Created**: 2026-04-20
-- **Updated**: 2026-04-20 v1.1 (added PR verification)
+- **Updated**: 2026-04-21 v1.2 (added Part 3 not-target check — explore-agent-driven, no pattern matching)
 - **Related Skills**: check_pr_status
 - **Repository**: intel/torch-xpu-ops
 - **Requires**: Deep investigation via explore agent
