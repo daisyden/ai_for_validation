@@ -385,7 +385,7 @@ def render_table(row_list) -> str:
     for r in sorted_rows:
         out.append("| " + " | ".join([
             issue_link(r[C["Issue ID"]]),
-            esc(clean(r[C["Title"]]), 50),
+            esc(clean(r[C["Title"]])),
             esc(owner(r), 25),
             esc(fmt_list(r[C["action_TBD"]]), 100),
             format_fix_approach(r[C["Fix Approach"]], 80),
@@ -439,7 +439,7 @@ def render_dep_table(row_list) -> str:
         out.append("| " + " | ".join([
             issue_link(r[C["Issue ID"]]),
             esc(clean(r[C["Dependency"]]), 30),
-            esc(clean(r[C["Title"]]), 50),
+            esc(clean(r[C["Title"]])),
             esc(owner(r), 25),
             esc(fmt_list(r[C["action_TBD"]]), 100),
             format_fix_approach(r[C["Fix Approach"]], 80),
@@ -465,7 +465,7 @@ def render_recent(row_list) -> str:
         out.append("| " + " | ".join([
             issue_link(r[C["Issue ID"]]),
             created,
-            esc(clean(r[C["Title"]]), 50),
+            esc(clean(r[C["Title"]])),
             esc(owner(r), 25),
             esc(fmt_list(r[C["action_TBD"]]), 100),
             format_fix_approach(r[C["Fix Approach"]], 80),
@@ -497,7 +497,7 @@ def render_dup_table(row_list) -> str:
         out.append("| " + " | ".join([
             issue_link(r[C["Issue ID"]]),
             dup_cell,
-            esc(clean(r[C["Title"]]), 50),
+            esc(clean(r[C["Title"]])),
             esc(owner(r), 25),
             esc(fmt_list(r[C["action_TBD"]]), 100),
             format_fix_approach(r[C["Fix Approach"]], 80),
