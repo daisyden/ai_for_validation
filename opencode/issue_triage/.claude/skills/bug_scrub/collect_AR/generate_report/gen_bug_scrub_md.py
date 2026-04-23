@@ -201,7 +201,7 @@ def wrap_cell(s, width: int = 80) -> str:
     if not s:
         return ""
     return "<br>".join(
-        textwrap.wrap(s, width=width, break_long_words=False,
+        textwrap.wrap(s, width=width, break_long_words=True,
                       break_on_hyphens=False)
     )
 
