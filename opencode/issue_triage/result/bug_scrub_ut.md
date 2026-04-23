@@ -37,8 +37,9 @@ This report groups the 53 tracked torch-xpu-ops issues into action buckets deriv
   - [4.4 CHECK_CASES](#sec-4-4-check-cases)
 - [5. Duplicated issues](#sec-5)
 - [6. Dependency (external blockers)](#sec-6)
-  - [6.1 upstream-pytorch](#sec-6-1-upstream-pytorch)
-  - [6.2 CPU fallback](#sec-6-2-cpu-fallback)
+  - [6.1 Third Parties](#sec-6-1-third-parties)
+  - [6.2 upstream-pytorch](#sec-6-2-upstream-pytorch)
+  - [6.3 CPU fallback](#sec-6-3-cpu-fallback)
 - [7. New submitted issues (<7 days)](#sec-7)
 - [8. Statistics](#sec-8)
 
@@ -274,6 +275,11 @@ _[↑ Back to Index](#sec-2)_
 
 Issues with a non-blank `Dependency` value, excluding `upstream-pytorch`, `CPU fallback`, and `SYCL kernel:*` (in-repo kernel pointers). Terminal-QA rows (CLOSE / VERIFY_AND_CLOSE / SKIP / NOT_TARGET_CLOSE) are also excluded.  —  13 issues.
 
+<a id="sec-6-1-third-parties"></a>
+### 6.1 Third Parties
+
+_[↑ Back to Index](#sec-2)_
+
 | Issue | Dependency | Title | Owner | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |
 |---|---|---|---|---|---|---|---|---|---|
 | [#3165](https://github.com/intel/torch-xpu-ops/issues/3165) | triton | test_sparse_csr_xpu.py::TestSparseCompressedTritonKernelsXPU::test_triton_bsr_softmax meet RuntimeError: ZE_RESULT_ERROR_INVALID_KERNEL_NAME | jafraustro | assignee investigate (split-out from #2209) | File/track a pytorch-triton-xpu issue with the failing kernel reproducer and, once fixed upstream,…<br>[→ details](details/3165.md) | P1 | Skipped Triton sparse softmax case; sub-issue split from #2209; assigned to @jafraustro. | CuiYifeng | skipped, ut_upstream |
@@ -291,8 +297,8 @@ Issues with a non-blank `Dependency` value, excluding `upstream-pytorch`, `CPU f
 | [#2245](https://github.com/intel/torch-xpu-ops/issues/2245) | oneDNN | oneDNN matmul received incorrect shape in test/test_sparse_csr.py::TestSparseCSRXPU::test_addmm_errors_xpu_float32 | CuiYifeng | Add input-tensor-expansion check on stock PyTorch side (per @CuiYifeng) | Invoke the standard CSR validation (at::_validate_sparse_csr_tensor_args or the same crow_indices/c…<br>[→ details](details/2245.md) | P3 | No fix PR; CuiYifeng identified upstream check needed. | wincent8 | module: ut, skipped |
 
 
-<a id="sec-6-1-upstream-pytorch"></a>
-### 6.1 upstream-pytorch
+<a id="sec-6-2-upstream-pytorch"></a>
+### 6.2 upstream-pytorch
 
 _[↑ Back to Index](#sec-2)_
 
@@ -312,8 +318,8 @@ Issues whose fix lives in `pytorch/pytorch` (Dynamo/Inductor, AOTAutograd, `_pri
 | [#3041](https://github.com/intel/torch-xpu-ops/issues/3041) | upstream-pytorch | AssertionError: Expected len(flat_diff_results) > 0 in test_fake_crossref_backward_amp_normal_number_mean_xpu_float32 | Silv3S, BartoszKokoszko | Owner @Silv3S, BartoszKokoszko to file fix PR | In torch/testing/_internal/common_methods_invocations.py, extend the existing CUDA DecorateInfo on…<br>[→ details](details/3041.md) | P3 | Issue assigned to @Silv3S, BartoszKokoszko; owner to implement fix. | daisyden | ut_upstream |
 
 
-<a id="sec-6-2-cpu-fallback"></a>
-### 6.2 CPU fallback
+<a id="sec-6-3-cpu-fallback"></a>
+### 6.3 CPU fallback
 
 _[↑ Back to Index](#sec-2)_
 

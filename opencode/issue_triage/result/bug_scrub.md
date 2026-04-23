@@ -37,8 +37,9 @@ This report groups the 375 tracked torch-xpu-ops issues into action buckets deri
   - [4.4 CHECK_CASES](#sec-4-4-check-cases)
 - [5. Duplicated issues](#sec-5)
 - [6. Dependency (external blockers)](#sec-6)
-  - [6.1 upstream-pytorch](#sec-6-1-upstream-pytorch)
-  - [6.2 CPU fallback](#sec-6-2-cpu-fallback)
+  - [6.1 Third Parties](#sec-6-1-third-parties)
+  - [6.2 upstream-pytorch](#sec-6-2-upstream-pytorch)
+  - [6.3 CPU fallback](#sec-6-3-cpu-fallback)
 - [7. New submitted issues (<7 days)](#sec-7)
 - [8. Statistics](#sec-8)
 
@@ -680,6 +681,11 @@ _[↑ Back to Index](#sec-2)_
 
 Issues with a non-blank `Dependency` value, excluding `upstream-pytorch`, `CPU fallback`, and `SYCL kernel:*` (in-repo kernel pointers). Terminal-QA rows (CLOSE / VERIFY_AND_CLOSE / SKIP / NOT_TARGET_CLOSE) are also excluded.  —  128 issues.
 
+<a id="sec-6-1-third-parties"></a>
+### 6.1 Third Parties
+
+_[↑ Back to Index](#sec-2)_
+
 | Issue | Dependency | Title | Owner | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |
 |---|---|---|---|---|---|---|---|---|---|
 | [#1324](https://github.com/intel/torch-xpu-ops/issues/1324) | driver | [Win] UR Error when OOM and break the tensor context | Stonepia | respond to open requests | Wait for the compute-runtime / UR fix tied to GSD-11670 and oneAPI 2026.1 (per chuanqi129 2026-04-0…<br>[→ details](details/1324.md) | P1 | 4 unresolved authoritative comment request(s) | Stonepia | client, os: Windows, module: dependency… |
@@ -812,8 +818,8 @@ Issues with a non-blank `Dependency` value, excluding `upstream-pytorch`, `CPU f
 | [#489](https://github.com/intel/torch-xpu-ops/issues/489) | xccl | Moco NotImplementedError: xpu not supported | weishi-deng | Land pytorch/benchmark#2616 (moco DDP backend with xccl) | Land pytorch/benchmark#2616 (device-agnostic MoCo init using XCCL when xpu is selected), ensure Pro…<br>[→ details](details/489.md) | P3 | Vector 0 link; @weishi-deng filed model-script PR with xccl DDP backend support. | mengfei25 | E2E, Accuracy, module: torchbench, dtyp… |
 
 
-<a id="sec-6-1-upstream-pytorch"></a>
-### 6.1 upstream-pytorch
+<a id="sec-6-2-upstream-pytorch"></a>
+### 6.2 upstream-pytorch
 
 _[↑ Back to Index](#sec-2)_
 
@@ -901,8 +907,8 @@ Issues whose fix lives in `pytorch/pytorch` (Dynamo/Inductor, AOTAutograd, `_pri
 | [#3362](https://github.com/intel/torch-xpu-ops/issues/3362) | upstream-pytorch | test_nn_xpu.py::TestNN::test_cudnn_weight_format SKIPPED (CUDNN not available) | jmamzax | Track PR intel/torch-xpu-ops#3402 to merge | Either drop test_cudnn_weight_format from test_nn_xpu.py (it is intrinsically a cuDNN test), or rew…<br>[→ details](details/3362.md) | P3 | Phase 4b backfill: verified open PR from pr_analysis. | jmamzax | bug_fix_stage5 |
 
 
-<a id="sec-6-2-cpu-fallback"></a>
-### 6.2 CPU fallback
+<a id="sec-6-3-cpu-fallback"></a>
+### 6.3 CPU fallback
 
 _[↑ Back to Index](#sec-2)_
 
