@@ -161,22 +161,22 @@ Each skill's contract, in the order the columns appear in the Excel:
 
 ```mermaid
 flowchart LR
-    subgraph Prep["Phase 1"]
-        A1[1.1] --> A2[1.2]
-        A1 --> A3[1.3]
-        A1 --> A4[1.4]
+    subgraph Prep["Phase 1 — Prepare Data"]
+        A1["1.1 issue-basic-info-extraction"] --> A2["1.2 download_ci_result"]
+        A1 --> A3["1.3 create-not-applicable-sheet"]
+        A1 --> A4["1.4 pytorch_xpu_backend_analysis"]
     end
-    subgraph CI["Phase 2"]
-        B1[2.1] --> B2[2.2] --> B3[2.3] --> B4[2.4]
+    subgraph CI["Phase 2 — Analyze CI Result"]
+        B1["2.1 match-ut-ci-matching"] --> B2["2.2 match-e2e-ci-matching"] --> B3["2.3 case-duplication-detection"] --> B4["2.4 check_xpu_case_existence"]
     end
-    subgraph Issue["Phase 3"]
-        C1[3.1] --> C3[3.3]
+    subgraph Issue["Phase 3 — Analyze Issue"]
+        C1["3.1 duplicated-issue-detection"] --> C3["3.3 triage_skills"]
     end
-    subgraph AR["Phase 4"]
-        D1[4a] --> D2[4b] --> D3[4c]
+    subgraph AR["Phase 4 — Collect AR"]
+        D1["4a close_or_skip"] --> D2["4b get_AR_from_issue<br/>(+ check_pr_status)"] --> D3["4c case_existence_check"]
     end
-    subgraph Report["Phase 5"]
-        E1[run_action_type] --> E2[gen_bug_scrub_md]
+    subgraph Report["Phase 5 — Generate Report"]
+        E1["run_action_type.py"] --> E2["gen_bug_scrub_md.py"]
     end
     Prep --> CI --> Issue --> AR --> Report
 
