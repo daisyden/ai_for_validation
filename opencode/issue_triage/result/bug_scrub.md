@@ -51,7 +51,7 @@ _[↑ Back to Index](#sec-2)_
 Issues in this section require developer work before they can progress. Each subsection is split by `Category` (existing taxonomy column); rows inside each category table are sorted by `Priority` (P0 → P3).
 
 <a id="sec-3-0-unclassified"></a>
-- **3.0 UNCLASSIFIED**  ·  38 issues
+- **UNCLASSIFIED**  ·  38 issues
 
 _[↑ Back to Index](#sec-2)_
 
@@ -100,7 +100,7 @@ _[↑ Back to Index](#sec-2)_
 
 
 <a id="sec-3-1-need-pr"></a>
-- **3.1 NEED PR**  ·  130 issues
+- **NEED PR**  ·  130 issues
 
 **NEED PR — a PR must be produced or continued (no PR yet, or owner actively debugging root cause, or new code needed)**
 
@@ -307,7 +307,7 @@ _[↑ Back to Index](#sec-2)_
 
 
 <a id="sec-3-2-track-pr"></a>
-- **3.2 TRACK PR**  ·  88 issues
+- **TRACK PR**  ·  88 issues
 
 **TRACK PR — a PR is identified; track it to merge, or re-evaluate if prior PRs are dead / unverified**
 
@@ -463,7 +463,7 @@ _[↑ Back to Index](#sec-2)_
 
 
 <a id="sec-3-3-needs-owner"></a>
-- **3.3 NEEDS_OWNER**  ·  5 issues
+- **NEEDS_OWNER**  ·  5 issues
 
 **NEEDS_OWNER — awaiting triage-lead to assign an owner**
 
@@ -517,7 +517,7 @@ _[↑ Back to Index](#sec-2)_
 Issues in this section are ready for QA action (close, verify, reply, etc.). Rows sorted by `Priority` (P0 → P3).
 
 <a id="sec-4-1-close-or-skip"></a>
-- **4.1 CLOSE or SKIP**  ·  60 issues
+- **CLOSE or SKIP**  ·  60 issues
 
 **CLOSE or SKIP — terminal QA action (close fixed, verify merged fix, skip not-target/wontfix, or label not_target and close)**
 
@@ -586,7 +586,7 @@ Issues in this section are ready for QA action (close, verify, reply, etc.). Row
 
 
 <a id="sec-4-2-await-reply"></a>
-- **4.2 AWAIT_REPLY**  ·  10 issues
+- **AWAIT_REPLY**  ·  10 issues
 
 **AWAIT_REPLY — open questions in thread; owner must respond**
 
@@ -605,7 +605,7 @@ Issues in this section are ready for QA action (close, verify, reply, etc.). Row
 
 
 <a id="sec-4-3-monitor"></a>
-- **4.3 MONITOR**  ·  4 issues
+- **MONITOR**  ·  4 issues
 
 **MONITOR — long-running tracker / maintenance / scoping**
 
@@ -618,7 +618,7 @@ Issues in this section are ready for QA action (close, verify, reply, etc.). Row
 
 
 <a id="sec-4-4-check-cases"></a>
-- **4.4 CHECK_CASES**  ·  24 issues
+- **CHECK_CASES**  ·  24 issues
 
 **CHECK_CASES — XPU test case missing in repo; QA must verify case existence before action**
 
@@ -682,7 +682,7 @@ _[↑ Back to Index](#sec-2)_
 Issues with a non-blank `Dependency` value, excluding `upstream-pytorch`, `CPU fallback`, and `SYCL kernel:*` (in-repo kernel pointers). Terminal-QA rows (CLOSE / VERIFY_AND_CLOSE / SKIP / NOT_TARGET_CLOSE) are also excluded.  —  128 issues.
 
 <a id="sec-6-1-third-parties"></a>
-- **6.1 Third Parties**
+- **Third Parties**
 
 _[↑ Back to Index](#sec-2)_
 
@@ -819,7 +819,7 @@ _[↑ Back to Index](#sec-2)_
 
 
 <a id="sec-6-2-upstream-pytorch"></a>
-- **6.2 upstream-pytorch**
+- **upstream-pytorch**
 
 _[↑ Back to Index](#sec-2)_
 
@@ -908,7 +908,7 @@ Issues whose fix lives in `pytorch/pytorch` (Dynamo/Inductor, AOTAutograd, `_pri
 
 
 <a id="sec-6-3-cpu-fallback"></a>
-- **6.3 CPU fallback**
+- **CPU fallback**
 
 _[↑ Back to Index](#sec-2)_
 
@@ -975,7 +975,7 @@ _[↑ Back to Index](#sec-2)_
 - Empty `action_TBD` (no verdict yet): **38**
 - Issues flagged for test-case existence check (`CHECK_CASES`): **24**
 
-- **8.1 Primary action_Type distribution (exclusive — one bucket per issue)**
+- **Primary action_Type distribution (exclusive — one bucket per issue)**
 
 _[↑ Back to Index](#sec-2)_
 
@@ -1011,7 +1011,7 @@ Raw atoms (pre-merge, for reference):
 | CHECK_CASES | 24 |
 | SKIP | 9 |
 
-- **8.2 action_Type distribution (multi-label — each category counted once per issue)**
+- **action_Type distribution (multi-label — each category counted once per issue)**
 
 _[↑ Back to Index](#sec-2)_
 
@@ -1033,7 +1033,7 @@ _[↑ Back to Index](#sec-2)_
 | CHECK_CASES | 24 |
 | SKIP | 10 |
 
-- **8.3 Priority distribution**
+- **Priority distribution**
 
 _[↑ Back to Index](#sec-2)_
 
@@ -1044,7 +1044,7 @@ _[↑ Back to Index](#sec-2)_
 | P2 | 188 |
 | P3 | 117 |
 
-- **8.4 Status distribution**
+- **Status distribution**
 
 _[↑ Back to Index](#sec-2)_
 
@@ -1052,7 +1052,7 @@ _[↑ Back to Index](#sec-2)_
 |---|---:|
 | open | 375 |
 
-- **8.5 Category column distribution (top 20)**
+- **Category column distribution (top 20)**
 
 _[↑ Back to Index](#sec-2)_
 
@@ -1067,7 +1067,7 @@ _[↑ Back to Index](#sec-2)_
 | TorchAO | 24 |
 | Sparse | 22 |
 
-- **8.6 CHECK_CASES issue IDs**
+- **CHECK_CASES issue IDs**
 
 _[↑ Back to Index](#sec-2)_
 
