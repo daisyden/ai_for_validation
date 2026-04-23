@@ -614,7 +614,7 @@ def render_section_by_category(row_list, section_num: str, cat_prefix: str) -> l
     return out, toc
 
 
-def render_dep_table(row_list) -> str:
+def render_dep_table(row_list, title_wrap: int = 0) -> str:
     head = "| Issue | Dependency | Title | Owner | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |"
     sep  = "|---|---|---|---|---|---|---|---|---|---|"
     out = [head, sep]
@@ -622,10 +622,12 @@ def render_dep_table(row_list) -> str:
         prio_key(r), clean(r[C["Dependency"]]), str(r[C["Issue ID"]])
     ))
     for r in sorted_rows:
+        title_raw = clean(r[C["Title"]])
+        title_cell = wrap_cell(title_raw, title_wrap) if title_wrap else esc(title_raw)
         out.append("| " + " | ".join([
             issue_link(r[C["Issue ID"]]),
             esc(clean(r[C["Dependency"]]), 30),
-            esc(clean(r[C["Title"]])),
+            title_cell,
             esc(owner(r), 25),
             esc(fmt_list(r[C["action_TBD"]]), 100),
             fix_approach_cell(r),
@@ -862,7 +864,7 @@ w("Issues whose fix lives in `pytorch/pytorch` (Dynamo/Inductor, AOTAutograd, "
   "`_prims_common`, benchmark harness, test-list sync, etc.). Terminal-QA rows "
   f"excluded.  —  {len(upstream_rows)} issues.")
 w()
-w(render_dep_table(upstream_rows))
+w(render_dep_table(upstream_rows, title_wrap=40))
 w()
 
 w('<a id="sec-6-3-cpu-fallback"></a>')
@@ -874,7 +876,7 @@ w("Issues where the XPU operator is missing and a CPU fallback is registered "
   "in torch-xpu-ops. Terminal-QA rows excluded.  —  "
   f"{len(cpu_fb_rows)} issues.")
 w()
-w(render_dep_table(cpu_fb_rows))
+w(render_dep_table(cpu_fb_rows, title_wrap=40))
 w()
 
 # -- Section 7: New <=7 days -----------------------------------------------
