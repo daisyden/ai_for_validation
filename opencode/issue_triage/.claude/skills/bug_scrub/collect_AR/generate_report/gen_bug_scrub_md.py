@@ -773,7 +773,7 @@ w()
 
 # §3.0 Unclassified — rows with empty action_Type (Phase 4b emitted no verb)
 w('<a id="sec-3-0-unclassified"></a>')
-w(f"### 3.0 UNCLASSIFIED  ·  {len(unclassified_rows)} issues")
+w(f"- **3.0 UNCLASSIFIED**  ·  {len(unclassified_rows)} issues")
 w()
 w(BACK)
 w()
@@ -787,7 +787,7 @@ for i, cat in enumerate(DEV_SECTIONS, start=1):
     section_num = f"3.{i}"
     anchor = f"sec-3-{i}-{slug(cat)}"
     w(f'<a id="{anchor}"></a>')
-    w(f"### {section_num} {cat}  ·  {len(by_section[cat])} issues")
+    w(f"- **{section_num} {cat}**  ·  {len(by_section[cat])} issues")
     w()
     w(f"**{SECTION_TITLES[cat]}**")
     w()
@@ -815,7 +815,7 @@ for i, cat in enumerate(QA_SECTIONS, start=1):
     # action_Type), not just those where CHECK_CASES is the primary bucket.
     bucket = check_cases_rows if cat == "CHECK_CASES" else by_section[cat]
     w(f'<a id="{anchor}"></a>')
-    w(f"### {section_num} {cat}  ·  {len(bucket)} issues")
+    w(f"- **{section_num} {cat}**  ·  {len(bucket)} issues")
     w()
     w(f"**{SECTION_TITLES[cat]}**")
     w()
@@ -846,7 +846,7 @@ w("Issues with a non-blank `Dependency` value, excluding `upstream-pytorch`, "
   f"also excluded.  —  {len(dep_rows)} issues.")
 w()
 w('<a id="sec-6-1-third-parties"></a>')
-w("### 6.1 Third Parties")
+w("- **6.1 Third Parties**")
 w()
 w(BACK)
 w()
@@ -854,7 +854,7 @@ w(render_dep_table(dep_rows))
 w()
 
 w('<a id="sec-6-2-upstream-pytorch"></a>')
-w("### 6.2 upstream-pytorch")
+w("- **6.2 upstream-pytorch**")
 w()
 w(BACK)
 w()
@@ -866,7 +866,7 @@ w(render_dep_table(upstream_rows))
 w()
 
 w('<a id="sec-6-3-cpu-fallback"></a>')
-w("### 6.3 CPU fallback")
+w("- **6.3 CPU fallback**")
 w()
 w(BACK)
 w()
@@ -902,7 +902,7 @@ w(f"- Empty `action_TBD` (no verdict yet): **{empty_action}**")
 w(f"- Issues flagged for test-case existence check (`CHECK_CASES`): **{len(check_cases_ids)}**")
 w()
 
-w("### 8.1 Primary action_Type distribution (exclusive — one bucket per issue)")
+w("- **8.1 Primary action_Type distribution (exclusive — one bucket per issue)**")
 w()
 w(BACK)
 w()
@@ -927,7 +927,7 @@ for c in PRIMARY_ORDER + ["WAIT_EXTERNAL","FILE_ISSUE","CHECK_CASES"]:
         w(f"| {c} | {per_primary[c]} |")
 w()
 
-w("### 8.2 action_Type distribution (multi-label — each category counted once per issue)")
+w("- **8.2 action_Type distribution (multi-label — each category counted once per issue)**")
 w()
 w(BACK)
 w()
@@ -938,7 +938,7 @@ for c in PRIMARY_ORDER:
         w(f"| {c} | {per_cat[c]} |")
 w()
 
-w("### 8.3 Priority distribution")
+w("- **8.3 Priority distribution**")
 w()
 w(BACK)
 w()
@@ -949,7 +949,7 @@ for p in ["P0","P1","P2","P3","(blank)"]:
         w(f"| {p} | {per_prio[p]} |")
 w()
 
-w("### 8.4 Status distribution")
+w("- **8.4 Status distribution**")
 w()
 w(BACK)
 w()
@@ -959,7 +959,7 @@ for s, n in per_status.most_common():
     w(f"| {s} | {n} |")
 w()
 
-w("### 8.5 Category column distribution (top 20)")
+w("- **8.5 Category column distribution (top 20)**")
 w()
 w(BACK)
 w()
@@ -969,7 +969,7 @@ for c, n in per_category_col.most_common(20):
     w(f"| {c} | {n} |")
 w()
 
-w("### 8.6 CHECK_CASES issue IDs")
+w("- **8.6 CHECK_CASES issue IDs**")
 w()
 w(BACK)
 w()
