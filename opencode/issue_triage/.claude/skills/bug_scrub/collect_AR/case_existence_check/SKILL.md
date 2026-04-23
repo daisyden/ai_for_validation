@@ -53,6 +53,7 @@ Columns on the **Issues** sheet:
 |---|---|
 | `action_TBD` | append `"check_case_avaliablity"` |
 | `owner_transferred` | set to the issue's `Reporter` |
+| `action_reason` | distinct non-empty `case_existence_comments` aggregated across the issue's Test Cases rows. Single comment → plain string; multiple distinct comments → JSON array. Only written when `action_reason` is blank (does not overwrite values produced by Phase 4a / 4b). |
 
 `action_TBD` is a delimited list of tokens (comma-separated). If the
 column already has content from Phase 4a / 4b, append rather than
@@ -172,12 +173,23 @@ backup convention used by Phase 3 (`_bk_before_phase3_write.xlsx`,
 ## Non-Goals
 
 - Does not re-verify `xpu_case_existence`; trusts Phase 2.4's values.
-- Does not touch `action_reason` in this version. (Future extension:
-  append `case_existence_comments` into `action_reason`, per the
-  parent `bug_scrub/SKILL.md` description. Deferred until requested.)
 - Does not produce any per-issue narrative; the token is a flag that
   downstream triage tooling expands.
 
+## Scripts (in this folder)
+
+| Script | Purpose |
+|---|---|
+| [`run_action_reason_backfill.py`](./run_action_reason_backfill.py) | For issues whose `action_TBD` contains `check_case_avaliablity` and whose `action_reason` is blank, aggregate distinct non-empty `case_existence_comments` from the Test Cases sheet and write them into `action_reason` (single → plain string, multiple → JSON array). Backs up the workbook to `_bk_before_action_reason_backfill.xlsx` before writing. Anchored via `__file__` so it runs from any CWD. |
+
+Typical run:
+
+```bash
+python3 opencode/issue_triage/.claude/skills/bug_scrub/collect_AR/case_existence_check/run_action_reason_backfill.py
+```
+
 ## Version
 
+- v1.1.0 — 2026-04-22 — populate `action_reason` from `case_existence_comments`
+  (see `run_action_reason_backfill.py`); clarified Outputs + Scripts sections.
 - v1.0.0 — 2026-04-21 — initial skill.
