@@ -102,9 +102,41 @@ hdr = [c.value for c in ws[1]]
 def col(n): return hdr.index(n)
 C = {k: col(k) for k in [
     "Issue ID","Title","Status","Assignee","Reporter","Labels","Created Time",
-    "Category","Priority","Fix Approach","action_TBD","action_reason",
+    "Category","Priority","Root Cause","Fix Approach","action_TBD","action_reason",
     "owner_transferred","duplicated_issue","Dependency","action_Type",
 ]}
+
+# Traceback index: {issue_id: [ {source, test_case, test_file, error, traceback}, ... ]}
+tb_by_issue: dict[int, list[dict]] = defaultdict(list)
+for sheet_name, src_label in [("Test Cases", "UT"), ("E2E Test Cases", "E2E")]:
+    ws_tb = wb[sheet_name]
+    h_tb = [c.value for c in ws_tb[1]]
+    idx = {k: h_tb.index(k) for k in ("Issue ID", "Error Message", "Traceback")}
+    tc_i = h_tb.index("Test Case") if "Test Case" in h_tb else None
+    tf_i = h_tb.index("Test File") if "Test File" in h_tb else None
+    mdl_i = h_tb.index("Model") if "Model" in h_tb else None
+    bench_i = h_tb.index("Benchmark") if "Benchmark" in h_tb else None
+    for r_tb in ws_tb.iter_rows(min_row=2, values_only=True):
+        iid_v = r_tb[idx["Issue ID"]]
+        tb_v = r_tb[idx["Traceback"]]
+        if iid_v is None or not tb_v:
+            continue
+        try:
+            iid_int = int(iid_v)
+        except (TypeError, ValueError):
+            continue
+        name = ""
+        if tc_i is not None and r_tb[tc_i]:
+            name = str(r_tb[tc_i])
+        elif mdl_i is not None and r_tb[mdl_i]:
+            name = f"{r_tb[bench_i] or ''}/{r_tb[mdl_i]}".strip("/")
+        tb_by_issue[iid_int].append({
+            "source": src_label,
+            "name": name,
+            "file": str(r_tb[tf_i]) if tf_i is not None and r_tb[tf_i] else "",
+            "error": str(r_tb[idx["Error Message"]]) if r_tb[idx["Error Message"]] else "",
+            "traceback": str(tb_v),
+        })
 
 rows = [tuple(c.value for c in r) for r in ws.iter_rows(min_row=2)]
 print(f"loaded {len(rows)} rows")
@@ -259,6 +291,152 @@ def format_fix_approach(s, width: int = 80) -> str:
 DUP_TOKEN = re.compile(r"#?(\d+)")
 
 
+# ---- per-issue detail files ----------------------------------------------
+DETAILS_DIR = OUT.parent / "details"
+DETAILS_REL = "details"
+
+def _wrap_para(s: str, width: int = 100) -> str:
+    """Wrap free-form prose for detail-file body (plain markdown, no <br>)."""
+    s = clean(s).replace("\r", " ")
+    s = re.sub(r"[ \t]+", " ", s)
+    paras = [p.strip() for p in re.split(r"\n\s*\n", s) if p.strip()]
+    out = []
+    for p in paras:
+        p_flat = re.sub(r"\s+", " ", p)
+        out.append("\n".join(textwrap.wrap(p_flat, width=width,
+                                           break_long_words=False,
+                                           break_on_hyphens=False)))
+    return "\n\n".join(out)
+
+def _bullets(raw) -> str:
+    """Render action_TBD / action_reason JSON list cells as markdown bullets."""
+    s = clean(raw)
+    if not s:
+        return "_(none)_"
+    items: list[str] = []
+    if s.startswith("["):
+        try:
+            import json as _j
+            parsed = _j.loads(s)
+            if isinstance(parsed, list):
+                items = [str(x) for x in parsed]
+        except Exception:
+            items = [s]
+    if not items:
+        items = [s]
+    return "\n".join(f"- {it}" for it in items)
+
+def _fix_approach_md(raw) -> str:
+    """Render Fix Approach as bulleted markdown for detail files."""
+    s = clean(raw)
+    if not s:
+        return "_(none)_"
+    s = re.sub(r"\s+", " ", s).strip()
+    parts = [p.strip() for p in _SPLIT_RE.split(s) if p.strip()]
+    if not parts:
+        return s
+    out = []
+    for i, p in enumerate(parts):
+        if i < len(parts) - 1 and not p.endswith(".") and not p.endswith(":"):
+            p = p + "."
+        out.append(f"- {p}")
+    return "\n".join(out)
+
+def _preview(raw, max_chars: int = 100) -> str:
+    """Short preview for Fix Approach table cell: first sentence or max_chars."""
+    s = clean(raw).replace("|", "\\|")
+    s = re.sub(r"\s+", " ", s).strip()
+    if not s:
+        return ""
+    m = _SPLIT_RE.search(s)
+    if m and m.start() <= max_chars:
+        head = s[:m.start()].rstrip()
+        if m.group(0).startswith("."):
+            head += "."
+        return head
+    if len(s) <= max_chars:
+        return s
+    return s[:max_chars - 1].rstrip() + "…"
+
+def fix_approach_cell(r) -> str:
+    """Truncated Fix Approach + link to per-issue detail file."""
+    iid = r[C["Issue ID"]]
+    preview = _preview(r[C["Fix Approach"]])
+    link = f"[→ details]({DETAILS_REL}/{iid}.md)"
+    return f"{preview}<br>{link}" if preview else link
+
+def write_detail(r) -> None:
+    iid = r[C["Issue ID"]]
+    if iid is None:
+        return
+    title = clean(r[C["Title"]])
+    buf: list[str] = []
+    a = buf.append
+    a(f"# Issue #{iid}: {title}")
+    a("")
+    a(f"- **GitHub**: https://github.com/{REPO}/issues/{iid}")
+    for key, label in [
+        ("Category", "Category"),
+        ("Priority", "Priority"),
+        ("Status", "Status"),
+        ("Assignee", "Assignee"),
+        ("owner_transferred", "owner_transferred"),
+        ("Reporter", "Reporter"),
+        ("Labels", "Labels"),
+        ("Dependency", "Dependency"),
+        ("action_Type", "action_Type"),
+    ]:
+        v = clean(r[C[key]])
+        a(f"- **{label}**: {v if v else '_(blank)_'}")
+    a("")
+    a("## action_TBD")
+    a("")
+    a(_bullets(r[C["action_TBD"]]))
+    a("")
+    a("## action_reason")
+    a("")
+    a(_bullets(r[C["action_reason"]]))
+    a("")
+    a("## Root Cause")
+    a("")
+    rc = clean(r[C["Root Cause"]])
+    a(_wrap_para(rc) if rc else "_(none)_")
+    a("")
+    a("## Fix Approach")
+    a("")
+    a(_fix_approach_md(r[C["Fix Approach"]]))
+    a("")
+    try:
+        iid_int = int(iid)
+    except (TypeError, ValueError):
+        iid_int = None
+    tbs = tb_by_issue.get(iid_int, []) if iid_int is not None else []
+    if tbs:
+        a(f"## Test Cases & Traceback ({len(tbs)})")
+        a("")
+        for i, e in enumerate(tbs, start=1):
+            hdr_bits = [f"{e['source']}"]
+            if e["name"]:
+                hdr_bits.append(e["name"])
+            a(f"### {i}. {' · '.join(hdr_bits)}")
+            a("")
+            if e["file"]:
+                a(f"- **Test File**: `{e['file']}`")
+            if e["error"]:
+                err = e["error"].replace("\r", " ").strip()
+                err = re.sub(r"\s+", " ", err)
+                a(f"- **Error**: {err[:300] + ('…' if len(err) > 300 else '')}")
+            a("")
+            a("```")
+            a(e["traceback"].rstrip())
+            a("```")
+            a("")
+    (DETAILS_DIR / f"{iid}.md").write_text("\n".join(buf))
+
+
+
+
+
 def parse_dup_ids(dup_cell, action_tbd) -> list[int]:
     """Extract duplicate issue IDs from duplicated_issue cell, with
     action_TBD 'duplicate of …' fallback. Forward refs only."""
@@ -365,6 +543,14 @@ def is_terminal(r) -> bool:
     return primary(at) in TERMINAL_QA if at else False
 dep_rows    = [r for r in dep_rows    if not is_terminal(r)]
 
+# Dependency sub-buckets: upstream-pytorch + CPU fallback (terminal-QA excluded)
+upstream_rows = [r for r in rows
+                 if clean(r[C["Dependency"]]).lower() == "upstream-pytorch"
+                 and not is_terminal(r)]
+cpu_fb_rows   = [r for r in rows
+                 if clean(r[C["Dependency"]]).lower() == "cpu fallback"
+                 and not is_terminal(r)]
+
 # New <=7 days (exclude terminal-QA rows)
 recent_rows = [r for r in rows
                if (dt := parse_dt(r[C["Created Time"]])) and dt >= RECENT_CUTOFF
@@ -388,7 +574,7 @@ def render_table(row_list) -> str:
             esc(clean(r[C["Title"]])),
             esc(owner(r), 25),
             esc(fmt_list(r[C["action_TBD"]]), 100),
-            format_fix_approach(r[C["Fix Approach"]], 80),
+            fix_approach_cell(r),
             esc(clean(r[C["Priority"]]), 6),
             esc(fmt_list(r[C["action_reason"]]), 140),
             esc(clean(r[C["Reporter"]]), 20),
@@ -442,7 +628,7 @@ def render_dep_table(row_list) -> str:
             esc(clean(r[C["Title"]])),
             esc(owner(r), 25),
             esc(fmt_list(r[C["action_TBD"]]), 100),
-            format_fix_approach(r[C["Fix Approach"]], 80),
+            fix_approach_cell(r),
             esc(clean(r[C["Priority"]]), 6),
             esc(fmt_list(r[C["action_reason"]]), 140),
             esc(clean(r[C["Reporter"]]), 20),
@@ -468,7 +654,7 @@ def render_recent(row_list) -> str:
             esc(clean(r[C["Title"]])),
             esc(owner(r), 25),
             esc(fmt_list(r[C["action_TBD"]]), 100),
-            format_fix_approach(r[C["Fix Approach"]], 80),
+            fix_approach_cell(r),
             esc(clean(r[C["Priority"]]), 6),
             esc(fmt_list(r[C["action_reason"]]), 140),
             esc(clean(r[C["Reporter"]]), 20),
@@ -500,13 +686,20 @@ def render_dup_table(row_list) -> str:
             esc(clean(r[C["Title"]])),
             esc(owner(r), 25),
             esc(fmt_list(r[C["action_TBD"]]), 100),
-            format_fix_approach(r[C["Fix Approach"]], 80),
+            fix_approach_cell(r),
             esc(clean(r[C["Priority"]]), 6),
             esc(fmt_list(r[C["action_reason"]]), 140),
             esc(clean(r[C["Reporter"]]), 20),
             esc(clean(r[C["Labels"]]), 40),
         ]) + " |")
     return "\n".join(out) + "\n"
+
+
+# ---- write per-issue detail files ----------------------------------------
+DETAILS_DIR.mkdir(parents=True, exist_ok=True)
+for _r in rows:
+    write_detail(_r)
+print(f"wrote {len(rows)} detail files to {DETAILS_DIR}")
 
 
 # ---- assemble report ------------------------------------------------------
@@ -542,6 +735,8 @@ w(f"| Developer action required | {', '.join(DEV_SECTIONS)} | {dev_total} |")
 w(f"| QA action required | {', '.join(QA_SECTIONS)} | {qa_total} |")
 w(f"| Duplicated | — | {len(dup_rows)} |")
 w(f"| External dependency (non-upstream-pytorch, non-SYCL-kernel) | — | {len(dep_rows)} |")
+w(f"| Upstream-pytorch | — | {len(upstream_rows)} |")
+w(f"| CPU fallback | — | {len(cpu_fb_rows)} |")
 w(f"| Filed within last 7 days | — | {len(recent_rows)} |")
 w()
 
@@ -558,6 +753,8 @@ for i, c in enumerate(QA_SECTIONS, start=1):
     w(f'  - [4.{i} {c}](#sec-4-{i}-{slug(c)})')
 w('- [5. Duplicated issues](#sec-5)')
 w('- [6. Dependency (external blockers)](#sec-6)')
+w('  - [6.1 upstream-pytorch](#sec-6-1-upstream-pytorch)')
+w('  - [6.2 CPU fallback](#sec-6-2-cpu-fallback)')
 w('- [7. New submitted issues (<7 days)](#sec-7)')
 w('- [8. Statistics](#sec-8)')
 w()
@@ -648,6 +845,30 @@ w("Issues with a non-blank `Dependency` value, excluding `upstream-pytorch`, "
   f"also excluded.  —  {len(dep_rows)} issues.")
 w()
 w(render_dep_table(dep_rows))
+w()
+
+w('<a id="sec-6-1-upstream-pytorch"></a>')
+w("### 6.1 upstream-pytorch")
+w()
+w(BACK)
+w()
+w("Issues whose fix lives in `pytorch/pytorch` (Dynamo/Inductor, AOTAutograd, "
+  "`_prims_common`, benchmark harness, test-list sync, etc.). Terminal-QA rows "
+  f"excluded.  —  {len(upstream_rows)} issues.")
+w()
+w(render_dep_table(upstream_rows))
+w()
+
+w('<a id="sec-6-2-cpu-fallback"></a>')
+w("### 6.2 CPU fallback")
+w()
+w(BACK)
+w()
+w("Issues where the XPU operator is missing and a CPU fallback is registered "
+  "in torch-xpu-ops. Terminal-QA rows excluded.  —  "
+  f"{len(cpu_fb_rows)} issues.")
+w()
+w(render_dep_table(cpu_fb_rows))
 w()
 
 # -- Section 7: New <=7 days -----------------------------------------------
