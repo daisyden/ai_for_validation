@@ -46,7 +46,7 @@ flowchart TD
     subgraph P4["Phase 4 — Collect AR"]
         direction TB
         S4a["4a close_or_skip<br/><i>RULE 1: Fixed → Close<br/>RULE 2: not_target/wontfix → Skip</i>"]:::skill
-        S4b["4b get_AR_from_issue<br/>(+ check_pr_status)"]:::skill
+        S4b["4b get_AR_from_issue<br/>(+ check_pr_status)<br/><i>(see §6 sub-workflow)</i>"]:::skill
         S4c["4c case_existence_check"]:::skill
     end
 
@@ -214,9 +214,11 @@ ci_results/                            ← from 1.2, per-run artifacts
 `triage_skills` runs once per issue (no batch script — strictly one-by-one
 unless using the wave-based parallel pattern in
 [`SKILL_Batch_Orchestration.md`](./analyze_issue/triage_skills/SKILL_Batch_Orchestration.md)).
-Each invocation walks 6 deterministic steps and emits one JSON object per
-issue conforming to the canonical schema in
-[`triage_skills/SKILL.md`](./analyze_issue/triage_skills/SKILL.md):
+The diagram below shows the **three core analysis steps** (3, 5, 6) that
+produce the canonical JSON output. Steps 1 (version detection), 2 (reproduce
+extraction), and 4 (runtime verification) are diagnostic prerequisites
+documented in [`triage_skills/SKILL.md`](./analyze_issue/triage_skills/SKILL.md)
+and are omitted here for clarity.
 
 ```mermaid
 flowchart TD
@@ -228,10 +230,7 @@ flowchart TD
     IN_BACK[(pytorch_xpu_backend_analysis.md)]:::inp
 
     %% ========== STEPS ==========
-    T1["STEP 1<br/>Issue Acquisition + Version Detection<br/><sub>gh issue view · webfetch fallback<br/>extract PyTorch / IGC / Triton / oneAPI versions</sub>"]:::step
-    T2["STEP 2<br/>Reproduce Command Extraction<br/><sub>identify failing test from issue body<br/>resolve test path under ~/pytorch/test/<br/>or torch-xpu-ops/test/xpu/</sub>"]:::step
     T3["STEP 3<br/>Code Exploration + Test Analysis<br/><sub>explore agent (medium depth)<br/>locate impl + test files<br/>read assertions / kernel launch</sub>"]:::step
-    T4["STEP 4<br/>Runtime Verification<br/><sub>conda env: pytorch_opencode_env<br/>execute reproduce if version-compatible</sub>"]:::step
     T5["STEP 5<br/>Deep Root Cause Analysis<br/><sub>XPU vs CPU fallback diff<br/>kernel-code investigation<br/>error-pattern → cause mapping</sub>"]:::step
     T6["STEP 6<br/>Dependency Analysis + Classification<br/><sub>apply 4 taxonomies:<br/>Category · Priority · Dependency · Root Cause</sub>"]:::step
 
@@ -240,8 +239,6 @@ flowchart TD
     H_PRI["SKILL_Priority_Analysis.md<br/><sub>P0–P3 weighted scoring</sub>"]:::help
     H_DEP["SKILL_Domain_Patterns.md<br/><sub>quick-reference patterns</sub>"]:::help
     H_DEEP["SKILL_Deep_Analysis_Patterns.md<br/><sub>error-type → investigation</sub>"]:::help
-    H_E2E["SKILL_E2E_Benchmark.md<br/><sub>benchmark-suite triage</sub>"]:::help
-    H_TLOG["SKILL_Triage_Logic.md<br/><sub>orchestration rules</sub>"]:::help
 
     %% ========== OUTPUT ==========
     OUT["JSON entry per issue<br/><b>{ row, issue_id, category, priority,<br/>dependency, root_cause, fix_approach }</b>"]:::out
@@ -250,23 +247,18 @@ flowchart TD
     XLSX[(result/torch_xpu_ops_issues.xlsx<br/>Issues sheet)]:::art
 
     %% ========== FLOW ==========
-    IN_ISSUE --> T1
-    T1 --> T2
-    T2 --> T3
+    IN_ISSUE --> T3
     IN_SRC --> T3
-    T3 --> T4
-    T4 --> T5
+    T3 --> T5
     IN_CI -.evidence.-> T5
     IN_BACK -.reference.-> T5
     T5 --> T6
     IN_OP -.lookup.-> T6
 
-    H_CAT -.guides.-> T6
-    H_PRI -.guides.-> T6
     H_DEP -.guides.-> T3
     H_DEEP -.guides.-> T5
-    H_E2E -.guides.-> T2
-    H_TLOG -.guides.-> T1
+    H_CAT -.guides.-> T6
+    H_PRI -.guides.-> T6
 
     T6 --> OUT
     OUT --> XLSX
@@ -320,7 +312,117 @@ performing each step. They live in `analyze_issue/triage_skills/`:
 
 ---
 
+## 6. get_AR_from_issue Sub-Workflow (Phase 4b expansion)
+
+`get_AR_from_issue` runs once per non-skipped issue after `4a close_or_skip`.
+It produces the action-required (AR) signal that drives `action_TBD`,
+`action_reason`, and `owner_transferred`. The skill is composed of three
+parts that execute as **Step 0 → Part 1 → Part 2** (Part 3 in the SKILL.md
+text runs **first** at runtime as the not-target gate):
+
+```mermaid
+flowchart TD
+    %% ========== INPUTS ==========
+    IN_ROW[(Issue row<br/>title · body · labels · author · comments)]:::inp
+    IN_GH[(GitHub API<br/>gh CLI · GraphQL · REST · WebFetch)]:::inp
+    IN_OWN[(Authoritative-owner set<br/>OWNER · COLLABORATOR · MEMBER)]:::inp
+    IN_PT[(pytorch + torch-xpu-ops repos<br/>file-path lookup for Vector D)]:::inp
+
+    %% ========== STEP 0: NOT-TARGET CHECK (Part 3) ==========
+    P3["STEP 0 — Not-Target Check (Part 3)<br/><sub>explore agent classifies owner intent<br/>per enumerated case</sub>"]:::step
+    P3V{"verdict?"}:::dec
+    SHORT["short-circuit:<br/>action_TBD = 'label not_target and close'<br/>owner_transferred = earliest binding owner"]:::out
+    PARTIAL["partial:<br/>action_TBD += 'label not_target'<br/>continue Part 1/2 for remaining_cases"]:::step
+
+    %% ========== PART 1: PR DISCOVERY + VERIFICATION ==========
+    P1A["PART 1 · PR Discovery<br/><sub>Vector 0: GraphQL closedByPullRequestsReferences (auto-VERIFY)<br/>Vector A: timeline cross-references<br/>Vector B: issue-body refs (post excluded-source strip)<br/>Vector C: title-keyword gh pr list (Copilot catch)<br/>Vector D: file-path search</sub>"]:::step
+    P1B["PART 1 · PR Verification (3-tier)<br/><sub>github_linked / explicit_reference / content_match<br/>→ VERIFIED · REJECTED · UNVERIFIABLE_PRIVATE</sub>"]:::step
+    P1C["PART 1 · check_pr_status (4 gates)<br/><sub>Resolving · Review · CI · Merge</sub>"]:::step
+
+    %% ========== PART 2: COMMENT AR ==========
+    P2["PART 2 · Comment AR<br/><sub>explore agent: author association ·<br/>request type · blocking level<br/>→ unresolved-request list</sub>"]:::step
+
+    %% ========== HELPER SCRIPTS ==========
+    H_PR["check_pr_status<br/><sub>shared 4-gate analyzer</sub>"]:::help
+
+    %% ========== COMBINE + OUTPUT ==========
+    COMBINE["Combine AR<br/><sub>merge: not_target + PR-AR + Comment-AR<br/>conflict resolution · priority escalation</sub>"]:::step
+    OUT["Per-issue AR object<br/><b>{ action_TBD, action_reason,<br/>owner_transferred, combined_ar[] }</b>"]:::out
+    XLSX[(result/torch_xpu_ops_issues.xlsx<br/>Issues sheet — appended)]:::art
+
+    POST1["run_phase4b_merge.py<br/><sub>merge per-issue AR JSON → Excel</sub>"]:::script
+    POST2["run_pass_backfill.py<br/><sub>repair: backfill missing pass rows</sub>"]:::script
+
+    %% ========== FLOW ==========
+    IN_ROW --> P3
+    IN_OWN -.guides.-> P3
+    IN_GH --> P3
+    P3 --> P3V
+    P3V -->|"label not_target<br/>and close"| SHORT
+    P3V -->|"label not_target<br/>(partial)"| PARTIAL
+    P3V -->|"null<br/>(no not-target signal)"| P1A
+    PARTIAL --> P1A
+
+    IN_ROW --> P1A
+    IN_GH --> P1A
+    IN_PT -.lookup.-> P1A
+    P1A --> P1B
+    IN_GH --> P1B
+    P1B --> P1C
+    H_PR -.invoked by.-> P1C
+
+    IN_ROW --> P2
+    IN_GH --> P2
+    IN_OWN -.guides.-> P2
+
+    SHORT --> COMBINE
+    P1C --> COMBINE
+    P2 --> COMBINE
+    COMBINE --> OUT
+    OUT --> XLSX
+    XLSX --> POST1
+    POST1 --> XLSX
+    XLSX --> POST2
+    POST2 --> XLSX
+
+    %% ========== STYLES ==========
+    classDef inp fill:#f4e8d8,stroke:#8b6f47,stroke-width:2px,color:#000
+    classDef step fill:#d8e8f4,stroke:#2c5f8a,stroke-width:2px,color:#000
+    classDef help fill:#e8e8f4,stroke:#5a5a8a,stroke-width:1px,color:#000,stroke-dasharray: 3 3
+    classDef out fill:#d8f4d8,stroke:#2c8a2c,stroke-width:2px,color:#000
+    classDef art fill:#fff4d8,stroke:#8a7c2c,stroke-width:1px,color:#000
+    classDef script fill:#e8d8f4,stroke:#5a2c8a,stroke-width:1px,color:#000
+    classDef dec fill:#fff0c8,stroke:#8a7c2c,stroke-width:2px,color:#000
+```
+
+### 6.1 Part Roles
+
+| Part | Runtime order | Role |
+|---|---|---|
+| Part 3 — Not-Target Check | **Step 0** (runs first) | Owner-issued won't-fix / out-of-scope detection. Explore-agent driven, no pattern matching. |
+| Part 1 — PR Discovery + Verification + Status | After Step 0 (unless full short-circuit) | Find candidate PRs (5 vectors), verify each (3-tier), then run `check_pr_status` 4-gate analysis. |
+| Part 2 — Comment AR | Parallel with Part 1 | Explore-agent classification of unresolved comment requests by author association, request type, and blocking level. |
+
+### 6.2 Output Columns
+
+| Column | Source | Notes |
+|---|---|---|
+| `action_TBD` | Part 3 (short-circuit) or combined Part 1/2 | Appended to any value left by 4a `close_or_skip`. |
+| `action_reason` | All parts | Free-form rationale, multi-source merged. |
+| `owner_transferred` | Earliest binding owner from Part 3, else PR author from Part 1, else commenter from Part 2 | Single value — first binding owner wins. |
+
+### 6.3 Invariants
+
+- Step 0 (Part 3) **always runs first**; on `label not_target and close` it short-circuits Parts 1/2.
+- Part 1 verification is **mandatory** — no candidate PR is treated as a fix without a verdict.
+- Vector 0 (GraphQL `closedByPullRequestsReferences`) auto-verifies; Vectors A–D still run for completeness (catches follow-up fixes and Copilot PRs).
+- Inner-source / private-repo PRs cannot be verified via public API → flagged `UNVERIFIABLE_PRIVATE`, treated as informational.
+- `run_phase4b_merge.py` and `run_pass_backfill.py` run **once after the full Phase-4b pass**, not per-issue.
+
+---
+
 ## Version
 
+v1.2 — 2026-04-22 — added §6 get_AR_from_issue sub-workflow (Step 0 → Part 1 → Part 2, with 5-vector PR discovery, 3-tier verification, 4-gate check_pr_status, and merge/backfill scripts); trimmed §5 to the 3 core analysis steps (3, 5, 6); cross-referenced §6 from the §1 master diagram.
 v1.1 — 2026-04-22 — added §5 Triage Skills sub-workflow (6-step expansion of Phase 3.3) with helper-skill reference matrix.
 v1.0 — 2026-04-22 — initial workflow diagram accompanying bug_scrub SKILL.md v3.3.
