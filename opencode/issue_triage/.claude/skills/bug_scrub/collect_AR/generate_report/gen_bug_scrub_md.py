@@ -535,6 +535,19 @@ def dep_ok(r) -> bool:
     return True
 dep_rows = [r for r in rows if dep_ok(r)]
 
+# Third-party blockers: rows whose Dependency points at code Intel does not
+# own (oneDNN/oneMKL/oneAPI/triton/driver/xccl). They are surfaced in §6 only;
+# §3 (Action required) hides them unless the row has a live PR to track —
+# i.e. raw primary action_Type is TRACK_PR or RETRIAGE_PRS. Note: this is
+# stricter than dep_ok (§6 also includes upstream-pytorch / CPU fallback /
+# SYCL kernel: deps, which §3 still shows because they are intel-actionable).
+THIRD_PARTY_DEPS = {"onednn", "onemkl", "oneapi", "triton", "driver", "xccl"}
+SEC3_EXEMPT_PRIMARIES = {"TRACK_PR", "RETRIAGE_PRS"}
+def is_third_party_blocked_for_sec3(r) -> bool:
+    if primary(clean(r[C["action_Type"]])) in SEC3_EXEMPT_PRIMARIES:
+        return False
+    return clean(r[C["Dependency"]]).lower() in THIRD_PARTY_DEPS
+
 # Exclude terminal QA rows (CLOSE / VERIFY_AND_CLOSE / SKIP / NOT_TARGET_CLOSE
 # — sections 4.1, 4.2, 4.4, 4.6) from §6 and §7.
 TERMINAL_QA = {"CLOSE", "VERIFY_AND_CLOSE", "SKIP", "NOT_TARGET_CLOSE"}
@@ -770,29 +783,38 @@ w("Issues in this section require developer work before they can progress. "
   "Each subsection is split by `Category` (existing taxonomy column); "
   "rows inside each category table are sorted by `Priority` (P0 → P3).")
 w()
+w("Issues whose `Dependency` is a third-party blocker "
+  "(`oneDNN` / `oneMKL` / `oneAPI` / `triton` / `driver` / `xccl`) are "
+  "hidden here and listed only under §6 Dependency, except when their "
+  "`action_Type` is `TRACK_PR` or `RETRIAGE_PRS` (a live PR to track).")
+w()
 
 # §3.0 Unclassified — rows with empty action_Type (Phase 4b emitted no verb)
+sec3_unclassified = [r for r in unclassified_rows
+                     if not is_third_party_blocked_for_sec3(r)]
 w('<a id="sec-3-0-unclassified"></a>')
-w(f"- **UNCLASSIFIED**  ·  {len(unclassified_rows)} issues")
+w(f"- **UNCLASSIFIED**  ·  {len(sec3_unclassified)} issues")
 w()
 w(BACK)
 w()
 w(f"**{SECTION_TITLES['UNCLASSIFIED']}**")
 w()
-w(render_table(unclassified_rows))
+w(render_table(sec3_unclassified))
 w()
 
 dev_toc: list[tuple[str, str]] = []  # [(anchor, label), ...] for extended TOC
 for i, cat in enumerate(DEV_SECTIONS, start=1):
     section_num = f"3.{i}"
     anchor = f"sec-3-{i}-{slug(cat)}"
+    bucket = [r for r in by_section[cat]
+              if not is_third_party_blocked_for_sec3(r)]
     w(f'<a id="{anchor}"></a>')
-    w(f"- **{cat}**  ·  {len(by_section[cat])} issues")
+    w(f"- **{cat}**  ·  {len(bucket)} issues")
     w()
     w(f"**{SECTION_TITLES[cat]}**")
     w()
     dev_toc.append((anchor, f"{section_num} {cat}"))
-    sub_lines, sub_toc = render_section_by_category(by_section[cat], section_num, cat)
+    sub_lines, sub_toc = render_section_by_category(bucket, section_num, cat)
     for line in sub_lines:
         w(line)
     # extend TOC with sub-category links
