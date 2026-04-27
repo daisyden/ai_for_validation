@@ -189,7 +189,7 @@ flowchart LR
 - Phases are strictly sequential; later phases append columns to the shared Excel.
 - Within a phase, sub-steps labeled N.1 → N.2 → N.3 → N.4 are also strictly sequential.
 - Phase 4 sub-steps 4a → 4b → 4c are sequential because each may **append** to `action_TBD` / `action_reason`.
-- Phase 5's two scripts are sequential: `action_Type` must exist before rendering.
+- Phase 5 is purely presentational: it classifies and renders, never rewrites verdict columns. PR-state correctness is owned by Phase 4b.
 
 ---
 
@@ -335,8 +335,9 @@ flowchart TD
     PARTIAL["partial:<br/>action_TBD += 'label not_target'<br/>continue Part 1/2 for remaining_cases"]:::step
 
     %% ========== PART 1: PR DISCOVERY + VERIFICATION ==========
-    P1A["PART 1 · PR Discovery<br/><sub>Vector 0: GraphQL closedByPullRequestsReferences (auto-VERIFY)<br/>Vector A: timeline cross-references<br/>Vector B: issue-body refs (post excluded-source strip)<br/>Vector C: title-keyword gh pr list (Copilot catch)<br/>Vector D: file-path search</sub>"]:::step
+    P1A["PART 1 · PR Discovery<br/><sub>Vector 0: GraphQL closedByPullRequestsReferences (auto-VERIFY)<br/>Vector A: timeline cross-references<br/>Vector B: issue-body refs (post excluded-source strip)<br/>Vector C: title-keyword gh pr list (Copilot catch)<br/>Vector D: file-path search<br/>Vector E: Fix Approach text scan (post-Phase-3.3)</sub>"]:::step
     P1B["PART 1 · PR Verification (3-tier)<br/><sub>github_linked / explicit_reference / content_match<br/>→ VERIFIED · REJECTED · UNVERIFIABLE_PRIVATE</sub>"]:::step
+    P1Bx["PART 1 · Step 2.5 Live state re-check<br/><sub>refresh state/mergedAt via gh pr view<br/>CLOSED-only → re-run Vectors C/D/E for replacement</sub>"]:::step
     P1C["PART 1 · check_pr_status (4 gates)<br/><sub>Resolving · Review · CI · Merge</sub>"]:::step
 
     %% ========== PART 2: COMMENT AR ==========
@@ -368,7 +369,9 @@ flowchart TD
     IN_PT -.lookup.-> P1A
     P1A --> P1B
     IN_GH --> P1B
-    P1B --> P1C
+    P1B --> P1Bx
+    IN_GH -.live state.-> P1Bx
+    P1Bx --> P1C
     H_PR -.invoked by.-> P1C
 
     IN_ROW --> P2
@@ -415,7 +418,8 @@ flowchart TD
 
 - Step 0 (Part 3) **always runs first**; on `label not_target and close` it short-circuits Parts 1/2.
 - Part 1 verification is **mandatory** — no candidate PR is treated as a fix without a verdict.
-- Vector 0 (GraphQL `closedByPullRequestsReferences`) auto-verifies; Vectors A–D still run for completeness (catches follow-up fixes and Copilot PRs).
+- Vector 0 (GraphQL `closedByPullRequestsReferences`) auto-verifies; Vectors A–E still run for completeness (catches follow-up fixes, Copilot PRs, and PRs named only in the Fix Approach).
+- Step 2.5 (live PR-state re-check) is **mandatory** before any verdict verb is emitted; it prevents stale-snapshot mis-verdicts (e.g., a now-merged PR being reported as CLOSED). For CLOSED-only verified sets, the replacement-PR search re-runs Vectors C/D/E before falling through to RETRIAGE_PRS.
 - Inner-source / private-repo PRs cannot be verified via public API → flagged `UNVERIFIABLE_PRIVATE`, treated as informational.
 - `run_phase4b_merge.py` and `run_pass_backfill.py` run **once after the full Phase-4b pass**, not per-issue.
 
@@ -423,6 +427,8 @@ flowchart TD
 
 ## Version
 
+v1.4 — 2026-04-27 — Reverted Phase 5 reconciliation node added in v1.3. PR-state fixes belong in Phase 4b only (Vector E + Step 2.5 in §6 sub-workflow remain). Phase 5 is purely presentational: `run_action_type.py` → `gen_bug_scrub_md.py`.
+v1.3 — 2026-04-27 — Phase 4b: added Vector E (Fix-Approach text scan) and Step 2.5 (live PR-state re-check + replacement-PR search) to §6 sub-workflow; Phase 5: inserted `run_fix_approach_reconcile.py` between `run_action_type.py` and `gen_bug_scrub_md.py` in §1, §2, §3.
 v1.2 — 2026-04-22 — added §6 get_AR_from_issue sub-workflow (Step 0 → Part 1 → Part 2, with 5-vector PR discovery, 3-tier verification, 4-gate check_pr_status, and merge/backfill scripts); trimmed §5 to the 3 core analysis steps (3, 5, 6); cross-referenced §6 from the §1 master diagram.
 v1.1 — 2026-04-22 — added §5 Triage Skills sub-workflow (6-step expansion of Phase 3.3) with helper-skill reference matrix.
 v1.0 — 2026-04-22 — initial workflow diagram accompanying bug_scrub SKILL.md v3.3.

@@ -54,14 +54,22 @@ CWD.
 | [`run_action_type.py`](./run_action_type.py) | Reads `action_TBD`, classifies into the 17-category taxonomy, writes the `action_Type` column back to the Issues sheet. Prints a Counter summary on stdout. |
 | [`gen_bug_scrub_md.py`](./gen_bug_scrub_md.py) | Reads Issues + Test Cases + E2E Test Cases sheets, consumes `action_Type`, emits `result/bug_scrub.md` with section-per-category, per-issue tables, `<br>`-wrapped Fix Approach (width 80), Duplicates column, and per-section Back-to-Index anchor links. |
 
+This skill is **purely presentational**: it does not call `gh`, does not
+re-query GitHub, and does not rewrite `action_TBD` / `action_reason`.
+Those columns are the responsibility of Phase 4b
+([`analyze_issue/get_AR_from_issue/`](../../analyze_issue/get_AR_from_issue/SKILL.md)),
+which owns PR discovery (Vectors 0–E) and live PR-state re-check (Step
+2.5). If a row reaches Phase 5 with the wrong verb, the fix belongs in
+Phase 4b — not here.
+
 ---
 
 ## Execution Order
 
 ```
-run_action_type.py       # populate action_Type column
+run_action_type.py                # populate action_Type column
         ↓
-gen_bug_scrub_md.py      # render bug_scrub.md
+gen_bug_scrub_md.py               # render bug_scrub.md
 ```
 
 Typical invocation:
@@ -106,7 +114,9 @@ scripts.
 
 ## Skill Metadata
 
-- **Version**: 1.0.0
+- **Version**: 1.2.0
 - **Created**: 2026-04-22
+- **Updated**: 2026-04-27 v1.2 (clarified that Phase 5 is purely presentational; PR-state verdicts are owned by Phase 4b — Vector E + Step 2.5 in `get_AR_from_issue/`. Reverted v1.1's `run_fix_approach_reconcile.py` repair pass.)
+- **Updated**: 2026-04-22 v1.0 (initial split of Phase 5 from analyze_issue)
 - **Consumes**: Phase 1–4 output in `result/torch_xpu_ops_issues.xlsx`
 - **Produces**: `action_Type` column + `result/bug_scrub.md`

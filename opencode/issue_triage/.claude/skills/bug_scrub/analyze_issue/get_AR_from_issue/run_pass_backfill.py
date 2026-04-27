@@ -8,12 +8,20 @@ Rule (per-issue, apply first that matches):
       -> TRACK_PR, verb: "Track PR <ref> to merge"
   - else any VERIFIED with state=CLOSED (unmerged)
       -> RETRIAGE_PRS, verb: "PR <ref> closed unmerged; reassess fix path"
+
+Step 2.5 — Live state re-check: before classification, every VERIFIED PR is
+re-queried via `gh pr view` so a now-merged PR doesn't get parked as CLOSED
+(or vice versa). This prevents stale-snapshot mis-verdicts in the rendered
+report.
 """
 import glob
 import json
 from pathlib import Path
 
 import openpyxl
+
+# Local helper — same folder, sibling module.
+from run_live_pr_state_recheck import refresh_pr_state
 
 REPO = Path(__file__).resolve().parents[7]
 EXCEL = str(REPO / "opencode/issue_triage/result/torch_xpu_ops_issues.xlsx")
@@ -57,6 +65,19 @@ def classify(pra: list) -> tuple[str, str, str]:
     raise RuntimeError("no VERIFIED PR but validation_status was PASS?")
 
 
+def refresh_verified(pra: list) -> list:
+    """Apply Step 2.5 live re-check to VERIFIED PRs only. REJECTED and
+    UNVERIFIABLE_PRIVATE entries are passed through unchanged because
+    re-querying them would either still fail or be wasteful."""
+    refreshed: list = []
+    for p in pra:
+        if p.get("verdict") == "VERIFIED":
+            refreshed.append(refresh_pr_state(p))
+        else:
+            refreshed.append(p)
+    return refreshed
+
+
 def main() -> None:
     # Load Phase 4b results
     backfill: dict[int, tuple[str, str, str]] = {}
@@ -67,7 +88,8 @@ def main() -> None:
         if d.get("action_TBD"):
             continue
         iid = d["issue_number"]
-        backfill[iid] = classify(d.get("pr_analysis", []))
+        pra = refresh_verified(d.get("pr_analysis", []))
+        backfill[iid] = classify(pra)
 
     print(f"Backfill candidates: {len(backfill)}")
 

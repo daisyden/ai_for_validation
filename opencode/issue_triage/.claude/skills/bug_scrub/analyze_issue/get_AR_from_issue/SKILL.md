@@ -242,6 +242,29 @@ recommended as a sanity check even when they do return candidates
    reasonable window around the issue (typically issue creation date
    ± 90 days) are plausible fixes.
 
+#### Vector E: Fix-Approach text scan (post-Phase-3, when present)
+
+After Phase 3.3 (`triage_skills`) has populated the `Fix Approach` column,
+scan that text for PR references using the same patterns as Vector B —
+`#<digits>`, full PR URLs, and `<owner>/<repo>#<digits>`. The Fix Approach
+is LLM-generated and frequently names a concrete PR ("Land
+intel/torch-xpu-ops PR #N: ..."), but because it is written *after* the
+issue body it is missed by Vectors A–B which scan only the original issue.
+
+Apply the same excluded-source rules as Vector B (strip code blocks and
+HTML comments before scanning). Each surviving number/URL is a candidate
+that must still pass Step 2 verification — Fix Approach text is
+LLM-generated and CANNOT be trusted as a fix signal on its own.
+
+Vector E is the safety net for two real failure modes:
+1. The issue body never named the fix PR (PR was opened later).
+2. PR discovery via Vectors A–D returned candidates that all REJECTED
+   in Step 2, so Part 1 was about to emit "no verified PR".
+
+When Vector E produces a VERIFIED candidate, it overrides the
+"no verified PR" path. When it produces nothing, downstream behaviour
+is unchanged.
+
 #### Vector D: File-path search (when issue cites specific files)
 
 If the issue body or stack trace identifies specific source files
@@ -266,14 +289,22 @@ candidate even without an issue-number reference.
 #### Aggregation
 
 Run Vector 0 first; if it returns any candidate, that candidate is
-already auto-VERIFIED and Vectors A–D become a sanity check rather
-than the primary discovery path. Always run Vectors A–D anyway to
-catch additional related PRs (e.g., follow-up fixes). Union all
-candidates from Vectors 0 + A–D, dedupe by `(repo, pr_number)`, and
-pass each through Step 2 verification. Inner-source / private repo
-PRs (e.g., `intel-innersource/...`) cannot be verified through the
-public API — flag them as `unverifiable_private` in the output and
-treat them as informational only.
+already auto-VERIFIED and Vectors A–E become a sanity check rather
+than the primary discovery path. Always run Vectors A–E anyway to
+catch additional related PRs (e.g., follow-up fixes, replacement PRs
+opened after a prior PR was closed unmerged). Union all candidates
+from Vectors 0 + A–E, dedupe by `(repo, pr_number)`, and pass each
+through Step 2 verification. Inner-source / private repo PRs (e.g.,
+`intel-innersource/...`) cannot be verified through the public API —
+flag them as `unverifiable_private` in the output and treat them as
+informational only.
+
+**Replacement-PR rule**: if Vector A surfaces a CLOSED-unmerged PR
+and Vectors C / D / E surface a later OPEN or MERGED PR touching the
+same files or symptoms, the later PR supersedes the closed one for
+verdict purposes. Both are recorded in `pr_analysis`, but the live
+verdict is taken from the latest non-rejected one. This prevents the
+report from parking on a stale dead PR after a replacement lands.
 
 ### Step 2: PR Verification (content-match aware)
 
@@ -351,6 +382,45 @@ gh pr view {pr_number} --repo {repo} --json files --jq '.files[].path'
 
 If **all** candidates are REJECTED or UNVERIFIABLE_PRIVATE, Part 1
 yields no fix PR and downstream AR comes from Part 2 (comments) only.
+
+### Step 2.5: Live PR-State Re-Check (mandatory before emitting verdict)
+
+`pr_analysis.state` recorded at Phase-4b run time is a **point-in-time
+snapshot**. By the time Phase 5 renders `bug_scrub.md` (often hours or
+days later), a PR's state may have changed:
+
+- A CLOSED-unmerged PR may have been re-opened.
+- An OPEN PR may have been merged (most common case).
+- A new replacement PR may have superseded a CLOSED one.
+
+A skill that emits "PR #N closed unmerged; reassess fix path" based on
+a stale snapshot will mislead the triager. To prevent this, every
+verified PR must be re-queried for its current state immediately
+before the verdict verb is emitted (in `run_pass_backfill.py` and in
+the Phase 5 reconciliation script):
+
+```bash
+gh pr view <pr_number> --repo <owner/name> \
+  --json state,mergedAt,closedAt,updatedAt
+```
+
+Then apply the **state-precedence rule**:
+
+| Live state | Snapshot state | Resulting verdict |
+|---|---|---|
+| MERGED | any | VERIFY_AND_CLOSE — "Verify fix from merged PR <ref> and close" |
+| OPEN | any | TRACK_PR — "Track PR <ref> to merge" |
+| CLOSED (unmerged) | any | RETRIAGE_PRS, **but** first re-run Vectors C/D/E to look for a replacement PR; emit RETRIAGE_PRS only if no replacement found |
+
+The CLOSED→RETRIAGE_PRS branch is the failure case that produced wrong
+verdicts in past reports — a closed PR is rarely the end of the story
+when the issue itself is still open. The replacement-PR re-search is
+**mandatory** for this branch, not optional.
+
+The helper script
+[`run_live_pr_state_recheck.py`](./run_live_pr_state_recheck.py)
+implements this rule and is invoked by both `run_pass_backfill.py` and
+the Phase 5 reconciliation step.
 
 ### Step 3: Deep PR Analysis Using check_pr_status
 
@@ -960,8 +1030,9 @@ def get_AR_from_issue(issue_number: int, repo: str = "intel/torch-xpu-ops") -> d
             "blocking": False
         })
     
-    # Step 1: Find related PR via Vectors A-D (timeline + body refs +
-    # title-keyword search + file-path search). See Part 1 Step 1.
+    # Step 1: Find related PR via Vectors 0/A–E (graphql links + timeline +
+    # body refs + title-keyword search + file-path search + Fix Approach
+    # text scan). See Part 1 Step 1.
     potential_prs = find_related_prs_multivector(issue_number, repo)
 
     # Step 2: VERIFY each potential PR (content-match aware)
@@ -979,6 +1050,16 @@ def get_AR_from_issue(issue_number: int, repo: str = "intel/torch-xpu-ops") -> d
         else:  # REJECTED
             log_warning(f"Rejected PR candidate #{pr_candidate['number']}: "
                         f"{verified['verification_details']}")
+
+    # Step 2.5: Live PR-state re-check (mandatory before emitting verdict).
+    # Updates state/mergedAt on each verified PR so a now-merged PR is not
+    # reported as CLOSED, and a now-closed PR triggers replacement-PR search.
+    verified_prs = [refresh_pr_state(pr) for pr in verified_prs]
+    if any(pr["state"] == "CLOSED" and not pr.get("mergedAt") for pr in verified_prs):
+        # Re-run Vectors C/D/E to find a replacement PR; if found, append
+        # to verified_prs after re-verification.
+        replacements = find_replacement_prs(issue_number, repo, verified_prs)
+        verified_prs.extend(replacements)
 
     ar_result["validation_status"] = "PASS" if verified_prs else "NO_VALID_PR"
     if unverifiable_prs:
@@ -1331,7 +1412,8 @@ Helper scripts co-located with this skill. All use `Path(__file__).resolve().par
 | Script | Purpose |
 |---|---|
 | [`run_phase4b_merge.py`](./run_phase4b_merge.py) | Merge Phase 4b per-issue AR JSON results (from `agent_space/phase4b/wave*/`) into the Issues sheet of `result/torch_xpu_ops_issues.xlsx`. Populates `action_TBD`, `action_reason`, `owner_transferred`. |
-| [`run_pass_backfill.py`](./run_pass_backfill.py) | Backfill Phase 4b rows whose AR columns came back blank by classifying them from existing signals (all tests PASS → `VERIFY_AND_CLOSE`; open linked PR → `TRACK_PR`; merged but still-failing → `RETRIAGE_PRS`). |
+| [`run_pass_backfill.py`](./run_pass_backfill.py) | Backfill Phase 4b rows whose AR columns came back blank by classifying them from existing signals (all tests PASS → `VERIFY_AND_CLOSE`; open linked PR → `TRACK_PR`; merged but still-failing → `RETRIAGE_PRS`). Internally calls `run_live_pr_state_recheck.refresh_pr_state` so a stale `CLOSED` snapshot does not produce a wrong verdict. |
+| [`run_live_pr_state_recheck.py`](./run_live_pr_state_recheck.py) | Step 2.5 helper. `refresh_pr_state(pr)` re-queries `gh pr view` for the live `state` / `mergedAt` of a single PR. `find_replacement_prs(issue_number, repo, dead_prs)` re-runs Vectors C/D/E when the only verified candidates are CLOSED-unmerged. Used by `run_pass_backfill.py` and by the Phase 5 reconciliation script. |
 
 Typical run:
 ```bash
@@ -1343,8 +1425,9 @@ python3 opencode/issue_triage/.claude/skills/bug_scrub/analyze_issue/get_AR_from
 
 ## Skill Metadata
 
-- **Version**: 1.4.0
+- **Version**: 1.5.0
 - **Created**: 2026-04-20
+- **Updated**: 2026-04-27 v1.5 (Vector E: scan `Fix Approach` text for PR references; Step 2.5 live PR-state re-check with replacement-PR search to prevent stale-snapshot verdicts; new helper `run_live_pr_state_recheck.py`)
 - **Updated**: 2026-04-21 v1.4 (Part 1 Vector 0: GitHub linked PRs via GraphQL `closedByPullRequestsReferences` — auto-verifies; highest authority)
 - **Updated**: 2026-04-21 v1.3 (Part 1 PR discovery rewritten: exclude `### Versions` section, add title-keyword + file-path search vectors, content-match verification path)
 - **Updated**: 2026-04-21 v1.2 (added Part 3 not-target check — explore-agent-driven, no pattern matching)

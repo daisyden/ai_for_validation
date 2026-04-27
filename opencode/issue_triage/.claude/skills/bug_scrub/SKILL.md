@@ -216,11 +216,17 @@ Classifies each row's free-text `action_TBD` into a 17-category
 `result/bug_scrub.md` grouped by action_Type with per-section
 back-to-index anchors and a Duplicates column.
 
+Phase 5 is **purely presentational** — it does not call `gh` or rewrite
+verdict columns. PR-state correctness is owned by Phase 4b (Vector E +
+Step 2.5 live re-check in `get_AR_from_issue/`). If a row reaches Phase
+5 with the wrong verb, fix it in Phase 4b and re-run; do not patch in
+Phase 5.
+
 **Execution Order**:
 ```
-run_action_type.py     # populate action_Type
+run_action_type.py                # populate action_Type
         ↓
-gen_bug_scrub_md.py    # render result/bug_scrub.md
+gen_bug_scrub_md.py               # render result/bug_scrub.md
 ```
 
 | Output | Description |
@@ -279,5 +285,6 @@ script details.
 ---
 
 ## Version
+v3.4 - April 27, 2026 - Phase 4b: added Vector E (scan `Fix Approach` text for PR references) and Step 2.5 (mandatory live `gh pr view` re-check + replacement-PR search via Vectors C/D/E for CLOSED-only verified sets) to fix stale-snapshot and missed-PR mis-verdicts. Phase 5 remains purely presentational.
 v3.3 - April 22, 2026 - Reorganized helper scripts into skill-colocated folders (`analyze_issue/get_AR_from_issue/`, `analyze_issue/triage_skills/`, `collect_AR/generate_report/`) with `__file__`-anchored paths. Added Phase 5 (generate_report) section.
 v3.2 - April 21, 2026 - All paths updated to relative paths, directory renamed (case-duplication-detection)
