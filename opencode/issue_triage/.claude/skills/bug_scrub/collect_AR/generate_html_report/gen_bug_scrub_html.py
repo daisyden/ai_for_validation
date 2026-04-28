@@ -285,18 +285,20 @@ def render_table(headers: list[str], rows: list[list[str]], show_done: bool, sec
         # so they must not contribute to filter dropdowns.
         emitted: dict[str, str] = {}
         if issue_id:
-            for idx_c, slug in col_to_slug.items():
-                if idx_c < len(row):
-                    raw = re.sub(r"<[^>]+>", " ", row[idx_c])
-                    raw = re.sub(r"\s+", " ", raw).strip()
-                    emitted[slug] = raw
-            # backfill missing dims from the workbook so e.g. §3/§4 rows
-            # still carry Category/Dependency even though those columns
-            # aren't rendered in the markdown table.
+            # Workbook is authoritative for filter values: the markdown
+            # cell may be truncated/wrapped (e.g. "Copilot / Ei…") which
+            # would corrupt tokenization. Cells only fill in dimensions
+            # the workbook doesn't have.
             if issue_id in ISSUE_META:
                 for slug, val in ISSUE_META[issue_id].items():
-                    if slug not in emitted and val:
+                    if val:
                         emitted[slug] = val
+            for idx_c, slug in col_to_slug.items():
+                if slug in emitted or idx_c >= len(row):
+                    continue
+                raw = re.sub(r"<[^>]+>", " ", row[idx_c])
+                raw = re.sub(r"\s+", " ", raw).strip()
+                emitted[slug] = raw
         data_attrs = [
             f'data-{slug}="{html.escape(val, quote=True)}"'
             for slug, val in emitted.items()
@@ -424,13 +426,38 @@ const FILTER_LABELS = {
   priority: 'Priority', category: 'Category', dependency: 'Dependency'
 };
 
+// Dimensions whose raw cell value may carry multiple comma-separated
+// owners (e.g. "daisyden, CuiYifeng"). Selecting "daisyden" should match
+// any row that contains that token.
+const MULTI_VALUE_DIMS = new Set(['assignee', 'owner_transferred']);
+const SYCL_KERNEL_GROUP = 'SYCL kernel';
+
+// Map a raw cell value to the list of canonical filter tokens it
+// contributes. For multi-owner cells we split on `,`; for Dependency we
+// collapse every "SYCL kernel: <file>.cpp" into a single "SYCL kernel"
+// group so users don't have to scroll through 50 file-specific options.
+function tokensFor(dim, raw) {
+  if (!raw) return [];
+  if (dim === 'dependency') {
+    return [/^SYCL kernel:/i.test(raw) ? SYCL_KERNEL_GROUP : raw];
+  }
+  if (MULTI_VALUE_DIMS.has(dim)) {
+    return raw.split(',').map(s => s.trim()).filter(Boolean);
+  }
+  return [raw];
+}
+
 function collectValues(dim) {
-  const set = new Set();
+  // {token -> count} so we can label grouped options like "SYCL kernel (50)".
+  const counts = new Map();
   document.querySelectorAll(`[data-${dim}]`).forEach(tr => {
-    const v = (tr.dataset[dim] || '').trim();
-    if (v) set.add(v);
+    const raw = (tr.dataset[dim] || '').trim();
+    for (const tok of tokensFor(dim, raw)) {
+      counts.set(tok, (counts.get(tok) || 0) + 1);
+    }
   });
-  return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+  return Array.from(counts.entries())
+    .sort((a, b) => a[0].localeCompare(b[0], undefined, {numeric: true}));
 }
 
 function buildFilterBar() {
@@ -445,9 +472,12 @@ function buildFilterBar() {
     const optAll = document.createElement('option');
     optAll.value = ''; optAll.textContent = '(all)';
     sel.appendChild(optAll);
-    for (const v of collectValues(dim)) {
+    for (const [tok, count] of collectValues(dim)) {
       const opt = document.createElement('option');
-      opt.value = v; opt.textContent = v;
+      opt.value = tok;
+      // Annotate with the count for grouped tokens (Dependency = SYCL kernel).
+      opt.textContent = (dim === 'dependency' && tok === SYCL_KERNEL_GROUP)
+        ? `${tok} (${count})` : tok;
       sel.appendChild(opt);
     }
     sel.addEventListener('change', applyFilters);
@@ -519,7 +549,7 @@ function applyFilters() {
   const filters = {};
   for (const dim of FILTER_DIMS) {
     const v = document.getElementById('filter-' + dim).value;
-    if (v) filters[dim] = v.toLowerCase();
+    if (v) filters[dim] = v;  // case-preserved; tokens compared verbatim
   }
   const search = document.getElementById('filter-search').value.trim().toLowerCase();
   const hideDone = document.getElementById('filter-hide-done').checked;
@@ -529,8 +559,8 @@ function applyFilters() {
     total++;
     let show = true;
     for (const [dim, val] of Object.entries(filters)) {
-      const rowVal = (tr.dataset[dim] || '').toLowerCase();
-      if (rowVal !== val) { show = false; break; }
+      const tokens = tokensFor(dim, (tr.dataset[dim] || '').trim());
+      if (!tokens.includes(val)) { show = false; break; }
     }
     if (show && search) {
       show = (tr.dataset.search || '').includes(search);
