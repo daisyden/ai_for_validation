@@ -239,6 +239,44 @@ script details.
 
 ---
 
+## Phase 5b: Generate HTML Report (optional, on demand)
+
+- **Skill**: `collect_AR/generate_html_report/`
+- **Trigger**: After Phase 4c, when an interactive triage console is wanted.
+
+Wraps Phase 5 — re-runs `gen_bug_scrub_md.py` internally so the HTML
+always reflects the current workbook, then converts the markdown to a
+single self-contained `result/bug_scrub.html` with:
+
+- Per-row "Done" checkbox in §3 Action required and §4 QA tables;
+  checked-state persists in browser `localStorage` (per-browser, not
+  shared, not embedded in the file).
+- Sticky filter bar with five dropdowns (Assignee, Owner Transferred,
+  Priority, Category, Dependency), free-text search, and a "Hide Done"
+  toggle. Filters apply across all sections and are AND-combined.
+- "Export Done IDs" button — copies the comma-separated list of
+  done-checked issue IDs to clipboard.
+
+Phase 5b is purely presentational and never touches the workbook.
+`bug_scrub.html` is regenerated on demand and not committed by default —
+`bug_scrub.md` remains the canonical, diffable artifact.
+
+**Execution Order**:
+```
+gen_bug_scrub_html.py
+    ├── (calls) gen_bug_scrub_md.py     # refresh result/bug_scrub.md
+    └── parse markdown → render HTML    # emit result/bug_scrub.html
+```
+
+| Output | Description |
+|---|---|
+| `result/bug_scrub.html` | Self-contained interactive report (CSS/JS inlined) |
+
+See `collect_AR/generate_html_report/SKILL.md` for filter mapping,
+markdown subset supported, and customization points.
+
+---
+
 ## Phase 4 Column Summary
 
 | Phase | Column | Description |
@@ -285,6 +323,7 @@ script details.
 ---
 
 ## Version
+v3.5 - April 27, 2026 - Added Phase 5b (`collect_AR/generate_html_report/`): on-demand interactive HTML report with per-row Done checkboxes (§3/§4, persisted in browser localStorage), sticky filter bar (Assignee / Owner Transferred / Priority / Category / Dependency + free-text + Hide Done), and "Export Done IDs" — fully self-contained, regenerated on demand from the markdown report. Phase 5 markdown remains canonical.
 v3.4 - April 27, 2026 - Phase 4b: added Vector E (scan `Fix Approach` text for PR references) and Step 2.5 (mandatory live `gh pr view` re-check + replacement-PR search via Vectors C/D/E for CLOSED-only verified sets) to fix stale-snapshot and missed-PR mis-verdicts. Phase 5 remains purely presentational.
 v3.3 - April 22, 2026 - Reorganized helper scripts into skill-colocated folders (`analyze_issue/get_AR_from_issue/`, `analyze_issue/triage_skills/`, `collect_AR/generate_report/`) with `__file__`-anchored paths. Added Phase 5 (generate_report) section.
 v3.2 - April 21, 2026 - All paths updated to relative paths, directory renamed (case-duplication-detection)

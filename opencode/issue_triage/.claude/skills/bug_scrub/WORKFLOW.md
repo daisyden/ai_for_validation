@@ -57,11 +57,18 @@ flowchart TD
         S52["gen_bug_scrub_md.py<br/><i>render markdown</i>"]:::script
     end
 
+    %% ========== PHASE 5b: GENERATE HTML (optional) ==========
+    subgraph P5B["Phase 5b — Generate HTML Report (on demand)"]
+        direction TB
+        S5B1["gen_bug_scrub_html.py<br/><i>re-runs gen_bug_scrub_md.py<br/>then md → interactive HTML</i>"]:::script
+    end
+
     %% ========== ARTIFACTS ==========
     XLSX[(result/torch_xpu_ops_issues.xlsx<br/><b>Issues</b> · Test Cases · E2E · Not Applicable)]:::art
     CIART[(ci_results/)]:::art
     BACK[(pytorch_xpu_backend_analysis.md)]:::art
     REPORT[(result/bug_scrub.md<br/>result/bug_scrub_ut.md<br/>result/details/{id}.md × N)]:::out
+    HTML[(result/bug_scrub.html<br/><i>self-contained, on demand</i>)]:::out
 
     %% ========== FLOWS ==========
     GH --> S11
@@ -109,6 +116,10 @@ flowchart TD
 
     XLSX --> S52
     S52 --> REPORT
+
+    REPORT --> S5B1
+    XLSX --> S5B1
+    S5B1 --> HTML
 
     %% ========== STYLES ==========
     classDef ext fill:#f4e8d8,stroke:#8b6f47,stroke-width:2px,color:#000
@@ -427,6 +438,7 @@ flowchart TD
 
 ## Version
 
+v1.5 — 2026-04-27 — Added Phase 5b (`generate_html_report`) node to §1 master diagram: `gen_bug_scrub_html.py` consumes `bug_scrub.md` + `Issues` sheet (for Category/Dependency backfill) and emits self-contained `bug_scrub.html`. Phase 5 markdown remains canonical and unchanged.
 v1.4 — 2026-04-27 — Reverted Phase 5 reconciliation node added in v1.3. PR-state fixes belong in Phase 4b only (Vector E + Step 2.5 in §6 sub-workflow remain). Phase 5 is purely presentational: `run_action_type.py` → `gen_bug_scrub_md.py`.
 v1.3 — 2026-04-27 — Phase 4b: added Vector E (Fix-Approach text scan) and Step 2.5 (live PR-state re-check + replacement-PR search) to §6 sub-workflow; Phase 5: inserted `run_fix_approach_reconcile.py` between `run_action_type.py` and `gen_bug_scrub_md.py` in §1, §2, §3.
 v1.2 — 2026-04-22 — added §6 get_AR_from_issue sub-workflow (Step 0 → Part 1 → Part 2, with 5-vector PR discovery, 3-tier verification, 4-gate check_pr_status, and merge/backfill scripts); trimmed §5 to the 3 core analysis steps (3, 5, 6); cross-referenced §6 from the §1 master diagram.
