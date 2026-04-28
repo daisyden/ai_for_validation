@@ -170,6 +170,18 @@ def owner(r) -> str:
     o = clean(r[C["owner_transferred"]])
     return o
 
+def assignee_only(r) -> str:
+    """Raw GitHub Assignee value, with the literal string 'None' (which is
+    how the workbook represents an unassigned issue) treated as empty.
+    Used in report tables alongside the separate `Owner Transferred`
+    column so the two cells are actually different on rows where
+    triage transferred ownership."""
+    a = clean(r[C["Assignee"]])
+    return "" if a.lower() == "none" else a
+
+def owner_transferred_cell(r) -> str:
+    return clean(r[C["owner_transferred"]])
+
 def esc(s: str, max_len: int = 0) -> str:
     s = s.replace("\r", " ").replace("\n", " ").replace("|", "\\|")
     s = re.sub(r"\s+", " ", s)
@@ -572,11 +584,11 @@ recent_rows = [r for r in rows
 
 # -------- render -----------------------------------------------------------
 def render_table(row_list) -> str:
-    """Standard table: Issue | Title | Owner | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels"""
+    """Standard table: Issue | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels"""
     if not row_list:
         return "_No issues._\n"
-    head = "| Issue | Title | Owner | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |"
-    sep  = "|---|---|---|---|---|---|---|---|---|"
+    head = "| Issue | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |"
+    sep  = "|---|---|---|---|---|---|---|---|---|---|"
     out = [head, sep]
     sorted_rows = sorted(row_list, key=lambda r: (
         prio_key(r), str(r[C["Issue ID"]])
@@ -585,7 +597,8 @@ def render_table(row_list) -> str:
         out.append("| " + " | ".join([
             issue_link(r[C["Issue ID"]]),
             wrap_cell(r[C["Title"]], 50),
-            esc(owner(r), 25),
+            esc(assignee_only(r), 25),
+            esc(owner_transferred_cell(r), 25),
             esc(fmt_list(r[C["action_TBD"]]), 100),
             fix_approach_cell(r),
             esc(clean(r[C["Priority"]]), 6),
@@ -628,8 +641,8 @@ def render_section_by_category(row_list, section_num: str, cat_prefix: str) -> l
 
 
 def render_dep_table(row_list) -> str:
-    head = "| Issue | Dependency | Title | Owner | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |"
-    sep  = "|---|---|---|---|---|---|---|---|---|---|"
+    head = "| Issue | Dependency | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |"
+    sep  = "|---|---|---|---|---|---|---|---|---|---|---|"
     out = [head, sep]
     sorted_rows = sorted(row_list, key=lambda r: (
         prio_key(r), clean(r[C["Dependency"]]), str(r[C["Issue ID"]])
@@ -639,7 +652,8 @@ def render_dep_table(row_list) -> str:
             issue_link(r[C["Issue ID"]]),
             esc(clean(r[C["Dependency"]]), 30),
             wrap_cell(r[C["Title"]], 50),
-            esc(owner(r), 25),
+            esc(assignee_only(r), 25),
+            esc(owner_transferred_cell(r), 25),
             esc(fmt_list(r[C["action_TBD"]]), 100),
             fix_approach_cell(r),
             esc(clean(r[C["Priority"]]), 6),
@@ -651,8 +665,8 @@ def render_dep_table(row_list) -> str:
 
 
 def render_recent(row_list) -> str:
-    head = "| Issue | Created | Title | Owner | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |"
-    sep  = "|---|---|---|---|---|---|---|---|---|---|"
+    head = "| Issue | Created | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |"
+    sep  = "|---|---|---|---|---|---|---|---|---|---|---|"
     out = [head, sep]
     sorted_rows = sorted(
         row_list,
@@ -665,7 +679,8 @@ def render_recent(row_list) -> str:
             issue_link(r[C["Issue ID"]]),
             created,
             wrap_cell(r[C["Title"]], 50),
-            esc(owner(r), 25),
+            esc(assignee_only(r), 25),
+            esc(owner_transferred_cell(r), 25),
             esc(fmt_list(r[C["action_TBD"]]), 100),
             fix_approach_cell(r),
             esc(clean(r[C["Priority"]]), 6),
@@ -681,8 +696,8 @@ def render_dup_table(row_list) -> str:
     parsed from `duplicated_issue` (fallback: 'duplicate of …' clause in action_TBD)."""
     if not row_list:
         return "_No issues._\n"
-    head = "| Issue | Duplicates | Title | Owner | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |"
-    sep  = "|---|---|---|---|---|---|---|---|---|---|"
+    head = "| Issue | Duplicates | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |"
+    sep  = "|---|---|---|---|---|---|---|---|---|---|---|"
     out = [head, sep]
     sorted_rows = sorted(row_list, key=lambda r: (
         prio_key(r), str(r[C["Issue ID"]])
@@ -697,7 +712,8 @@ def render_dup_table(row_list) -> str:
             issue_link(r[C["Issue ID"]]),
             dup_cell,
             wrap_cell(r[C["Title"]], 50),
-            esc(owner(r), 25),
+            esc(assignee_only(r), 25),
+            esc(owner_transferred_cell(r), 25),
             esc(fmt_list(r[C["action_TBD"]]), 100),
             fix_approach_cell(r),
             esc(clean(r[C["Priority"]]), 6),
