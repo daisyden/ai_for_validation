@@ -382,6 +382,9 @@ table.ar-table tr.done td:not(.done-col) { text-decoration: line-through; }
 table.ar-table tr.hidden { display: none; }
 table.ar-table tr.hl td { background: var(--hl) !important; }
 
+/* Whole sections (and TOC entries) collapsed when a filter empties them. */
+.section-hidden { display: none !important; }
+
 /* Lists */
 ul { margin: .3em 0; padding-left: 1.5em; }
 """
@@ -540,6 +543,118 @@ function applyFilters() {
   });
   document.getElementById('filter-stats').textContent =
     `${visible} / ${total} rows`;
+
+  hideEmptySections();
+}
+
+// Collapse blocks whose tables ended up with zero visible rows. A "block"
+// is a <table.ar-table> together with the siblings immediately preceding
+// it back to the previous table or section heading (h2/h3/h4) — i.e. the
+// intro paragraph(s), the bullet that names the subsection, and the
+// "back to index" link that go with that table. Then a parent <h2> (and
+// its descendants up to the next <h2>) is hidden when every table under
+// it is hidden. Finally TOC entries pointing to hidden anchors are
+// hidden too.
+function hideEmptySections() {
+  const content = document.querySelector('.content');
+  if (!content) return;
+
+  // Reset previous hides on structure-level elements (rows already toggled above)
+  content.querySelectorAll('.section-hidden').forEach(el => {
+    el.classList.remove('section-hidden');
+  });
+
+  const STOP = el => el && (el.tagName === 'TABLE' ||
+                            el.tagName === 'H2' || el.tagName === 'H3' || el.tagName === 'H4');
+
+  // Pass 1: hide each empty table + its leading intro siblings.
+  const tables = Array.from(content.querySelectorAll('table.ar-table'));
+  for (const table of tables) {
+    const visibleRows = table.querySelectorAll('tbody tr:not(.hidden)').length;
+    if (visibleRows > 0) continue;
+    table.classList.add('section-hidden');
+    // Walk back over intro siblings up to (but not including) the previous
+    // table or heading.
+    let sib = table.previousElementSibling;
+    while (sib && !STOP(sib)) {
+      sib.classList.add('section-hidden');
+      sib = sib.previousElementSibling;
+    }
+    // The triggering heading (h3/h4) immediately before the intro: if
+    // we landed on one and it isn't an h2 (which may parent multiple
+    // tables), hide it too.
+    if (sib && (sib.tagName === 'H3' || sib.tagName === 'H4')) {
+      sib.classList.add('section-hidden');
+    }
+  }
+
+  // Pass 2: hide an <h2> (and everything until the next <h2>) when all
+  // descendants in that span are already hidden.
+  const kids = Array.from(content.children);
+  let i = 0;
+  while (i < kids.length) {
+    if (kids[i].tagName !== 'H2') { i++; continue; }
+    const start = i;
+    let end = i + 1;
+    while (end < kids.length && kids[end].tagName !== 'H2') end++;
+    // span = [start, end)
+    let anyVisible = false;
+    for (let j = start + 1; j < end; j++) {
+      if (!kids[j].classList.contains('section-hidden')) {
+        // tables only matter for "is this section worth showing?"
+        if (kids[j].tagName === 'TABLE') {
+          anyVisible = true; break;
+        }
+      }
+    }
+    // If no table in the span is visible, hide the whole span.
+    if (!anyVisible) {
+      // But: only collapse the span if it contains at least one table to
+      // begin with. Sections like §1 Summary and §2 Index have no
+      // <table.ar-table> and should always remain visible.
+      let hasTable = false;
+      for (let j = start + 1; j < end; j++) {
+        if (kids[j].tagName === 'TABLE' && kids[j].classList.contains('ar-table')) {
+          hasTable = true; break;
+        }
+      }
+      if (hasTable) {
+        for (let j = start; j < end; j++) {
+          kids[j].classList.add('section-hidden');
+        }
+      }
+    }
+    i = end;
+  }
+
+  // Pass 3: hide TOC entries (in §2 Index) whose target anchor is now
+  // inside a hidden section.
+  const tocLinks = content.querySelectorAll('ul li > a[href^="#sec-"]');
+  tocLinks.forEach(a => {
+    const target = document.getElementById(a.getAttribute('href').slice(1));
+    const li = a.parentElement;
+    if (!target) { li.classList.remove('section-hidden'); return; }
+    // A target is "effectively hidden" if the target itself is hidden,
+    // or every <table> following it in its h2-span is hidden.
+    let hide = target.classList.contains('section-hidden');
+    if (!hide) {
+      // walk forward until next same-or-higher heading; if every table
+      // in between is hidden AND there is at least one table, hide.
+      const targetLevel = parseInt(target.tagName[1], 10);
+      let sib = target.nextElementSibling;
+      let sawTable = false, allHidden = true;
+      while (sib) {
+        if (/^H[1-6]$/.test(sib.tagName) && parseInt(sib.tagName[1], 10) <= targetLevel) break;
+        if (sib.tagName === 'TABLE' && sib.classList.contains('ar-table')) {
+          sawTable = true;
+          if (!sib.classList.contains('section-hidden')) { allHidden = false; break; }
+        }
+        sib = sib.nextElementSibling;
+      }
+      hide = sawTable && allHidden;
+    }
+    li.classList.toggle('section-hidden', hide);
+  });
 }
 
 // ---- init ----
