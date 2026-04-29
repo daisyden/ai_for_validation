@@ -361,7 +361,7 @@ code { background: #f1f3f5; padding: 1px 4px; border-radius: 3px; font-size: .9e
   padding: .6em 1em; display: flex; flex-wrap: wrap; gap: .8em; align-items: center;
   box-shadow: 0 1px 3px rgba(0,0,0,.06);
 }
-.filter-bar label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+.filter-bar > label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
 .filter-bar select, .filter-bar input[type=text] {
   font-size: 13px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 3px;
   background: white; min-width: 140px;
@@ -416,12 +416,22 @@ ul { margin: .3em 0; padding-left: 1.5em; }
   border: 1px solid var(--border); border-radius: 3px; font-size: 12px;
 }
 .ms-dd-item {
-  display: flex; align-items: center; gap: 6px; padding: 3px 8px;
-  cursor: pointer; font-size: 12px; user-select: none;
+  display: flex; flex-direction: row; align-items: center; gap: 8px;
+  padding: 4px 10px; cursor: pointer; font-size: 12px; user-select: none;
+  color: var(--fg);
 }
 .ms-dd-item:hover { background: #f1f3f5; }
-.ms-dd-item input { margin: 0; }
-.ms-dd-item .count { color: var(--muted); margin-left: auto; font-size: 11px; }
+.ms-dd-item input[type=checkbox] {
+  margin: 0; flex: 0 0 auto; width: 14px; height: 14px; accent-color: var(--accent);
+}
+.ms-dd-item > span:not(.count) {
+  flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ms-dd-item .count {
+  flex: 0 0 auto; color: var(--muted); font-size: 11px;
+  background: #f1f3f5; padding: 0 6px; border-radius: 8px; min-width: 24px;
+  text-align: center;
+}
 .ms-dd-actions {
   display: flex; gap: 4px; padding: 4px 6px; border-top: 1px solid var(--border);
   margin-top: 2px; position: sticky; bottom: 0; background: white;
