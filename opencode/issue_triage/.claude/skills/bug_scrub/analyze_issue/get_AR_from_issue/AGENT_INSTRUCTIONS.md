@@ -103,7 +103,7 @@ Path: `/home/daisydeng/pytorch/agent_space/phase4b/wave<W>/result_<N>.json`
   ],
   "action_TBD": ["..."],
   "action_reason": ["..."],
-  "owner_transferred": ["earliest binding owner login"],
+  "owner_transferred": ["earliest binding owner login (Assignee, never Reporter)"],
   "summary": "1-2 sentence narrative"
 }
 ```
@@ -150,6 +150,27 @@ Additional rules:
 **Never** return `validation_status:"OK"` with empty `action_TBD` while
 `pr_candidates` contains a VERIFIED entry — that combination produced
 the wrong verdicts that the obsolete `run_pass_backfill.py` was patching.
+
+## DERIVATION RULE — owner_transferred (mandatory)
+
+`owner_transferred` is the engineer who is on the hook for the next action.
+It is NOT a record of who reported the issue.
+
+Rules:
+- Source of truth, in order: (1) issue `Assignee` if set; (2) the explicit
+  `owner_should_act` from a binding comment AR; (3) blank.
+- **NEVER** use the issue `Reporter` as `owner_transferred`. The reporter
+  filed the bug — that does not make them responsible for fixing or
+  investigating it.
+- For rows whose `action_TBD` contains `"No action — investigate further"`
+  (alone OR combined with other verbs like `"Address comment AR from …"`,
+  `"Close the fixed issue"`, etc.): if no Assignee exists, leave
+  `owner_transferred` **blank**. Do not fall back to the reporter. A blank
+  cell is intentional — it lets the Phase 5 row classifier surface the
+  issue under `NEEDS_OWNER` so an owner can be assigned manually.
+- This rule applies regardless of how many tokens the `action_TBD` cell
+  contains. Multi-token rows (e.g. `"Close the fixed issue | No action —
+  investigate further"`) are subject to the same blank-vs-Assignee logic.
 
 ## Critical rules
 - Use ONLY actual gh CLI / GraphQL output. Never invent PR numbers.
