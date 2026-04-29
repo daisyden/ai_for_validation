@@ -74,6 +74,22 @@ For each issue `I` in the Issues sheet:
 If no test case for the issue has `xpu_case_existence == False`, do
 nothing for that issue in this phase.
 
+### Precedence: `check_case_avaliablity` overrides `No action — investigate further`
+
+After the append step, do a final pass over every row whose
+`action_TBD` contains both `check_case_avaliablity` and
+`No action — investigate further`: drop the latter. Rationale: the
+case-existence question must be resolved before any "investigate
+upstream" verdict is meaningful — a missing test case cannot be
+investigated further until its identity is verified or fixed. Phase 4b
+emits `No action — investigate further` only when its 6-vector PR
+search comes up empty, which is irrelevant once the test case itself is
+in question.
+
+`action_reason` is **not** modified — the Phase 4b PR-discovery
+narrative is preserved so the future investigator still has that
+context.
+
 Note on spelling: the token written is literally
 `check_case_avaliablity` (as specified by the workflow owner). Do not
 correct the spelling when writing — downstream tooling reads this exact

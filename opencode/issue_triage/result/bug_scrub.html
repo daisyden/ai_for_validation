@@ -140,15 +140,15 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <th>Issues</th>
 </tr></thead>
 <tbody>
-<tr data-search="developer action required need pr, track pr, needs_owner 282">
+<tr data-search="developer action required need pr, track pr, needs_owner 276">
 <td>Developer action required</td>
 <td>NEED PR, TRACK PR, NEEDS_OWNER</td>
-<td>282</td>
+<td>276</td>
 </tr>
-<tr data-search="qa action required close or skip, await_reply, monitor, check_cases 91">
+<tr data-search="qa action required close or skip, await_reply, monitor, check_cases 97">
 <td>QA action required</td>
 <td>CLOSE or SKIP, AWAIT_REPLY, MONITOR, CHECK_CASES</td>
-<td>91</td>
+<td>97</td>
 </tr>
 <tr data-search="duplicated — 6">
 <td>Duplicated</td>
@@ -220,7 +220,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 
 
 <ul>
-  <li><strong>NEED PR</strong>  ·  42 issues</li>
+  <li><strong>NEED PR</strong>  ·  37 issues</li>
 </ul>
 
 <p><strong>NEED PR — a PR must be produced or continued (no PR yet, or owner actively debugging root cause, or new code needed)</strong></p>
@@ -377,7 +377,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 </table>
 
 
-<h4 id="sec-3-1-3-others">3.1.3 Others  ·  13 issues</h4>
+<h4 id="sec-3-1-3-others">3.1.3 Others  ·  12 issues</h4>
 
 <p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
 
@@ -540,19 +540,6 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>BBBela</td>
 <td></td>
 </tr>
-<tr data-category="Others" data-dependency="upstream-pytorch" data-priority="P3" data-owner_transferred="zxd1997066" data-milestone="UT Backlog" data-assignee="" data-search="[#3477](https://github.com/intel/torch-xpu-ops/issues/3477) [upstream_ut] export/test_torchbind.py notimplementederror: the operator &#x27;_torchscripttesting::queue_push&#x27; is not currently implemented for the xpu device  zxd1997066 no action — investigate further | check_case_avaliablity" data-issue="3477">
-<td class="done-col"><input type="checkbox" class="ar-done" data-issue="3477" id="done-3477"></td>
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3477">#3477</a></td>
-<td>[upstream_ut] export/test_torchbind.py<br>NotImplementedError: The operator<br>'_TorchScriptTesting::queue_push' is not currently<br>implemented for the XPU device</td>
-<td></td>
-<td>zxd1997066</td>
-<td>No action — investigate further | check_case_avaliablity</td>
-<td>Add a TORCH_LIBRARY_IMPL(_TorchScriptTesting, XPU, m) block in pytorch/test/cpp/jit/test_custom_cla…<br><a href="details/3477.md">→ details</a></td>
-<td>P3</td>
-<td>Issue is OPEN with 'skipped' label and no associated fix PR exists in either intel/torch-xpu-ops or pytorch/pytorch. The fix per the docume…</td>
-<td>zxd1997066</td>
-<td>module: ut, skipped</td>
-</tr>
 <tr data-category="Others" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="BartoszKokoszko" data-milestone="UT Backlog" data-owner_transferred="" data-search="[#3480](https://github.com/intel/torch-xpu-ops/issues/3480) [upstream_ut] test_custom_ops.py runtimeerror: element 0 of tensors does not require grad and does not have a grad_fn bartoszkokoszko  no action — investigate further" data-issue="3480">
 <td class="done-col"><input type="checkbox" class="ar-done" data-issue="3480" id="done-3480"></td>
 <td><a href="https://github.com/intel/torch-xpu-ops/issues/3480">#3480</a></td>
@@ -607,7 +594,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 </table>
 
 
-<h4 id="sec-3-1-5-torch-operations">3.1.5 Torch Operations  ·  11 issues</h4>
+<h4 id="sec-3-1-5-torch-operations">3.1.5 Torch Operations  ·  9 issues</h4>
 
 <p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
 
@@ -744,32 +731,6 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>tonghaining</td>
 <td></td>
 </tr>
-<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-owner_transferred="kaileiyx" data-milestone="UT Backlog" data-assignee="" data-search="[#3484](https://github.com/intel/torch-xpu-ops/issues/3484) [bug skip]: ut new failure : torch.autograd.gradcheck.gradcheckerror: backward is not reentrant  kaileiyx no action — investigate further | check_case_avaliablity" data-issue="3484">
-<td class="done-col"><input type="checkbox" class="ar-done" data-issue="3484" id="done-3484"></td>
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3484">#3484</a></td>
-<td>[Bug Skip]: UT new failure :<br>torch.autograd.gradcheck.GradcheckError: Backward<br>is not reentrant</td>
-<td></td>
-<td>kaileiyx</td>
-<td>No action — investigate further | check_case_avaliablity</td>
-<td>Upstream fix in the linear_cross_entropy OpInfo: set gradcheck_nondet_tol to a small positive value…<br><a href="details/3484.md">→ details</a></td>
-<td>P3</td>
-<td>Issue has no linked PR via GraphQL/timeline, no body PR refs, and no authoritative not-target declaration. Upstream candidate PR pytorch/py…</td>
-<td>kaileiyx</td>
-<td>skipped</td>
-</tr>
-<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-owner_transferred="kaileiyx" data-milestone="UT Backlog" data-assignee="" data-search="[#3485](https://github.com/intel/torch-xpu-ops/issues/3485) [bug skip]: ut new failure: assertionerror: false is not true  kaileiyx no action — investigate further | check_case_avaliablity" data-issue="3485">
-<td class="done-col"><input type="checkbox" class="ar-done" data-issue="3485" id="done-3485"></td>
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3485">#3485</a></td>
-<td>[Bug Skip]: UT new failure: AssertionError: False<br>is not true</td>
-<td></td>
-<td>kaileiyx</td>
-<td>No action — investigate further | check_case_avaliablity</td>
-<td>Upstream fix: in the OpInfo for nn.functional.linear_cross_entropy (torch/testing/_internal/opinfo/…<br><a href="details/3485.md">→ details</a></td>
-<td>P3</td>
-<td>V0 closedByPullRequestsReferences returned no PRs. Timeline cross-refs returned no PRs. Issue body contains no PR references (only error lo…</td>
-<td>kaileiyx</td>
-<td>skipped</td>
-</tr>
 </tbody>
 </table>
 
@@ -824,7 +785,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 </table>
 
 
-<h4 id="sec-3-1-7-torchao">3.1.7 TorchAO  ·  7 issues</h4>
+<h4 id="sec-3-1-7-torchao">3.1.7 TorchAO  ·  5 issues</h4>
 
 <p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
 
@@ -844,19 +805,6 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <th>Labels</th>
 </tr></thead>
 <tbody>
-<tr data-category="TorchAO" data-dependency="SYCL kernel: LinearInt4.cpp" data-priority="P1" data-assignee="xiaowangintel" data-owner_transferred="xiaowangintel | zxd1997066" data-milestone="PT2.13" data-search="[#2572](https://github.com/intel/torch-xpu-ops/issues/2572) [torchao][ut] test/dtypes/test_affine_quantized.py assertionerror: tensor-likes are not close! xiaowangintel xiaowangintel | zxd1997… address comment ar from lifengwang: status update on int4wo copy_/slice fix | no action — investig…" data-issue="2572">
-<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2572" id="done-2572"></td>
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/2572">#2572</a></td>
-<td>[TorchAO][UT] test/dtypes/test_affine_quantized.py<br>AssertionError: Tensor-likes are not close!</td>
-<td>xiaowangintel</td>
-<td>xiaowangintel | zxd1997…</td>
-<td>Address comment AR from LifengWang: status update on int4wo copy_/slice fix | No action — investig…</td>
-<td>Fix int4 weight pack copy_/slice semantics in the AffineQuantizedTensor XPU dispatch and ensure Lin…<br><a href="details/2572.md">→ details</a></td>
-<td>P1</td>
-<td>V0 GraphQL closedByPullRequestsReferences returned no nodes. | VA timeline cross-references yielded only unrelated upstream_ut issues (#26…</td>
-<td>zxd1997066</td>
-<td>module: ao</td>
-</tr>
 <tr data-category="TorchAO" data-dependency="upstream-pytorch" data-priority="P1" data-assignee="Stonepia" data-owner_transferred="Stonepia" data-milestone="PT2.13" data-search="[#3368](https://github.com/intel/torch-xpu-ops/issues/3368) [torchao][bmg] deepseek-r1-distill-llama-8b rtn int4 got 7 performance regression after upgrading transformers from 4.55.4 to 5.4.0 stonepia stonepia no action — investigate further" data-issue="3368">
 <td class="done-col"><input type="checkbox" class="ar-done" data-issue="3368" id="done-3368"></td>
 <td><a href="https://github.com/intel/torch-xpu-ops/issues/3368">#3368</a></td>
@@ -920,19 +868,6 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>P3</td>
 <td>No VERIFIED PR fixes this feature request. pytorch/ao#3191 (the only referenced ao PR) is a benchmark-script fix, not the optimizer XPU ena…</td>
 <td>liangan1</td>
-<td>module: ao</td>
-</tr>
-<tr data-category="TorchAO" data-dependency="SYCL kernel: BinaryRemainderKernels.cpp" data-priority="P3" data-assignee="arlesniak" data-owner_transferred="arlesniak | zxd1997066" data-milestone="UT Backlog" data-search="[#2580](https://github.com/intel/torch-xpu-ops/issues/2580) [torchao][ut] test/test_low_bit_optim.py assertionerror: tensor-likes are not close! arlesniak arlesniak | zxd1997066 no action — investigate further | check_case_avaliablity" data-issue="2580">
-<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2580" id="done-2580"></td>
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/2580">#2580</a></td>
-<td>[TorchAO][UT] test/test_low_bit_optim.py<br>AssertionError: Tensor-likes are not close!</td>
-<td>arlesniak</td>
-<td>arlesniak | zxd1997066</td>
-<td>No action — investigate further | check_case_avaliablity</td>
-<td>Reproduce on PVC, isolate which op in _fp32_to_bf16_sr (bitwise_and/right_shift/add then bitcast to…<br><a href="details/2580.md">→ details</a></td>
-<td>P3</td>
-<td>No PR candidates surfaced from any of V0/VA/VB/VC/VD/VE (GraphQL closing refs empty; timeline cross-refs are unrelated issues #2611 and #26…</td>
-<td>zxd1997066</td>
 <td>module: ao</td>
 </tr>
 </tbody>
@@ -2116,13 +2051,13 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>BBBela</td>
 <td></td>
 </tr>
-<tr data-category="Others" data-priority="P2" data-owner_transferred="zxd1997066" data-milestone="UT Backlog" data-assignee="" data-search="[#3482](https://github.com/intel/torch-xpu-ops/issues/3482) new failed test cases 2026-04-26  zxd1997066 track pr 3513 to merge | no action — investigate further | check_case_avaliablity" data-issue="3482">
+<tr data-category="Others" data-priority="P2" data-owner_transferred="zxd1997066" data-milestone="UT Backlog" data-assignee="" data-search="[#3482](https://github.com/intel/torch-xpu-ops/issues/3482) new failed test cases 2026-04-26  zxd1997066 track pr 3513 to merge | check_case_avaliablity" data-issue="3482">
 <td class="done-col"><input type="checkbox" class="ar-done" data-issue="3482" id="done-3482"></td>
 <td><a href="https://github.com/intel/torch-xpu-ops/issues/3482">#3482</a></td>
 <td>New failed test cases 2026-04-26</td>
 <td></td>
 <td>zxd1997066</td>
-<td>Track PR 3513 to merge | No action — investigate further | check_case_avaliablity</td>
+<td>Track PR 3513 to merge | check_case_avaliablity</td>
 <td>Split into per-area child issues: SDPA nested broadcasting -&gt; torch-xpu-ops SDPA (Flash Attention)<br><a href="details/3482.md">→ details</a></td>
 <td>P2</td>
 <td>PR intel/torch-xpu-ops#3513 is OPEN with one APPROVED review and CI in progress; explicitly 'Partially fixes' #3482. Awaiting merge. | PR …</td>
@@ -4843,7 +4778,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 
 
 <ul>
-  <li><strong>AWAIT_REPLY</strong>  ·  7 issues</li>
+  <li><strong>AWAIT_REPLY</strong>  ·  8 issues</li>
 </ul>
 
 <p><strong>AWAIT_REPLY — open questions in thread; owner must respond</strong></p>
@@ -4864,6 +4799,19 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <th>Labels</th>
 </tr></thead>
 <tbody>
+<tr data-category="TorchAO" data-dependency="SYCL kernel: LinearInt4.cpp" data-priority="P1" data-assignee="xiaowangintel" data-owner_transferred="xiaowangintel | zxd1997066" data-milestone="PT2.13" data-search="[#2572](https://github.com/intel/torch-xpu-ops/issues/2572) [torchao][ut] test/dtypes/test_affine_quantized.py assertionerror: tensor-likes are not close! xiaowangintel xiaowangintel | zxd1997… address comment ar from lifengwang: status update on int4wo copy_/slice fix | check_case_avaliabli…" data-issue="2572">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2572" id="done-2572"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2572">#2572</a></td>
+<td>[TorchAO][UT] test/dtypes/test_affine_quantized.py<br>AssertionError: Tensor-likes are not close!</td>
+<td>xiaowangintel</td>
+<td>xiaowangintel | zxd1997…</td>
+<td>Address comment AR from LifengWang: status update on int4wo copy_/slice fix | check_case_avaliabli…</td>
+<td>Fix int4 weight pack copy_/slice semantics in the AffineQuantizedTensor XPU dispatch and ensure Lin…<br><a href="details/2572.md">→ details</a></td>
+<td>P1</td>
+<td>V0 GraphQL closedByPullRequestsReferences returned no nodes. | VA timeline cross-references yielded only unrelated upstream_ut issues (#26…</td>
+<td>zxd1997066</td>
+<td>module: ao</td>
+</tr>
 <tr data-category="Distributed" data-dependency="xccl" data-priority="P1" data-assignee="syedshahbaaz" data-owner_transferred="madhumitha0102" data-milestone="PT2.12" data-search="[#2701](https://github.com/intel/torch-xpu-ops/issues/2701) [distributed] barrier timeout error with test_distributed_spawn.py syedshahbaaz madhumitha0102 address comment ar from syedshahbaaz: confirm env-var injection approach and file pr to set torch_d…" data-issue="2701">
 <td class="done-col"><input type="checkbox" class="ar-done" data-issue="2701" id="done-2701"></td>
 <td><a href="https://github.com/intel/torch-xpu-ops/issues/2701">#2701</a></td>
@@ -5016,13 +4964,13 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>daisyden</td>
 <td>skipped</td>
 </tr>
-<tr data-category="TorchAO" data-dependency="SYCL kernel: LinearInt4.cpp" data-priority="P1" data-assignee="xiaowangintel" data-owner_transferred="xiaowangintel | zxd1997066" data-milestone="PT2.13" data-search="[#2572](https://github.com/intel/torch-xpu-ops/issues/2572) [torchao][ut] test/dtypes/test_affine_quantized.py assertionerror: tensor-likes are not close! xiaowangintel xiaowangintel | zxd1997… address comment ar from lifengwang: status update on int4wo copy_/slice fix | no action — investig…" data-issue="2572">
+<tr data-category="TorchAO" data-dependency="SYCL kernel: LinearInt4.cpp" data-priority="P1" data-assignee="xiaowangintel" data-owner_transferred="xiaowangintel | zxd1997066" data-milestone="PT2.13" data-search="[#2572](https://github.com/intel/torch-xpu-ops/issues/2572) [torchao][ut] test/dtypes/test_affine_quantized.py assertionerror: tensor-likes are not close! xiaowangintel xiaowangintel | zxd1997… address comment ar from lifengwang: status update on int4wo copy_/slice fix | check_case_avaliabli…" data-issue="2572">
 <td class="done-col"><input type="checkbox" class="ar-done" data-issue="2572" id="done-2572"></td>
 <td><a href="https://github.com/intel/torch-xpu-ops/issues/2572">#2572</a></td>
 <td>[TorchAO][UT] test/dtypes/test_affine_quantized.py<br>AssertionError: Tensor-likes are not close!</td>
 <td>xiaowangintel</td>
 <td>xiaowangintel | zxd1997…</td>
-<td>Address comment AR from LifengWang: status update on int4wo copy_/slice fix | No action — investig…</td>
+<td>Address comment AR from LifengWang: status update on int4wo copy_/slice fix | check_case_avaliabli…</td>
 <td>Fix int4 weight pack copy_/slice semantics in the AffineQuantizedTensor XPU dispatch and ensure Lin…<br><a href="details/2572.md">→ details</a></td>
 <td>P1</td>
 <td>V0 GraphQL closedByPullRequestsReferences returned no nodes. | VA timeline cross-references yielded only unrelated upstream_ut issues (#26…</td>
@@ -5133,13 +5081,13 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>Silv3S</td>
 <td>Ready for merge, skipped, bug_fix_stage5</td>
 </tr>
-<tr data-category="Distributed" data-dependency="xccl" data-priority="P2" data-assignee="newtdms" data-owner_transferred="newtdms | zxd1997066" data-search="[#2972](https://github.com/intel/torch-xpu-ops/issues/2972) [distributed] assertionerror: valueerror not raised in test/distributed/test_c10d_xccl.py newtdms newtdms | zxd1997066 no action — investigate further | check_case_avaliablity" data-issue="2972">
+<tr data-category="Distributed" data-dependency="xccl" data-priority="P2" data-assignee="newtdms" data-owner_transferred="newtdms | zxd1997066" data-search="[#2972](https://github.com/intel/torch-xpu-ops/issues/2972) [distributed] assertionerror: valueerror not raised in test/distributed/test_c10d_xccl.py newtdms newtdms | zxd1997066 check_case_avaliablity" data-issue="2972">
 <td class="done-col"><input type="checkbox" class="ar-done" data-issue="2972" id="done-2972"></td>
 <td><a href="https://github.com/intel/torch-xpu-ops/issues/2972">#2972</a></td>
 <td>[distributed] AssertionError: ValueError not<br>raised in test/distributed/test_c10d_xccl.py</td>
 <td>newtdms</td>
 <td>newtdms | zxd1997066</td>
-<td>No action — investigate further | check_case_avaliablity</td>
+<td>check_case_avaliablity</td>
 <td>Add a contiguity check in ProcessGroupXCCL::alltoall_base (and matching alltoall) to throw TORCH_CH…<br><a href="details/2972.md">→ details</a></td>
 <td>P2</td>
 <td>V0 GraphQL closedByPullRequestsReferences returned no nodes. VA timeline cross-references only show the umbrella tracker issue intel/torch-…</td>
@@ -5198,13 +5146,13 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>daisyden</td>
 <td>module: ut, skipped</td>
 </tr>
-<tr data-category="Others" data-priority="P2" data-owner_transferred="zxd1997066" data-milestone="UT Backlog" data-assignee="" data-search="[#3482](https://github.com/intel/torch-xpu-ops/issues/3482) new failed test cases 2026-04-26  zxd1997066 track pr 3513 to merge | no action — investigate further | check_case_avaliablity" data-issue="3482">
+<tr data-category="Others" data-priority="P2" data-owner_transferred="zxd1997066" data-milestone="UT Backlog" data-assignee="" data-search="[#3482](https://github.com/intel/torch-xpu-ops/issues/3482) new failed test cases 2026-04-26  zxd1997066 track pr 3513 to merge | check_case_avaliablity" data-issue="3482">
 <td class="done-col"><input type="checkbox" class="ar-done" data-issue="3482" id="done-3482"></td>
 <td><a href="https://github.com/intel/torch-xpu-ops/issues/3482">#3482</a></td>
 <td>New failed test cases 2026-04-26</td>
 <td></td>
 <td>zxd1997066</td>
-<td>Track PR 3513 to merge | No action — investigate further | check_case_avaliablity</td>
+<td>Track PR 3513 to merge | check_case_avaliablity</td>
 <td>Split into per-area child issues: SDPA nested broadcasting -&gt; torch-xpu-ops SDPA (Flash Attention)<br><a href="details/3482.md">→ details</a></td>
 <td>P2</td>
 <td>PR intel/torch-xpu-ops#3513 is OPEN with one APPROVED review and CI in progress; explicitly 'Partially fixes' #3482. Awaiting merge. | PR …</td>
@@ -5250,13 +5198,13 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>libohao1201</td>
 <td>skipped</td>
 </tr>
-<tr data-category="TorchAO" data-dependency="SYCL kernel: BinaryRemainderKernels.cpp" data-priority="P3" data-assignee="arlesniak" data-owner_transferred="arlesniak | zxd1997066" data-milestone="UT Backlog" data-search="[#2580](https://github.com/intel/torch-xpu-ops/issues/2580) [torchao][ut] test/test_low_bit_optim.py assertionerror: tensor-likes are not close! arlesniak arlesniak | zxd1997066 no action — investigate further | check_case_avaliablity" data-issue="2580">
+<tr data-category="TorchAO" data-dependency="SYCL kernel: BinaryRemainderKernels.cpp" data-priority="P3" data-assignee="arlesniak" data-owner_transferred="arlesniak | zxd1997066" data-milestone="UT Backlog" data-search="[#2580](https://github.com/intel/torch-xpu-ops/issues/2580) [torchao][ut] test/test_low_bit_optim.py assertionerror: tensor-likes are not close! arlesniak arlesniak | zxd1997066 check_case_avaliablity" data-issue="2580">
 <td class="done-col"><input type="checkbox" class="ar-done" data-issue="2580" id="done-2580"></td>
 <td><a href="https://github.com/intel/torch-xpu-ops/issues/2580">#2580</a></td>
 <td>[TorchAO][UT] test/test_low_bit_optim.py<br>AssertionError: Tensor-likes are not close!</td>
 <td>arlesniak</td>
 <td>arlesniak | zxd1997066</td>
-<td>No action — investigate further | check_case_avaliablity</td>
+<td>check_case_avaliablity</td>
 <td>Reproduce on PVC, isolate which op in _fp32_to_bf16_sr (bitwise_and/right_shift/add then bitcast to…<br><a href="details/2580.md">→ details</a></td>
 <td>P3</td>
 <td>No PR candidates surfaced from any of V0/VA/VB/VC/VD/VE (GraphQL closing refs empty; timeline cross-refs are unrelated issues #2611 and #26…</td>
@@ -5276,39 +5224,39 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>madhumitha0102</td>
 <td>module: distributed</td>
 </tr>
-<tr data-category="Others" data-dependency="upstream-pytorch" data-priority="P3" data-owner_transferred="zxd1997066" data-milestone="UT Backlog" data-assignee="" data-search="[#3477](https://github.com/intel/torch-xpu-ops/issues/3477) [upstream_ut] export/test_torchbind.py notimplementederror: the operator &#x27;_torchscripttesting::queue_push&#x27; is not currently implemented for the xpu device  zxd1997066 no action — investigate further | check_case_avaliablity" data-issue="3477">
+<tr data-category="Others" data-dependency="upstream-pytorch" data-priority="P3" data-owner_transferred="zxd1997066" data-milestone="UT Backlog" data-assignee="" data-search="[#3477](https://github.com/intel/torch-xpu-ops/issues/3477) [upstream_ut] export/test_torchbind.py notimplementederror: the operator &#x27;_torchscripttesting::queue_push&#x27; is not currently implemented for the xpu device  zxd1997066 check_case_avaliablity" data-issue="3477">
 <td class="done-col"><input type="checkbox" class="ar-done" data-issue="3477" id="done-3477"></td>
 <td><a href="https://github.com/intel/torch-xpu-ops/issues/3477">#3477</a></td>
 <td>[upstream_ut] export/test_torchbind.py<br>NotImplementedError: The operator<br>'_TorchScriptTesting::queue_push' is not currently<br>implemented for the XPU device</td>
 <td></td>
 <td>zxd1997066</td>
-<td>No action — investigate further | check_case_avaliablity</td>
+<td>check_case_avaliablity</td>
 <td>Add a TORCH_LIBRARY_IMPL(_TorchScriptTesting, XPU, m) block in pytorch/test/cpp/jit/test_custom_cla…<br><a href="details/3477.md">→ details</a></td>
 <td>P3</td>
 <td>Issue is OPEN with 'skipped' label and no associated fix PR exists in either intel/torch-xpu-ops or pytorch/pytorch. The fix per the docume…</td>
 <td>zxd1997066</td>
 <td>module: ut, skipped</td>
 </tr>
-<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-owner_transferred="kaileiyx" data-milestone="UT Backlog" data-assignee="" data-search="[#3484](https://github.com/intel/torch-xpu-ops/issues/3484) [bug skip]: ut new failure : torch.autograd.gradcheck.gradcheckerror: backward is not reentrant  kaileiyx no action — investigate further | check_case_avaliablity" data-issue="3484">
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-owner_transferred="kaileiyx" data-milestone="UT Backlog" data-assignee="" data-search="[#3484](https://github.com/intel/torch-xpu-ops/issues/3484) [bug skip]: ut new failure : torch.autograd.gradcheck.gradcheckerror: backward is not reentrant  kaileiyx check_case_avaliablity" data-issue="3484">
 <td class="done-col"><input type="checkbox" class="ar-done" data-issue="3484" id="done-3484"></td>
 <td><a href="https://github.com/intel/torch-xpu-ops/issues/3484">#3484</a></td>
 <td>[Bug Skip]: UT new failure :<br>torch.autograd.gradcheck.GradcheckError: Backward<br>is not reentrant</td>
 <td></td>
 <td>kaileiyx</td>
-<td>No action — investigate further | check_case_avaliablity</td>
+<td>check_case_avaliablity</td>
 <td>Upstream fix in the linear_cross_entropy OpInfo: set gradcheck_nondet_tol to a small positive value…<br><a href="details/3484.md">→ details</a></td>
 <td>P3</td>
 <td>Issue has no linked PR via GraphQL/timeline, no body PR refs, and no authoritative not-target declaration. Upstream candidate PR pytorch/py…</td>
 <td>kaileiyx</td>
 <td>skipped</td>
 </tr>
-<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-owner_transferred="kaileiyx" data-milestone="UT Backlog" data-assignee="" data-search="[#3485](https://github.com/intel/torch-xpu-ops/issues/3485) [bug skip]: ut new failure: assertionerror: false is not true  kaileiyx no action — investigate further | check_case_avaliablity" data-issue="3485">
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-owner_transferred="kaileiyx" data-milestone="UT Backlog" data-assignee="" data-search="[#3485](https://github.com/intel/torch-xpu-ops/issues/3485) [bug skip]: ut new failure: assertionerror: false is not true  kaileiyx check_case_avaliablity" data-issue="3485">
 <td class="done-col"><input type="checkbox" class="ar-done" data-issue="3485" id="done-3485"></td>
 <td><a href="https://github.com/intel/torch-xpu-ops/issues/3485">#3485</a></td>
 <td>[Bug Skip]: UT new failure: AssertionError: False<br>is not true</td>
 <td></td>
 <td>kaileiyx</td>
-<td>No action — investigate further | check_case_avaliablity</td>
+<td>check_case_avaliablity</td>
 <td>Upstream fix: in the OpInfo for nn.functional.linear_cross_entropy (torch/testing/_internal/opinfo/…<br><a href="details/3485.md">→ details</a></td>
 <td>P3</td>
 <td>V0 closedByPullRequestsReferences returned no PRs. Timeline cross-refs returned no PRs. Issue body contains no PR references (only error lo…</td>
@@ -6562,7 +6510,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>[distributed] AssertionError: ValueError not<br>raised in test/distributed/test_c10d_xccl.py</td>
 <td>newtdms</td>
 <td>newtdms | zxd1997066</td>
-<td>No action — investigate further | check_case_avaliablity</td>
+<td>check_case_avaliablity</td>
 <td>Add a contiguity check in ProcessGroupXCCL::alltoall_base (and matching alltoall) to throw TORCH_CH…<br><a href="details/2972.md">→ details</a></td>
 <td>P2</td>
 <td>V0 GraphQL closedByPullRequestsReferences returned no nodes. VA timeline cross-references only show the umbrella tracker issue intel/torch-…</td>
@@ -8267,7 +8215,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>[upstream_ut] export/test_torchbind.py<br>NotImplementedError: The operator<br>'_TorchScriptTesting::queue_push' is not currently<br>implemented for the XPU device</td>
 <td></td>
 <td>zxd1997066</td>
-<td>No action — investigate further | check_case_avaliablity</td>
+<td>check_case_avaliablity</td>
 <td>Add a TORCH_LIBRARY_IMPL(_TorchScriptTesting, XPU, m) block in pytorch/test/cpp/jit/test_custom_cla…<br><a href="details/3477.md">→ details</a></td>
 <td>P3</td>
 <td>Issue is OPEN with 'skipped' label and no associated fix PR exists in either intel/torch-xpu-ops or pytorch/pytorch. The fix per the docume…</td>
@@ -8293,7 +8241,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>[Bug Skip]: UT new failure :<br>torch.autograd.gradcheck.GradcheckError: Backward<br>is not reentrant</td>
 <td></td>
 <td>kaileiyx</td>
-<td>No action — investigate further | check_case_avaliablity</td>
+<td>check_case_avaliablity</td>
 <td>Upstream fix in the linear_cross_entropy OpInfo: set gradcheck_nondet_tol to a small positive value…<br><a href="details/3484.md">→ details</a></td>
 <td>P3</td>
 <td>Issue has no linked PR via GraphQL/timeline, no body PR refs, and no authoritative not-target declaration. Upstream candidate PR pytorch/py…</td>
@@ -8306,7 +8254,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>[Bug Skip]: UT new failure: AssertionError: False<br>is not true</td>
 <td></td>
 <td>kaileiyx</td>
-<td>No action — investigate further | check_case_avaliablity</td>
+<td>check_case_avaliablity</td>
 <td>Upstream fix: in the OpInfo for nn.functional.linear_cross_entropy (torch/testing/_internal/opinfo/…<br><a href="details/3485.md">→ details</a></td>
 <td>P3</td>
 <td>V0 closedByPullRequestsReferences returned no PRs. Timeline cross-refs returned no PRs. Issue body contains no PR references (only error lo…</td>
@@ -8659,7 +8607,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>New failed test cases 2026-04-26</td>
 <td></td>
 <td>zxd1997066</td>
-<td>Track PR 3513 to merge | No action — investigate further | check_case_avaliablity</td>
+<td>Track PR 3513 to merge | check_case_avaliablity</td>
 <td>Split into per-area child issues: SDPA nested broadcasting -&gt; torch-xpu-ops SDPA (Flash Attention)<br><a href="details/3482.md">→ details</a></td>
 <td>P2</td>
 <td>PR intel/torch-xpu-ops#3513 is OPEN with one APPROVED review and CI in progress; explicitly 'Partially fixes' #3482. Awaiting merge. | PR …</td>
@@ -8815,7 +8763,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>[Bug Skip]: UT new failure: AssertionError: False<br>is not true</td>
 <td></td>
 <td>kaileiyx</td>
-<td>No action — investigate further | check_case_avaliablity</td>
+<td>check_case_avaliablity</td>
 <td>Upstream fix: in the OpInfo for nn.functional.linear_cross_entropy (torch/testing/_internal/opinfo/…<br><a href="details/3485.md">→ details</a></td>
 <td>P3</td>
 <td>V0 closedByPullRequestsReferences returned no PRs. Timeline cross-refs returned no PRs. Issue body contains no PR references (only error lo…</td>
@@ -8828,7 +8776,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>[Bug Skip]: UT new failure :<br>torch.autograd.gradcheck.GradcheckError: Backward<br>is not reentrant</td>
 <td></td>
 <td>kaileiyx</td>
-<td>No action — investigate further | check_case_avaliablity</td>
+<td>check_case_avaliablity</td>
 <td>Upstream fix in the linear_cross_entropy OpInfo: set gradcheck_nondet_tol to a small positive value…<br><a href="details/3484.md">→ details</a></td>
 <td>P3</td>
 <td>Issue has no linked PR via GraphQL/timeline, no body PR refs, and no authoritative not-target declaration. Upstream candidate PR pytorch/py…</td>
@@ -8854,7 +8802,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>[upstream_ut] export/test_torchbind.py<br>NotImplementedError: The operator<br>'_TorchScriptTesting::queue_push' is not currently<br>implemented for the XPU device</td>
 <td></td>
 <td>zxd1997066</td>
-<td>No action — investigate further | check_case_avaliablity</td>
+<td>check_case_avaliablity</td>
 <td>Add a TORCH_LIBRARY_IMPL(_TorchScriptTesting, XPU, m) block in pytorch/test/cpp/jit/test_custom_cla…<br><a href="details/3477.md">→ details</a></td>
 <td>P3</td>
 <td>Issue is OPEN with 'skipped' label and no associated fix PR exists in either intel/torch-xpu-ops or pytorch/pytorch. The fix per the docume…</td>
@@ -8943,9 +8891,9 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <th>Issues</th>
 </tr></thead>
 <tbody>
-<tr data-search="need pr 79">
+<tr data-search="need pr 73">
 <td>NEED PR</td>
-<td>79</td>
+<td>73</td>
 </tr>
 <tr data-search="track pr 203">
 <td>TRACK PR</td>
@@ -8955,13 +8903,13 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>CLOSE or SKIP</td>
 <td>83</td>
 </tr>
-<tr data-search="await_reply 7">
+<tr data-search="await_reply 8">
 <td>AWAIT_REPLY</td>
-<td>7</td>
+<td>8</td>
 </tr>
-<tr data-search="check_cases 1">
+<tr data-search="check_cases 6">
 <td>CHECK_CASES</td>
-<td>1</td>
+<td>6</td>
 </tr>
 </tbody>
 </table>
@@ -9003,17 +8951,17 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>WAIT_EXTERNAL</td>
 <td>6</td>
 </tr>
-<tr data-search="need_action 75">
+<tr data-search="need_action 69">
 <td>NEED_ACTION</td>
-<td>75</td>
+<td>69</td>
 </tr>
-<tr data-search="await_reply 7">
+<tr data-search="await_reply 8">
 <td>AWAIT_REPLY</td>
-<td>7</td>
+<td>8</td>
 </tr>
-<tr data-search="check_cases 1">
+<tr data-search="check_cases 6">
 <td>CHECK_CASES</td>
-<td>1</td>
+<td>6</td>
 </tr>
 <tr data-search="skip 2">
 <td>SKIP</td>
@@ -9063,9 +9011,9 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>WAIT_EXTERNAL</td>
 <td>17</td>
 </tr>
-<tr data-search="need_action 89">
+<tr data-search="need_action 81">
 <td>NEED_ACTION</td>
-<td>89</td>
+<td>81</td>
 </tr>
 <tr data-search="await_reply 50">
 <td>AWAIT_REPLY</td>
