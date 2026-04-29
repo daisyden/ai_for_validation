@@ -58,12 +58,13 @@ def classify(s: str) -> list[str]:
     if low.strip() in ("verify and close", "verify fix and close"): cats.add("VERIFY_AND_CLOSE")
     if "assignee verify fix and close" in low:   cats.add("VERIFY_AND_CLOSE")
 
-    # --- RETRIAGE_PRS (covers both "re-validate cross-refs" and "prior PR dead") ---
+    # --- RETRIAGE_PRS (only when a PR is actually cited) ---
+    # The bare 'RETRIAGE_PRS' token (Phase 4b emitted bucket-name as verb
+    # for issues with no PRs found) is intentionally NOT mapped here —
+    # see NEED_ACTION below.
     if "re-evaluate" in low and "closed unmerged" in low: cats.add("RETRIAGE_PRS")
     if "closed unmerged; reassess fix path" in low:       cats.add("RETRIAGE_PRS")
     if "re-validate cross-referenced prs" in low:         cats.add("RETRIAGE_PRS")
-    # Phase 4b standalone token + variants
-    if re.search(r"\bretriage_prs\b", low):               cats.add("RETRIAGE_PRS")
     if "resolve unresolved review comments on pr" in low: cats.add("RETRIAGE_PRS")
     if "address ci failures on pr" in low:                cats.add("RETRIAGE_PRS")
 
@@ -125,6 +126,11 @@ def classify(s: str) -> list[str]:
     if "weak/closed cross-ref candidates" in low: cats.add("NEED_ACTION")
     # Phase 4b "No action — investigate further" (em dash or hyphen)
     if "no action" in low and "investigate further" in low: cats.add("NEED_ACTION")
+    # Phase 4b emitted the bare bucket name "RETRIAGE_PRS" as the verb
+    # when its 6-vector PR search came up empty. There is no PR to
+    # re-triage, so this is really a "needs investigation from scratch"
+    # state — classify as NEED_ACTION rather than RETRIAGE_PRS.
+    if re.search(r"\bretriage_prs\b", low):      cats.add("NEED_ACTION")
 
     # NEEDS_OWNER: no owner assigned / Phase 3 triage stub
     if "needs investigation / owner assignment" in low: cats.add("NEEDS_OWNER")
@@ -160,6 +166,9 @@ def main():
     ws = wb["Issues"]
     hdr = [c.value for c in ws[1]]
     I_ACT = hdr.index("action_TBD")
+    I_ASSIGN = hdr.index("Assignee")
+    I_OWNER = hdr.index("owner_transferred")
+    I_STATUS = hdr.index("Status")
 
     # add action_Type column if absent
     if "action_Type" in hdr:
@@ -175,17 +184,40 @@ def main():
     combos = Counter()
     unclassified: list[tuple[int, str]] = []
 
+    def is_blank(v) -> bool:
+        if v is None: return True
+        s = str(v).strip()
+        return not s or s.lower() == "none"
+
     for r in rows:
         act = r[I_ACT].value
-        if not act:
+        cats = classify(act) if act else []
+
+        # Row-level rule: NEEDS_OWNER applies whenever an OPEN issue has
+        # neither an Assignee nor a non-empty owner_transferred,
+        # regardless of action_TBD verbs. This catches the truly
+        # unowned issues that the verb-based classifier never tags.
+        # Exception: if the row already has a terminal verdict
+        # (CLOSE / NOT_TARGET_CLOSE / SKIP / VERIFY_AND_CLOSE), the
+        # next step is closing — it doesn't really need an owner first.
+        TERMINAL = {"CLOSE", "NOT_TARGET_CLOSE", "SKIP", "VERIFY_AND_CLOSE"}
+        status = (r[I_STATUS].value or "").strip().lower() if r[I_STATUS].value else ""
+        if status != "closed" and not (set(cats) & TERMINAL):
+            if is_blank(r[I_ASSIGN].value) and is_blank(r[I_OWNER].value):
+                cats = list(cats) if cats else []
+                if "NEEDS_OWNER" not in cats:
+                    cats.append("NEEDS_OWNER")
+
+        if not act and not cats:
             empty += 1
             r[I_TYPE].value = None
             continue
-        cats = classify(act)
         if not cats:
             unclassified.append((r[0].value, act))
             r[I_TYPE].value = "UNCLASSIFIED"
             continue
+        # Re-sort by PRIORITY since NEEDS_OWNER may have been appended above.
+        cats = [c for c in PRIORITY if c in set(cats)]
         label = "+".join(cats)
         r[I_TYPE].value = label
         for c in cats:
