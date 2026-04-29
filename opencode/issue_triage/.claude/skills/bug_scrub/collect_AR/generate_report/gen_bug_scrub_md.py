@@ -44,7 +44,7 @@ elif _args.out.is_absolute():
 else:
     OUT = REPO_ROOT / _args.out
 REPO  = "intel/torch-xpu-ops"
-TODAY = datetime(2026, 4, 21, tzinfo=timezone.utc)
+TODAY = datetime.now(timezone.utc)
 RECENT_CUTOFF = TODAY - timedelta(days=7)
 
 # display order for the two macro-groups (merged buckets — see MERGE below)

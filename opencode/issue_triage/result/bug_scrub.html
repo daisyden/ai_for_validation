@@ -68,7 +68,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 
 <ul>
   <li><strong>Repository</strong>: <code>intel/torch-xpu-ops</code></li>
-  <li><strong>Generated</strong>: 2026-04-21 (cutoff for Section 7: 2026-04-14)</li>
+  <li><strong>Generated</strong>: 2026-04-29 (cutoff for Section 7: 2026-04-22)</li>
   <li><strong>Total issues in workbook</strong>: 379</li>
   <li><strong>Classified (non-empty <code>action_Type</code>)</strong>: 379</li>
   <li><strong>Empty <code>action_TBD</code> (no verdict)</strong>: 0</li>
@@ -118,10 +118,10 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>—</td>
 <td>11</td>
 </tr>
-<tr data-search="filed within last 7 days — 54">
+<tr data-search="filed within last 7 days — 33">
 <td>Filed within last 7 days</td>
 <td>—</td>
-<td>54</td>
+<td>33</td>
 </tr>
 </tbody>
 </table>
@@ -8440,7 +8440,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 
 <p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
 
-<p>Issues created on or after 2026-04-14, excluding terminal-QA rows.  —  54 issues.</p>
+<p>Issues created on or after 2026-04-22, excluding terminal-QA rows.  —  33 issues.</p>
 
 <table class="ar-table" data-section="7">
 <thead>
@@ -8523,19 +8523,6 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>mengfei25</td>
 <td>performance, hw: PVC, regression</td>
 </tr>
-<tr data-category="Flash Attention" data-dependency="oneDNN" data-priority="P0" data-assignee="LuFinch" data-owner_transferred="LuFinch" data-search="[#3394](https://github.com/intel/torch-xpu-ops/issues/3394) 2026-04-20 crash still occur in sdpa lufinch lufinch" data-issue="3394">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3394">#3394</a></td>
-<td>2026-04-20</td>
-<td>crash still occur in sdpa</td>
-<td>LuFinch</td>
-<td>LuFinch</td>
-<td>Track oneDNN JIRA MFDNN-14479 fix for SDPA seq_len&gt;16K fp32 crash; consider stop-gap math-backend f…</td>
-<td>Fix in oneDNN SDPA primitive (MFDNN-14479) — bounds/tiling for seq_len&gt;16K fp32.<br><a href="details/3394.md">→ details</a></td>
-<td>P0</td>
-<td>PR discovery (V0 GraphQL, VA timeline, VB body refs, VC title-keyword, VD file-path, VE fix_approach) found zero GitHub PR candidates in ei…</td>
-<td>sywangyi</td>
-<td>dependency component: oneDNN</td>
-</tr>
 <tr data-category="Inductor" data-dependency="triton" data-priority="P1" data-owner_transferred="mengfei25" data-assignee="" data-search="[#3459](https://github.com/intel/torch-xpu-ops/issues/3459) 2026-04-24 [release/2.12][bmg b60] dynamo benchmark performance regression in pytorch 2.12: hf_t5/hf_t5_base ~30% slower inductor latency  mengfei25" data-issue="3459">
 <td><a href="https://github.com/intel/torch-xpu-ops/issues/3459">#3459</a></td>
 <td>2026-04-24</td>
@@ -8600,84 +8587,6 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>Meta/tracking issue. V0 GraphQL closedByPullRequestsReferences is empty; VA timeline has no cross-references; VB body refs are all to sub-i…</td>
 <td>mengfei25</td>
 <td>os: Ubuntu, hw: BMG</td>
-</tr>
-<tr data-category="Inductor" data-dependency="driver" data-priority="P1" data-owner_transferred="daisyden" data-assignee="" data-search="[#3386](https://github.com/intel/torch-xpu-ops/issues/3386) 2026-04-19 [bug skip] xpu dynamo ocloc/igc compilation failures  daisyden" data-issue="3386">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3386">#3386</a></td>
-<td>2026-04-19</td>
-<td>[Bug Skip] XPU Dynamo ocloc/IGC compilation<br>failures</td>
-<td></td>
-<td>daisyden</td>
-<td>No action — investigate further</td>
-<td>Fix the CI driver stack: install matching libigc/intel-compute-runtime versions so libigc.so.2 load…<br><a href="details/3386.md">→ details</a></td>
-<td>P1</td>
-<td>Issue root cause is a CI driver/environment defect (libigc.so.2 cannot load; intel-igc-cm 1.0.224 / intel-ocloc 25.18.33578 mismatch in the…</td>
-<td>daisyden</td>
-<td>module: inductor, module: ut, skipped</td>
-</tr>
-<tr data-category="Distributed" data-dependency="xccl" data-priority="P1" data-assignee="frost-intel" data-owner_transferred="frost-intel | madhumitha0102" data-search="[#3378](https://github.com/intel/torch-xpu-ops/issues/3378) 2026-04-17 [distributed] hang in test_c10d_xccl.py::processgr oupxcclgrouptest::test_abort_pg frost-intel frost-intel | madhumith…" data-issue="3378">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3378">#3378</a></td>
-<td>2026-04-17</td>
-<td>[distributed] hang in test_c10d_xccl.py::ProcessGr<br>oupXCCLGroupTest::test_abort_pg</td>
-<td>frost-intel</td>
-<td>frost-intel | madhumith…</td>
-<td>Track PR pytorch/pytorch#181646 to merge | check_case_avaliablity</td>
-<td>Implement WorkXCCL::abort() and ProcessGroupXCCL::abort()/shutdown() to call ccl::comm abort/destro…<br><a href="details/3378.md">→ details</a></td>
-<td>P1</td>
-<td>PR 181646 by assignee frost-intel explicitly references issue #3378 and is OPEN with all CI checks passing but no reviews/approval yet. Gat…</td>
-<td>madhumitha0102</td>
-<td>module: distributed</td>
-</tr>
-<tr data-category="Distributed" data-dependency="xccl" data-priority="P1" data-assignee="frost-intel" data-owner_transferred="frost-intel | madhumitha0102" data-search="[#3376](https://github.com/intel/torch-xpu-ops/issues/3376) 2026-04-17 [distributed] attributeerrors/feature gaps in newly enabled tests of test/distributed/test_c10d_xccl.py frost-intel frost-intel | madhumith…" data-issue="3376">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3376">#3376</a></td>
-<td>2026-04-17</td>
-<td>[distributed] AttributeErrors/Feature gaps in<br>newly enabled tests of<br>test/distributed/test_c10d_xccl.py</td>
-<td>frost-intel</td>
-<td>frost-intel | madhumith…</td>
-<td>Track PR pytorch/pytorch#181646 to merge | check_case_avaliablity</td>
-<td>Implement the missing methods in ProcessGroupXCCL (eager init, comm split, NaN check, default timeo…<br><a href="details/3376.md">→ details</a></td>
-<td>P1</td>
-<td>PR pytorch/pytorch#181646 is OPEN, all CI checks pass (0 failures, 0 pending across 119+ jobs), but reviewDecision is empty (no approvals y…</td>
-<td>madhumitha0102</td>
-<td>module: distributed</td>
-</tr>
-<tr data-category="TorchAO" data-dependency="upstream-pytorch" data-priority="P1" data-assignee="Stonepia" data-owner_transferred="Stonepia" data-search="[#3368](https://github.com/intel/torch-xpu-ops/issues/3368) 2026-04-17 [torchao][bmg] deepseek-r1-distill-llama-8b rtn int4 got 7 performance regression after upgrading transformers from 4.55.4 to 5.4.0 stonepia stonepia" data-issue="3368">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3368">#3368</a></td>
-<td>2026-04-17</td>
-<td>[TorchAO][BMG] DeepSeek-R1-Distill-Llama-8B RTN<br>INT4 got 7 performance regression after upgrading<br>transformers from 4.55.4 to 5.4.0</td>
-<td>Stonepia</td>
-<td>Stonepia</td>
-<td>No action — investigate further</td>
-<td>Bisect first-token cost between the two transformers versions with TORCH_LOGS=guards,recompiles to…<br><a href="details/3368.md">→ details</a></td>
-<td>P1</td>
-<td>V0 GraphQL closedByPullRequestsReferences returned 0 nodes. VA timeline cross-referenced events: none. VB body scan: only inner-source URL …</td>
-<td>LifengWang</td>
-<td>module: ao</td>
-</tr>
-<tr data-category="Torch Runtime" data-dependency="driver" data-priority="P1" data-assignee="aostrowski-hbn" data-owner_transferred="aostrowski-hbn" data-search="[#3350](https://github.com/intel/torch-xpu-ops/issues/3350) 2026-04-16 [profiler] [xpu][windows] torch.profiler fails to capture device activities despite __xpu_profiler__ track being created aostrowski-hbn aostrowski-hbn" data-issue="3350">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3350">#3350</a></td>
-<td>2026-04-16</td>
-<td>[profiler] [XPU][Windows] torch.profiler fails to<br>capture device activities despite __xpu_profiler__<br>track being created</td>
-<td>aostrowski-hbn</td>
-<td>aostrowski-hbn</td>
-<td>No action — investigate further</td>
-<td>Reproduce on Linux to confirm Windows-specific<br><a href="details/3350.md">→ details</a></td>
-<td>P1</td>
-<td>V0 closedByPullRequestsReferences: empty. VA timeline cross-references: empty. VB body refs: issue body contains only image asset URLs and …</td>
-<td>ZhaoqiongZ</td>
-<td>module: profiler</td>
-</tr>
-<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P1" data-assignee="CuiYifeng" data-owner_transferred="CuiYifeng" data-search="[#3342](https://github.com/intel/torch-xpu-ops/issues/3342) 2026-04-15 c-shim implementation is missing for aten.unsqueeze,expand and split_with_sizes cuiyifeng cuiyifeng" data-issue="3342">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3342">#3342</a></td>
-<td>2026-04-15</td>
-<td>c-shim implementation is missing for<br>aten.unsqueeze,expand and split_with_sizes</td>
-<td>CuiYifeng</td>
-<td>CuiYifeng</td>
-<td>RETRIAGE_PRS</td>
-<td>Add C-shim XPU declarations and implementations for aten_unsqueeze, aten_expand, aten_split_with_si…<br><a href="details/3342.md">→ details</a></td>
-<td>P1</td>
-<td>V0 closedByPullRequestsReferences returned no nodes. | VA timeline cross-references returned no entries. | VB body scan: only fenced code…</td>
-<td>kaixuanliu</td>
-<td></td>
 </tr>
 <tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-owner_transferred="Silv3S" data-assignee="" data-search="[#3500](https://github.com/intel/torch-xpu-ops/issues/3500) 2026-04-28 [bug skip]: new failed test cases 2026-4-28  silv3s" data-issue="3500">
 <td><a href="https://github.com/intel/torch-xpu-ops/issues/3500">#3500</a></td>
@@ -8874,123 +8783,6 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>sywangyi</td>
 <td></td>
 </tr>
-<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="pponikox" data-owner_transferred="shangerxin" data-search="[#3393](https://github.com/intel/torch-xpu-ops/issues/3393) 2026-04-20 [upstream_ut] test/dynamo/test_activation_checkpoi nting.py::activationcheckpointingviatagstestsxpu:: test_pattern_matcher failed with indexerror pponikox shangerxin" data-issue="3393">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3393">#3393</a></td>
-<td>2026-04-20</td>
-<td>[upstream_ut] test/dynamo/test_activation_checkpoi<br>nting.py::ActivationCheckpointingViaTagsTestsXPU::<br>test_pattern_matcher failed with IndexError</td>
-<td>pponikox</td>
-<td>shangerxin</td>
-<td>Track PR pytorch/pytorch#169241 to merge | Resolve unresolved review comments on PR pytorch/pytorc…</td>
-<td>Wait for upstream PR pytorch/pytorch#169241 to land (extends activation-checkpointing pattern match…<br><a href="details/3393.md">→ details</a></td>
-<td>P2</td>
-<td>PR is OPEN upstream and is the explicit fix referenced from the issue body and fix_approach. | reviewDecision=CHANGES_REQUESTED indicates …</td>
-<td>shangerxin</td>
-<td>skipped, ut_upstream</td>
-</tr>
-<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-owner_transferred="daisyden" data-assignee="" data-search="[#3389](https://github.com/intel/torch-xpu-ops/issues/3389) 2026-04-19 [bug skip] xpu record_stream tests fail with cpu backend  daisyden" data-issue="3389">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3389">#3389</a></td>
-<td>2026-04-19</td>
-<td>[Bug Skip] XPU record_stream Tests Fail with CPU<br>Backend</td>
-<td></td>
-<td>daisyden</td>
-<td>Track PR intel/torch-xpu-ops#3383 to merge | No action — investigate further</td>
-<td>Track the upstream Dynamo fixes for record_stream tracing (pytorch#178155 etc.)<br><a href="details/3389.md">→ details</a></td>
-<td>P2</td>
-<td>PR #3383 is OPEN and ports the affected test file test/xpu/dynamo/test_streams_xpu.py; reporter explicitly tied this tracking issue to that…</td>
-<td>daisyden</td>
-<td>module: ut, skipped, module: dynamo</td>
-</tr>
-<tr data-category="Distributed" data-dependency="xccl" data-priority="P2" data-assignee="frost-intel" data-owner_transferred="frost-intel | madhumitha0102" data-search="[#3377](https://github.com/intel/torch-xpu-ops/issues/3377) 2026-04-17 [distributed] assertionerror: distbackenderror not raised in test_c10d_xccl.py::processgroupxcclgroup test::test_abort_in_destroy_pg frost-intel frost-intel | madhumith…" data-issue="3377">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3377">#3377</a></td>
-<td>2026-04-17</td>
-<td>[distributed] AssertionError: DistBackendError not<br>raised in test_c10d_xccl.py::ProcessGroupXCCLGroup<br>Test::test_abort_in_destroy_pg</td>
-<td>frost-intel</td>
-<td>frost-intel | madhumith…</td>
-<td>Track PR pytorch/pytorch#181646 to merge | check_case_avaliablity</td>
-<td>Wire abort() to set work exception_ptr to DistBackendError and rethrow on wait()/synchronize()<br><a href="details/3377.md">→ details</a></td>
-<td>P2</td>
-<td>PR 181646 by assignee frost-intel explicitly fixes #3377 and is OPEN with no review submitted yet (reviewDecision empty). Required CI check…</td>
-<td>madhumitha0102</td>
-<td>module: distributed</td>
-</tr>
-<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="kdrozd-dev" data-owner_transferred="shangerxin" data-search="[#3361](https://github.com/intel/torch-xpu-ops/issues/3361) 2026-04-16 [upstream_ut] test/dynamo/test_higher_order_ops.py test_dropout failed with runtimeerror: cuda not available kdrozd-dev shangerxin" data-issue="3361">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3361">#3361</a></td>
-<td>2026-04-16</td>
-<td>[upstream_ut] test/dynamo/test_higher_order_ops.py<br>test_dropout failed with RuntimeError: CUDA not<br>available</td>
-<td>kdrozd-dev</td>
-<td>shangerxin</td>
-<td>Track PR pytorch/pytorch#174370 to merge | Track PR intel/torch-xpu-ops#3492 to merge | Address C…</td>
-<td>Land the upstream PyTorch fix (pytorch/pytorch#174370) generalizing CUDARngStateHelper to dispatch…<br><a href="details/3361.md">→ details</a></td>
-<td>P2</td>
-<td>pytorch/pytorch#174370 is the upstream fix explicitly referenced from the issue body; live state OPEN, reviewDecision empty, multiple linux…</td>
-<td>shangerxin</td>
-<td></td>
-</tr>
-<tr data-category="Flash Attention" data-dependency="oneDNN" data-priority="P2" data-owner_transferred="shangerxin" data-assignee="" data-search="[#3356](https://github.com/intel/torch-xpu-ops/issues/3356) 2026-04-16 [upstream_ut] dynamo/test_activation_checkpointing .py::test_autocast_flash_attention failed with error tensor-likes are not close!  shangerxin" data-issue="3356">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3356">#3356</a></td>
-<td>2026-04-16</td>
-<td>[upstream_ut] dynamo/test_activation_checkpointing<br>.py::test_autocast_flash_attention failed with<br>error Tensor-likes are not close!</td>
-<td></td>
-<td>shangerxin</td>
-<td>Track PR pytorch/pytorch#169241 to merge</td>
-<td>Land upstream PyTorch PR #169241 to widen tolerances or force the same backend for ref and res in t…<br><a href="details/3356.md">→ details</a></td>
-<td>P2</td>
-<td>Issue body explicitly links pytorch/pytorch#169241 as the upstream fix and the PR modifies test/dynamo/test_activation_checkpointing.py (th…</td>
-<td>shangerxin</td>
-<td>skipped, ut_upstream</td>
-</tr>
-<tr data-category="Torch Operations" data-dependency="SYCL kernel: BatchNormKernels.cpp" data-priority="P2" data-assignee="Stonepia, chuanqi129, Copilot" data-owner_transferred="copilot-swe-agent" data-search="[#3349](https://github.com/intel/torch-xpu-ops/issues/3349) 2026-04-16 [ai_generated] torch.native_batch_norm in eval mode returns populated save_mean/save_invstd on xpu stonepia, chuanqi129, co… copilot-swe-agent" data-issue="3349">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3349">#3349</a></td>
-<td>2026-04-16</td>
-<td>[ai_generated] torch.native_batch_norm in eval<br>mode returns populated save_mean/save_invstd on<br>XPU</td>
-<td>Stonepia, chuanqi129, Co…</td>
-<td>copilot-swe-agent</td>
-<td>Address CI failures on PR intel/torch-xpu-ops#3486 | Track PR intel/torch-xpu-ops#3486 to merge</td>
-<td>In the else branch at BatchNormKernels.cpp:4157-4162, replace the resize/copy with at::native::resi…<br><a href="details/3349.md">→ details</a></td>
-<td>P2</td>
-<td>PR 3486 (OPEN, REVIEW_REQUIRED) has linux-ut (basic)/summary and linux-ut (op_ut)/summary failing; underlying test-in-container jobs pass, …</td>
-<td>laifenxiawucha</td>
-<td></td>
-</tr>
-<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-owner_transferred="shangerxin" data-assignee="" data-search="[#3334](https://github.com/intel/torch-xpu-ops/issues/3334) 2026-04-15 [upstream_ut] test_repros.py reprotests.test_parti tioner_activation_memory_budget_with_unbacked_symi nts failed with error tensor-likes are not close!  shangerxin" data-issue="3334">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3334">#3334</a></td>
-<td>2026-04-15</td>
-<td>[upstream_ut] test_repros.py ReproTests.test_parti<br>tioner_activation_memory_budget_with_unbacked_symi<br>nts failed with error Tensor-likes are not close!</td>
-<td></td>
-<td>shangerxin</td>
-<td>Track PR pytorch/pytorch#174370 to merge | Track PR intel/torch-xpu-ops#3492 to merge | Address C…</td>
-<td>Wait for upstream pytorch/pytorch#174370<br><a href="details/3334.md">→ details</a></td>
-<td>P2</td>
-<td>Upstream PR pytorch/pytorch#174370 is the ToDo tracker referenced in issue body and fix_approach; still OPEN with no review decision. | Co…</td>
-<td>shangerxin</td>
-<td>skipped, ut_upstream</td>
-</tr>
-<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="Copilot" data-owner_transferred="copilot-swe-agent" data-search="[#3331](https://github.com/intel/torch-xpu-ops/issues/3331) 2026-04-14 [ai_generated] torch.compile with slice_scatter produces incorrect backward gradient on xpu copilot copilot-swe-agent" data-issue="3331">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3331">#3331</a></td>
-<td>2026-04-14</td>
-<td>[ai_generated] torch.compile with slice_scatter<br>produces incorrect backward gradient on XPU</td>
-<td>Copilot</td>
-<td>copilot-swe-agent</td>
-<td>Address CI failures on PR intel/torch-xpu-ops#3338 | Track PR intel/torch-xpu-ops#3338 to merge</td>
-<td>Track upstream pytorch/pytorch#180164.<br><a href="details/3331.md">→ details</a></td>
-<td>P2</td>
-<td>linux-ut (op_ut) / summary check is failing on PR #3338 and must be resolved before merge. | PR #3338 is OPEN with reviewDecision=REVIEW_R…</td>
-<td>laifenxiawucha</td>
-<td>ai_generated</td>
-</tr>
-<tr data-category="Flash Attention" data-dependency="driver" data-priority="P2" data-assignee="jmamzax" data-owner_transferred="jmamzax" data-search="[#3326](https://github.com/intel/torch-xpu-ops/issues/3326) 2026-04-14 sporadic test_mem_eff_attention_large_seq_len_unif orm_attention_xpu failures jmamzax jmamzax" data-issue="3326">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3326">#3326</a></td>
-<td>2026-04-14</td>
-<td>Sporadic test_mem_eff_attention_large_seq_len_unif<br>orm_attention_xpu failures</td>
-<td>jmamzax</td>
-<td>jmamzax</td>
-<td>Track PR pytorch/pytorch#180646 to merge | Track PR intel/torch-xpu-ops#3405 to merge | Track PR …</td>
-<td>Land warning-suppression PRs (pytorch#180646, torch-xpu-ops#3405, pytorch#180857) for the math-fall…<br><a href="details/3326.md">→ details</a></td>
-<td>P2</td>
-<td>pytorch/pytorch#180646 is OPEN and APPROVED but has failing CI on linux-jammy-rocm and linux-noble-xpu-n; address CI before merge. | intel…</td>
-<td>Silv3S</td>
-<td>skipped, random</td>
-</tr>
 <tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-owner_transferred="kaileiyx" data-assignee="" data-search="[#3485](https://github.com/intel/torch-xpu-ops/issues/3485) 2026-04-27 [bug skip]: ut new failure: assertionerror: false is not true  kaileiyx" data-issue="3485">
 <td><a href="https://github.com/intel/torch-xpu-ops/issues/3485">#3485</a></td>
 <td>2026-04-27</td>
@@ -9092,71 +8884,6 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>Best fix is upstream in aten/src/ATen/native/TensorCompare.cpp clamp_scalar_out helpers: validate s…<br><a href="details/3425.md">→ details</a></td>
 <td>P3</td>
 <td>Only candidate fix PR pytorch/pytorch#173776 is CLOSED unmerged; no successor PR found via V0/VA/VB/VC/VD/VE in either intel/torch-xpu-ops …</td>
-<td>laifenxiawucha</td>
-<td>ai_generated</td>
-</tr>
-<tr data-category="Torch Operations" data-dependency="SYCL kernel: Atomics.h" data-priority="P3" data-assignee="CuiYifeng" data-owner_transferred="CuiYifeng" data-search="[#3390](https://github.com/intel/torch-xpu-ops/issues/3390) 2026-04-19 clarification requested on mixed non-atomic load and atomic cas in atomics.h cuiyifeng cuiyifeng" data-issue="3390">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3390">#3390</a></td>
-<td>2026-04-19</td>
-<td>Clarification requested on mixed non-atomic load<br>and atomic CAS in Atomics.h</td>
-<td>CuiYifeng</td>
-<td>CuiYifeng</td>
-<td>No action — investigate further</td>
-<td>Replace the initial raw load with <code>auto assumed = target.load(sycl::memory_order_relaxed);</code> after c…<br><a href="details/3390.md">→ details</a></td>
-<td>P3</td>
-<td>V0/VA returned no closing/cross-referenced PRs. VB (issue body) and VE (fix_approach) contain no #N or PR URL references. VC keyword search…</td>
-<td>tonghaining</td>
-<td></td>
-</tr>
-<tr data-category="Others" data-priority="P3" data-assignee="jmamzax" data-owner_transferred="jmamzax" data-search="[#3362](https://github.com/intel/torch-xpu-ops/issues/3362) 2026-04-16 test_nn_xpu.py::testnn::test_cudnn_weight_format skipped (cudnn not available) jmamzax jmamzax" data-issue="3362">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3362">#3362</a></td>
-<td>2026-04-16</td>
-<td>test_nn_xpu.py::TestNN::test_cudnn_weight_format<br>SKIPPED (CUDNN not available)</td>
-<td>jmamzax</td>
-<td>jmamzax</td>
-<td>Address CI failures on PR intel/torch-xpu-ops#3402</td>
-<td>Either remove this test from torch-xpu-ops/test/xpu/test_nn_xpu.py since cuDNN can never be availab…<br><a href="details/3362.md">→ details</a></td>
-<td>P3</td>
-<td>PR #3402 is OPEN and has one MEMBER approval (Silv3S), but CI gate is failing: linux-build (build)/main fails in 20s, linux-ut (op_ut)/summ…</td>
-<td>jmamzax</td>
-<td>bug_fix_stage5</td>
-</tr>
-<tr data-category="Others" data-priority="P3" data-owner_transferred="chuanqi129" data-assignee="" data-search="[#3358](https://github.com/intel/torch-xpu-ops/issues/3358) 2026-04-16 [v.2.12.0] release tracker  chuanqi129" data-issue="3358">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3358">#3358</a></td>
-<td>2026-04-16</td>
-<td>[v.2.12.0] Release Tracker</td>
-<td></td>
-<td>chuanqi129</td>
-<td>Track PR intel/torch-xpu-ops#3360 to merge | Track PR intel/torch-xpu-ops#3406 to merge | Track P…</td>
-<td>Keep open until the 2.12.0 release ships<br><a href="details/3358.md">→ details</a></td>
-<td>P3</td>
-<td>PR #3360 is already MERGED (2026-04-21); release-only changes cherry-pick complete. | PR #3406 is already MERGED (2026-04-21); trunk fix l…</td>
-<td>chuanqi129</td>
-<td></td>
-</tr>
-<tr data-category="Torch Operations" data-dependency="SYCL kernel: ReduceMomentKernels.cpp" data-priority="P3" data-assignee="Stonepia, Copilot" data-owner_transferred="Stonepia" data-search="[#3330](https://github.com/intel/torch-xpu-ops/issues/3330) 2026-04-14 [ai_generated] torch.std on large float32 input returns inf on xpu stonepia, copilot stonepia" data-issue="3330">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3330">#3330</a></td>
-<td>2026-04-14</td>
-<td>[ai_generated] torch.std on large float32 input<br>returns inf on XPU</td>
-<td>Stonepia, Copilot</td>
-<td>Stonepia</td>
-<td>Address CI failures on PR intel/torch-xpu-ops#3337 | Resolve unresolved review comments on PR inte…</td>
-<td>Audit ReduceMomentKernels.cpp Welford reducer to ensure mean/M2 accumulators use higher precision (…<br><a href="details/3330.md">→ details</a></td>
-<td>P3</td>
-<td>linux-ut (op_ut) / summary check is failing on PR #3337; must be green before merge. | Copilot reviewer left 4 unresolved review comments …</td>
-<td>laifenxiawucha</td>
-<td>ai_generated</td>
-</tr>
-<tr data-category="Torch Operations" data-dependency="SYCL kernel: CumprodKernel.cpp" data-priority="P3" data-assignee="Stonepia, Copilot" data-owner_transferred="Stonepia" data-search="[#3329](https://github.com/intel/torch-xpu-ops/issues/3329) 2026-04-14 [ai_generated] torch.cumprod on long float32 input diverges from cpu reference on xpu stonepia, copilot stonepia" data-issue="3329">
-<td><a href="https://github.com/intel/torch-xpu-ops/issues/3329">#3329</a></td>
-<td>2026-04-14</td>
-<td>[ai_generated] torch.cumprod on long float32 input<br>diverges from CPU reference on XPU</td>
-<td>Stonepia, Copilot</td>
-<td>Stonepia</td>
-<td>Track PR intel/torch-xpu-ops#3339 to merge</td>
-<td>Either (a) document/relax tolerance (parallel scan has O(log N) different rounding paths so 1e-3 ac…<br><a href="details/3329.md">→ details</a></td>
-<td>P3</td>
-<td>PR #3339 is OPEN with all CI checks passing (linux-build, linux-ut basic/op_ut, linux-distributed, linux-e2e, preci-lint), but only has aut…</td>
 <td>laifenxiawucha</td>
 <td>ai_generated</td>
 </tr>
