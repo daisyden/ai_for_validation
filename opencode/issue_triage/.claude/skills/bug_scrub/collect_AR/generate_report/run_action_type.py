@@ -110,10 +110,12 @@ def classify(s: str) -> list[str]:
     if re.search(r"owner @\S+.* to skip .* tests", low): cats.add("IMPLEMENT")
     # Phase 4b "File upstream PR to ..."
     if "file upstream pr" in low:                cats.add("IMPLEMENT")
+    if "submit upstream pr" in low:              cats.add("IMPLEMENT")
 
     # --- FILE_ISSUE (was INV_FILE_UPSTREAM) ---
     if "file upstream issue" in low:             cats.add("FILE_ISSUE")
     if "file driver-team issue" in low:          cats.add("FILE_ISSUE")
+    if "file separate upstream issue" in low:    cats.add("FILE_ISSUE")
 
     # --- AWAIT_REPLY ---
     if "respond to open requests" in low:        cats.add("AWAIT_REPLY")
@@ -154,6 +156,8 @@ def classify(s: str) -> list[str]:
         cats.add("MONITOR")
     if re.search(r"owner @\S+ to evaluate\b", low) and "evaluate adding" not in low:
         cats.add("MONITOR")
+    # Phase 4b "Track release X.Y.Z through Phase ..."
+    if re.search(r"track release \d", low):      cats.add("MONITOR")
 
     # --- CHECK_CASES ---
     if "check_case_avaliablity" in low:          cats.add("CHECK_CASES")
