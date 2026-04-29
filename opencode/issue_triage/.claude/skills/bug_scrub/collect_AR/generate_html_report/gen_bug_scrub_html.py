@@ -49,6 +49,7 @@ FILTER_COLUMNS = {
     "Priority":          "priority",
     "Category":          "category",
     "Dependency":        "dependency",
+    "Milestone":         "milestone",
 }
 
 
@@ -127,7 +128,7 @@ def load_issue_metadata(xlsx_path: Path) -> dict[str, dict[str, str]]:
     rows = ws.iter_rows(values_only=True)
     headers = [str(c) if c is not None else "" for c in next(rows)]
     col = {h: i for i, h in enumerate(headers)}
-    needed = ("Issue ID", "Category", "Dependency", "Priority", "Assignee", "owner_transferred")
+    needed = ("Issue ID", "Category", "Dependency", "Priority", "Assignee", "owner_transferred", "Milestone")
     if "Issue ID" not in col:
         return {}
 
@@ -155,6 +156,7 @@ def load_issue_metadata(xlsx_path: Path) -> dict[str, dict[str, str]]:
             "priority":          _get(r, "Priority"),
             "assignee":          _get(r, "Assignee"),
             "owner_transferred": _get(r, "owner_transferred"),
+            "milestone":         _get(r, "Milestone"),
         }
     wb.close()
     return out
@@ -389,6 +391,46 @@ table.ar-table tr.hl td { background: var(--hl) !important; }
 
 /* Lists */
 ul { margin: .3em 0; padding-left: 1.5em; }
+
+/* Multi-select dropdown */
+.ms-dd { position: relative; display: inline-block; }
+.ms-dd-btn {
+  font-size: 13px; padding: 3px 24px 3px 6px; border: 1px solid var(--border);
+  border-radius: 3px; background: white; cursor: pointer; min-width: 160px;
+  text-align: left; position: relative; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 260px;
+}
+.ms-dd-btn::after {
+  content: "\\25BE"; position: absolute; right: 6px; top: 50%;
+  transform: translateY(-50%); color: var(--muted); font-size: 10px;
+}
+.ms-dd-panel {
+  display: none; position: absolute; top: calc(100% + 2px); left: 0;
+  background: white; border: 1px solid var(--border); border-radius: 3px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.12); z-index: 200;
+  max-height: 320px; overflow-y: auto; min-width: 220px; padding: 4px 0;
+}
+.ms-dd.open .ms-dd-panel { display: block; }
+.ms-dd-search {
+  width: calc(100% - 12px); margin: 4px 6px; padding: 3px 5px;
+  border: 1px solid var(--border); border-radius: 3px; font-size: 12px;
+}
+.ms-dd-item {
+  display: flex; align-items: center; gap: 6px; padding: 3px 8px;
+  cursor: pointer; font-size: 12px; user-select: none;
+}
+.ms-dd-item:hover { background: #f1f3f5; }
+.ms-dd-item input { margin: 0; }
+.ms-dd-item .count { color: var(--muted); margin-left: auto; font-size: 11px; }
+.ms-dd-actions {
+  display: flex; gap: 4px; padding: 4px 6px; border-top: 1px solid var(--border);
+  margin-top: 2px; position: sticky; bottom: 0; background: white;
+}
+.ms-dd-actions button {
+  flex: 1; font-size: 11px; padding: 2px 4px; border: 1px solid var(--border);
+  border-radius: 3px; background: white; cursor: pointer;
+}
+.ms-dd-actions button:hover { background: #f1f3f5; }
 """
 
 JS = """
@@ -420,10 +462,14 @@ function onDoneToggle(e) {
 }
 
 // ---- Filter bar ----
-const FILTER_DIMS = ['assignee', 'owner_transferred', 'priority', 'category', 'dependency'];
+// UI dimensions (what the user sees). owner_transferred is intentionally
+// NOT in this list — selecting an Assignee implicitly matches rows whose
+// owner_transferred token equals the selected assignee, so a separate
+// dropdown would be redundant.
+const FILTER_DIMS = ['assignee', 'priority', 'category', 'milestone', 'dependency'];
 const FILTER_LABELS = {
-  assignee: 'Assignee', owner_transferred: 'Owner Transferred',
-  priority: 'Priority', category: 'Category', dependency: 'Dependency'
+  assignee: 'Assignee', priority: 'Priority', category: 'Category',
+  milestone: 'Milestone', dependency: 'Dependency'
 };
 
 // Dimensions whose raw cell value may carry multiple comma-separated
@@ -450,14 +496,128 @@ function tokensFor(dim, raw) {
 function collectValues(dim) {
   // {token -> count} so we can label grouped options like "SYCL kernel (50)".
   const counts = new Map();
-  document.querySelectorAll(`[data-${dim}]`).forEach(tr => {
-    const raw = (tr.dataset[dim] || '').trim();
-    for (const tok of tokensFor(dim, raw)) {
-      counts.set(tok, (counts.get(tok) || 0) + 1);
-    }
-  });
+  // For the Assignee dropdown, also surface owner_transferred tokens so a
+  // user can pick a person who has only ever appeared via transfer.
+  const sourceDims = (dim === 'assignee') ? ['assignee', 'owner_transferred'] : [dim];
+  for (const sd of sourceDims) {
+    document.querySelectorAll(`[data-${sd}]`).forEach(tr => {
+      const raw = (tr.dataset[sd] || '').trim();
+      for (const tok of tokensFor(sd, raw)) {
+        counts.set(tok, (counts.get(tok) || 0) + 1);
+      }
+    });
+  }
   return Array.from(counts.entries())
     .sort((a, b) => a[0].localeCompare(b[0], undefined, {numeric: true}));
+}
+
+// Selected-token state, per dimension.
+const SELECTED = Object.fromEntries(FILTER_DIMS.map(d => [d, new Set()]));
+
+function buildMultiSelect(dim, items) {
+  const dd = document.createElement('div');
+  dd.className = 'ms-dd';
+  dd.dataset.dim = dim;
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'ms-dd-btn';
+  btn.textContent = '(all)';
+  dd.appendChild(btn);
+
+  const panel = document.createElement('div');
+  panel.className = 'ms-dd-panel';
+
+  const search = document.createElement('input');
+  search.type = 'text';
+  search.className = 'ms-dd-search';
+  search.placeholder = 'filter...';
+  panel.appendChild(search);
+
+  const list = document.createElement('div');
+  list.className = 'ms-dd-list';
+  panel.appendChild(list);
+
+  for (const [tok, count] of items) {
+    const label = document.createElement('label');
+    label.className = 'ms-dd-item';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = tok;
+    cb.addEventListener('change', () => {
+      if (cb.checked) SELECTED[dim].add(tok);
+      else SELECTED[dim].delete(tok);
+      updateButtonLabel(dd, dim);
+      applyFilters();
+    });
+    const txt = document.createElement('span');
+    const display = (dim === 'dependency' && tok === SYCL_KERNEL_GROUP)
+      ? `${tok}` : tok;
+    txt.textContent = display;
+    const cnt = document.createElement('span');
+    cnt.className = 'count';
+    cnt.textContent = count;
+    label.appendChild(cb);
+    label.appendChild(txt);
+    label.appendChild(cnt);
+    list.appendChild(label);
+  }
+
+  search.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    list.querySelectorAll('.ms-dd-item').forEach(it => {
+      const t = it.querySelector('span').textContent.toLowerCase();
+      it.style.display = (!q || t.includes(q)) ? '' : 'none';
+    });
+  });
+
+  const actions = document.createElement('div');
+  actions.className = 'ms-dd-actions';
+  const clr = document.createElement('button');
+  clr.type = 'button';
+  clr.textContent = 'Clear';
+  clr.addEventListener('click', () => {
+    SELECTED[dim].clear();
+    list.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+    updateButtonLabel(dd, dim);
+    applyFilters();
+  });
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.textContent = 'Close';
+  close.addEventListener('click', () => dd.classList.remove('open'));
+  actions.appendChild(clr);
+  actions.appendChild(close);
+  panel.appendChild(actions);
+
+  dd.appendChild(panel);
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const wasOpen = dd.classList.contains('open');
+    document.querySelectorAll('.ms-dd.open').forEach(d => d.classList.remove('open'));
+    if (!wasOpen) dd.classList.add('open');
+  });
+  panel.addEventListener('click', (e) => e.stopPropagation());
+
+  return dd;
+}
+
+function updateButtonLabel(dd, dim) {
+  const btn = dd.querySelector('.ms-dd-btn');
+  const sel = SELECTED[dim];
+  if (sel.size === 0) {
+    btn.textContent = '(all)';
+    btn.title = '';
+  } else if (sel.size === 1) {
+    const v = Array.from(sel)[0];
+    btn.textContent = v;
+    btn.title = v;
+  } else {
+    const vs = Array.from(sel).join(', ');
+    btn.textContent = `${sel.size} selected`;
+    btn.title = vs;
+  }
 }
 
 function buildFilterBar() {
@@ -467,21 +627,9 @@ function buildFilterBar() {
   for (const dim of FILTER_DIMS) {
     const wrap = document.createElement('label');
     wrap.textContent = FILTER_LABELS[dim];
-    const sel = document.createElement('select');
-    sel.id = 'filter-' + dim;
-    const optAll = document.createElement('option');
-    optAll.value = ''; optAll.textContent = '(all)';
-    sel.appendChild(optAll);
-    for (const [tok, count] of collectValues(dim)) {
-      const opt = document.createElement('option');
-      opt.value = tok;
-      // Annotate with the count for grouped tokens (Dependency = SYCL kernel).
-      opt.textContent = (dim === 'dependency' && tok === SYCL_KERNEL_GROUP)
-        ? `${tok} (${count})` : tok;
-      sel.appendChild(opt);
-    }
-    sel.addEventListener('change', applyFilters);
-    wrap.appendChild(sel);
+    const dd = buildMultiSelect(dim, collectValues(dim));
+    dd.id = 'filter-' + dim;
+    wrap.appendChild(dd);
     bar.appendChild(wrap);
   }
 
@@ -511,7 +659,12 @@ function buildFilterBar() {
   const reset = document.createElement('button');
   reset.textContent = 'Reset filters';
   reset.addEventListener('click', () => {
-    document.querySelectorAll('.filter-bar select').forEach(s => s.value = '');
+    for (const dim of FILTER_DIMS) {
+      SELECTED[dim].clear();
+      const dd = document.getElementById('filter-' + dim);
+      dd.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+      updateButtonLabel(dd, dim);
+    }
     document.getElementById('filter-search').value = '';
     document.getElementById('filter-hide-done').checked = false;
     applyFilters();
@@ -543,14 +696,27 @@ function buildFilterBar() {
   bar.appendChild(stats);
 
   document.body.insertBefore(bar, document.body.firstChild);
+
+  // dismiss any open dropdown on outside click
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.ms-dd.open').forEach(d => d.classList.remove('open'));
+  });
+}
+
+function rowMatchesDim(tr, dim, selectedSet) {
+  if (selectedSet.size === 0) return true;
+  // Assignee filter also matches owner_transferred tokens.
+  const sourceDims = (dim === 'assignee') ? ['assignee', 'owner_transferred'] : [dim];
+  for (const sd of sourceDims) {
+    const tokens = tokensFor(sd, (tr.dataset[sd] || '').trim());
+    for (const t of tokens) {
+      if (selectedSet.has(t)) return true;
+    }
+  }
+  return false;
 }
 
 function applyFilters() {
-  const filters = {};
-  for (const dim of FILTER_DIMS) {
-    const v = document.getElementById('filter-' + dim).value;
-    if (v) filters[dim] = v;  // case-preserved; tokens compared verbatim
-  }
   const search = document.getElementById('filter-search').value.trim().toLowerCase();
   const hideDone = document.getElementById('filter-hide-done').checked;
 
@@ -558,9 +724,8 @@ function applyFilters() {
   document.querySelectorAll('table.ar-table tbody tr').forEach(tr => {
     total++;
     let show = true;
-    for (const [dim, val] of Object.entries(filters)) {
-      const tokens = tokensFor(dim, (tr.dataset[dim] || '').trim());
-      if (!tokens.includes(val)) { show = false; break; }
+    for (const dim of FILTER_DIMS) {
+      if (!rowMatchesDim(tr, dim, SELECTED[dim])) { show = false; break; }
     }
     if (show && search) {
       show = (tr.dataset.search || '').includes(search);

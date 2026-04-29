@@ -20,7 +20,7 @@ This report groups the 379 tracked torch-xpu-ops issues into action buckets deri
 | External dependency (non-upstream-pytorch, non-SYCL-kernel) | — | 103 |
 | Upstream-pytorch | — | 114 |
 | CPU fallback | — | 11 |
-| Filed within last 7 days | — | 33 |
+| Filed within last 7 days | — | 32 |
 
 <a id="sec-2"></a>
 ## 2. Index
@@ -900,7 +900,7 @@ Issues where the XPU operator is missing and a CPU fallback is registered in tor
 
 _[↑ Back to Index](#sec-2)_
 
-Issues created on or after 2026-04-22, excluding terminal-QA rows.  —  33 issues.
+Issues created on or after 2026-04-22, excluding terminal-QA rows.  —  32 issues.
 
 | Issue | Created | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -913,7 +913,6 @@ Issues created on or after 2026-04-22, excluding terminal-QA rows.  —  33 issu
 | [#3455](https://github.com/intel/torch-xpu-ops/issues/3455) | 2026-04-24 | [E2E][Regression]<br>Huggingface/Timm_models/Torchbench got<br>fail_to_run, AssertionError: Torch not compiled<br>with CUDA enabled |  | mengfei25 | File upstream PR to pytorch/pytorch guarding torch.cuda.get_device_capability() in torch/_inductor/… | Upstream PyTorch fix: in autoheuristic.py replace hardcoded torch.cuda.get_device_capability() with…<br>[→ details](details/3455.md) | P1 | Root cause is fully identified (upstream PR pytorch/pytorch#181038, commit 620ac21, in main since 2026-04-23) but no fix PR has been filed … | kaileiyx |  |
 | [#3450](https://github.com/intel/torch-xpu-ops/issues/3450) | 2026-04-23 | [ai_generated] XPU crash on torch.linalg.ldl_solve<br>with invalid pivots instead of raising validation<br>error | laifenxiawucha, Copilot | copilot-swe-agent | Address CI failures on PR intel/torch-xpu-ops#3461 \| Track PR intel/torch-xpu-ops#3461 to merge | Confirm pytorch commit be51081 / PR #181032 is in the XPU nightly.<br>[→ details](details/3450.md) | P1 | PR #3461 is OPEN and APPROVED by MEMBER chuanqi129, but linux-ut (op_ut) / summary check failed; op author (copilot-swe-agent) needs to add… | laifenxiawucha | ai_generated |
 | [#3449](https://github.com/intel/torch-xpu-ops/issues/3449) | 2026-04-23 | [ai_generated] XPU wrong result for torch.compile<br>adaptive_avg_pool2d flatten-sum fusion | laifenxiawucha, Copilot | copilot-swe-agent | Address CI failures on PR intel/torch-xpu-ops#3498 \| Track PR intel/torch-xpu-ops#3498 to merge | Cherry-pick / wait for upstream pytorch/pytorch#180898 (Inductor contiguous-check / exact-stride fi…<br>[→ details](details/3449.md) | P1 | PR #3498 is OPEN with reviewDecision=REVIEW_REQUIRED. CI status shows linux-e2e-summary and linux-ut (basic) summary failing — these must b… | laifenxiawucha | ai_generated |
-| [#3417](https://github.com/intel/torch-xpu-ops/issues/3417) | 2026-04-22 | [release/2.12] New test cases failed compared with<br>2.11 |  | mengfei25 | No action — investigate further | Triage as a tracking row only<br>[→ details](details/3417.md) | P1 | Meta/tracking issue. V0 GraphQL closedByPullRequestsReferences is empty; VA timeline has no cross-references; VB body refs are all to sub-i… | mengfei25 | os: Ubuntu, hw: BMG |
 | [#3500](https://github.com/intel/torch-xpu-ops/issues/3500) | 2026-04-28 | [Bug Skip]: New failed test cases 2026-4-28 |  | Silv3S | No action — investigate further | For test_opcheck_fails_basic_xpu: register the test custom op for XPU (or relax the assertRaisesReg…<br>[→ details](details/3500.md) | P2 | The issue has zero comments and no PR (Vectors 0/A returned empty; Vectors C/D searches on 'test_opcheck_fails_basic', 'test_dynamic_lstm',… | kaileiyx | skipped |
 | [#3483](https://github.com/intel/torch-xpu-ops/issues/3483) | 2026-04-26 | FX profiler tests fail on XPU due to Level Zero /<br>Unified Runtime event names in trace |  |  | Track PR 3475 to merge \| RETRIAGE_PRS | Preferred: filter the XPU trace in the test helper to keep only the launch-equivalent event (zeComm…<br>[→ details](details/3483.md) | P2 | PR 3475 (OPEN, CI green for completed checks, only Copilot review comments) ports the three failing FX profiler tests to XPU and is explici… | daisyden | module: profiler |
 | [#3482](https://github.com/intel/torch-xpu-ops/issues/3482) | 2026-04-26 | New failed test cases 2026-04-26 |  | zxd1997066 | Track PR 3513 to merge \| No action — investigate further \| check_case_avaliablity | Split into per-area child issues: SDPA nested broadcasting -> torch-xpu-ops SDPA (Flash Attention)<br>[→ details](details/3482.md) | P2 | PR intel/torch-xpu-ops#3513 is OPEN with one APPROVED review and CI in progress; explicitly 'Partially fixes' #3482. Awaiting merge. \| PR … | zxd1997066 | module: ut, skipped |
