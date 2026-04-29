@@ -40,31 +40,56 @@ Verdict: `"label_not_target_and_close"` (full short-circuit), `"label_not_target
 UNION + DEDUPE candidates by (repo, pr_number).
 
 ### VERIFICATION (3-tier, mandatory per candidate)
-- **VERIFIED — github_linked**: appears in V0 result.
-- **VERIFIED — explicit_reference**: PR body or commit message has clean `#<N>` / `Fixes #<N>` / `Closes #<N>` / `<owner>/<repo>#<N>` / full issue URL, NOT inside an excluded section.
-- **VERIFIED — content_match**: explore-style reasoning shows file overlap + symptom match + plausible timing. Justify in `match_reasoning`.
-- **REJECTED**: fails all of the above.
+- **VERIFIED — github_linked**: appears in V0 `closedByPullRequestsReferences` result. (GitHub itself asserts the PR closes this issue.)
+- **VERIFIED — explicit_reference**: PR body or commit message contains a *fixing-verb* reference to this issue: `Fixes #<N>`, `Closes #<N>`, `Resolves #<N>`, `Fix for #<N>`, `closes intel/torch-xpu-ops#<N>`, or full issue URL with one of those verbs in the same sentence — NOT inside an excluded section.
+  - A bare `#<N>` mention, "see #<N>", "related to #<N>", "surfaced by #<N>", "exposed by #<N>", "tracked in #<N>", "follow-up to #<N>", "depends on #<N>" does **NOT** qualify. Mark these `verdict: "REJECTED"`, `rejection_reason: "reference_only"`.
+  - When ambiguous, read the PR diff intent: a PR whose diff modifies the kernel/op/file named in the issue's `fix_approach` is a fix candidate; a PR that only adds/enables tests for an already-failing case is **not** a fix.
+- **VERIFIED — content_match**: explore-style reasoning shows file overlap + symptom match + plausible timing. Justify in `match_reasoning`. Same fix-vs-surface caveat applies: enabling tests is not fixing.
+- **REJECTED**: fails all of the above. Always set `rejection_reason` (`"reference_only"`, `"no_overlap"`, `"wrong_symptom"`, `"timing_mismatch"`, etc.).
 - **UNVERIFIABLE_PRIVATE**: inner-source / private repo.
 
+### RELATIONSHIP CLASSIFICATION (mandatory for every VERIFIED candidate)
+
+For each VERIFIED PR, classify the issue↔PR relationship:
+
+| relationship   | Meaning                                                                                | Flows into action_TBD?                  |
+|----------------|----------------------------------------------------------------------------------------|------------------------------------------|
+| `fixes`        | PR's intent is to make this issue's failure stop reproducing                           | YES — drives the DERIVATION RULE table   |
+| `supersedes`   | PR replaces a previous fixing PR for this issue                                        | YES — recurse on this PR                 |
+| `surfaces`     | PR exposes/discovers this issue (e.g. enables tests that were already failing)         | NO — log only                            |
+| `related`      | Same module/area but neither fixes nor surfaces                                        | NO — log only                            |
+| `unknown`      | Insufficient evidence                                                                  | NO — treat as `related`                  |
+
+Only `fixes` and `supersedes` candidates contribute action_TBD verbs (`Track PR …`, `Verify fix from merged PR …`). `surfaces` and `related` are recorded for transparency but produce **no** PR-tracking verbs and **no** owner_transferred attribution to the PR author.
+
+If after classification there are zero `fixes`/`supersedes` candidates, treat the issue as having zero VERIFIED PRs for action_TBD purposes — fall back to `"No action — investigate further"` (per the action_TBD derivation rule).
+
+**Worked example (do NOT repeat this mistake)**: Issue intel/torch-xpu-ops#3530 body says "tracks an XPU numerical-accuracy gap surfaced (but not introduced) by PR #3475". PR #3475 enables 22 files of CUDA test coverage; it does not modify the `index_add_` kernel referenced in #3530's `fix_approach`. Correct classification: `relationship = "surfaces"`, do NOT emit `Track PR …#3475`. Correct verb: `"No action — investigate further"`. Correct `owner_transferred`: blank (no Assignee, and Reporter is forbidden per the owner_transferred rule).
+
 ### STEP 2.5 — LIVE PR-STATE RE-CHECK (mandatory before emitting verdict)
-For every VERIFIED PR:
+For every VERIFIED PR (regardless of relationship — we still record live state):
 ```
 gh pr view <pr> --repo <owner/name> --json state,mergedAt,closedAt,updatedAt,reviewDecision
 ```
-State precedence:
+State precedence (only applied when `relationship in {"fixes","supersedes"}`):
 - **MERGED** → action: `"Verify fix from merged PR <ref> and close"`
 - **OPEN** → action: `"Track PR <ref> to merge"`
 - **CLOSED unmerged** → re-run VC/VD/VE for replacement; if found use that. If still none → `"RETRIAGE_PRS"`.
 
-### STEP 3 — check_pr_status 4 GATES (only for OPEN VERIFIED PRs)
-- **Gate 1 Resolving**: unresolved review threads (`gh api repos/<repo>/pulls/<n>/reviews`, comments).
+For `relationship in {"surfaces","related","unknown"}`: live_state is recorded for transparency but produces NO action_TBD verb.
+
+### STEP 3 — check_pr_status 4 GATES (only for OPEN VERIFIED `fixes`/`supersedes` PRs)
+- **Gate 1 Resolving**: unresolved review threads (`gh api repos/<repo>/pulls/<n>/reviews`, comments). Capture the `createdAt` of the most recent unresolved-thread comment.
 - **Gate 2 Review**: approvals vs required (use `reviewDecision`).
-- **Gate 3 CI**: `gh pr checks <n> --repo <repo>`.
+- **Gate 3 CI**: `gh pr checks <n> --repo <repo>`. Capture `completedAt` of the latest failing/required check.
 - **Gate 4 Merge**: ready to merge?
 Identify the blocking gate and the specific owner action.
 
+### STEP 3.5 — STALENESS COMPUTATION (mandatory)
+Compute "now" from bash: `date -u +%Y-%m-%dT%H:%M:%SZ`. Then for every gating signal and every comment AR, compute `age_days = (now - signal_timestamp).days` and `stale = age_days > 7`.
+
 ### PART 2 — COMMENT AR
-For each issue comment, classify by author association (OWNER/COLLABORATOR/MEMBER/CONTRIBUTOR/NONE) and request type (`blocking` | `informational` | `answered`). Extract unresolved blocking requests with the owner who should act.
+For each issue comment from `gh issue view <N> --json comments`, capture `createdAt`, classify by author association (OWNER/COLLABORATOR/MEMBER/CONTRIBUTOR/NONE) and request type (`blocking` | `informational` | `answered`). For each blocking unresolved request, set `created_at`, compute `age_days` and `stale = age_days > 7`, and record `owner_should_act`.
 
 ## Output JSON (write ONE file, no other side effects)
 
@@ -83,10 +108,15 @@ Path: `/home/daisydeng/pytorch/agent_space/phase4b/wave<W>/result_<N>.json`
       "vector": "0|A|B|C|D|E",
       "verdict": "VERIFIED|REJECTED|UNVERIFIABLE_PRIVATE",
       "verdict_source": "github_linked|explicit_reference|content_match",
+      "rejection_reason": "reference_only|no_overlap|wrong_symptom|timing_mismatch|null",
+      "relationship": "fixes|supersedes|surfaces|related|unknown",
       "live_state": "MERGED|OPEN|CLOSED",
       "live_merged_at": null,
       "review_decision": null,
       "blocking_gate": null,
+      "blocking_signal_at": null,
+      "blocking_signal_age_days": null,
+      "blocking_signal_stale": false,
       "match_reasoning": "...",
       "files_overlap": []
     }
@@ -97,6 +127,9 @@ Path: `/home/daisydeng/pytorch/agent_space/phase4b/wave<W>/result_<N>.json`
       "author": "login",
       "association": "OWNER|COLLABORATOR|MEMBER|CONTRIBUTOR|NONE",
       "request_type": "blocking|informational|answered",
+      "created_at": "2026-04-01T12:00:00Z",
+      "age_days": 0,
+      "stale": false,
       "text": "...",
       "owner_should_act": "login"
     }
@@ -114,8 +147,11 @@ Path: `/home/daisydeng/pytorch/agent_space/phase4b/wave<W>/result_<N>.json`
 - `"RETRIAGE_PRS"`
 - `"label not_target and close"`
 - `"Resolve unresolved review comments on PR <ref>"`
+- `"Resolve unresolved review comments on PR <ref> (>1 week)"` — when latest unresolved-thread comment > 7 days old
 - `"Address CI failures on PR <ref>"`
+- `"Address CI failures on PR <ref> (>1 week)"` — when latest failing required check `completedAt` > 7 days old
 - `"Address comment AR from <owner>: <topic>"`
+- `"Address comment AR from <owner> (>1 week): <topic>"` — when the comment_ar entry has `stale: true` (note the space before `(>1 week)`)
 - `"No action — investigate further"`
 
 Free-form is allowed if no canonical fits.
@@ -135,14 +171,16 @@ VERIFIED PR candidate. The verb is derived deterministically from the
 | CLOSED unmerged AND replacement found via VC/VD/VE re-search | (recurse on the replacement PR's live_state) | (recurse) |
 
 Additional rules:
-- If the issue is OPEN and zero VERIFIED PR candidates exist, emit
+- If the issue is OPEN and zero VERIFIED PR candidates with `relationship in {"fixes","supersedes"}` exist, emit
   `"No action — investigate further"` (NEED_ACTION) — do NOT leave
-  `action_TBD` empty.
+  `action_TBD` empty. PR candidates classified as `surfaces`/`related` do NOT count toward this check.
 - If `not_target_verdict == "label_not_target_and_close"`, emit
   `"label not_target and close"` and you MAY skip PR-derived verbs.
-- For OPEN VERIFIED PRs that fail one of the 4 gates, ALSO emit the
+- For OPEN VERIFIED PRs (relationship `fixes`/`supersedes`) that fail one of the 4 gates, ALSO emit the
   matching gate verb (`"Resolve unresolved review comments on PR <ref>"`,
   `"Address CI failures on PR <ref>"`, etc.) in addition to `Track PR ... to merge`.
+- **Staleness suffix**: when emitting a gate verb, check the `blocking_signal_stale` flag for that gate. If true (signal > 7 days old), append ` (>1 week)` per the canonical phrases. The `Track PR <ref> to merge` verb itself does NOT get the stale suffix — only gate verbs do.
+- **Comment AR staleness**: when emitting `Address comment AR from <owner>: <topic>`, check the originating `comment_ar[].stale` flag. If true, emit the `(>1 week)` form instead. Note the required space before `(>1 week)`.
 - For each verb emitted, write a corresponding 1-sentence justification in
   `action_reason` (same array length is preferred but not required;
   downstream tooling unions across both arrays).
