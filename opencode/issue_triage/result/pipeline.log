@@ -1,0 +1,44 @@
+[2026-04-28 01:04:09]   Matching CI results from test_cases_all.xlsx...
+[2026-04-28 01:04:09]     Progress: 500/1638
+[2026-04-28 01:04:09]     Progress: 1000/1638
+[2026-04-28 01:04:09]     Progress: 1500/1638
+[2026-04-28 01:04:09]   PASS 1 complete: 1042 matched, 596 not found
+[2026-04-29 00:57:07]   Matching CI results from test_cases_all.xlsx...
+[2026-04-29 00:57:07]     Progress: 500/1678
+[2026-04-29 00:57:07]     Progress: 1000/1678
+[2026-04-29 00:57:07]     Progress: 1500/1678
+[2026-04-29 00:57:07]   PASS 1 complete: 1081 matched, 597 not found
+[2026-04-29 00:57:07]   [PASS 2/5] Extracting torch ops from test cases and error messages...
+[2026-04-29 00:57:07] --------------------------------------------------------------------------------
+[2026-04-29 00:57:41]   [PASS2] Issue:3501 | Class:TestAOTAutograd | Case:test_mark_activations_dynamic_with_nested
+[2026-04-29 00:57:41]            Ops:aten.linear,aten.matmul,aten.add | Time:21.257s | Method:LLM
+[2026-04-29 00:58:05]   [PASS2] Issue:3501 | Class:TestAOTAutograd | Case:test_mark_outputs_dynamic_use_autograd_False
+[2026-04-29 00:58:05]            Ops:aten.add,aten.mm,aten.conv2d | Time:23.197s | Method:LLM
+[2026-04-29 00:58:52]   Matching CI results from test_cases_all.xlsx...
+[2026-04-29 00:58:52]     Progress: 500/1678
+[2026-04-29 00:58:52]     Progress: 1000/1678
+[2026-04-29 00:58:52]     Progress: 1500/1678
+[2026-04-29 00:58:52]   PASS 1 complete: 1081 matched, 597 not found
+[2026-04-29 00:58:52]   [PASS 2/5] Extracting torch ops from test cases and error messages...
+[2026-04-29 00:58:52] --------------------------------------------------------------------------------
+[2026-04-29 00:59:26]   [PASS2] Issue:3501 | Class:TestAOTAutograd | Case:test_mark_activations_dynamic_with_nested
+[2026-04-29 00:59:26]            Ops:aten.linear,aten.matmul,aten.add | Time:21.269s | Method:LLM
+[2026-04-29 00:59:50]   [PASS2] Issue:3501 | Class:TestAOTAutograd | Case:test_mark_outputs_dynamic_use_autograd_False
+[2026-04-29 00:59:50]            Ops:aten.add,aten.mm,aten.conv2d | Time:23.203s | Method:LLM
+[2026-04-29 01:00:09]   [PASS2] Issue:3501 | Class:TestAOTAutograd | Case:test_mark_outputs_dynamic_use_autograd_True
+[2026-04-29 01:00:09]            Ops:aten.add,aten.mm,aten.conv2d | Time:19.883s | Method:LLM
+[2026-04-29 01:00:43]   [PASS2] Issue:3501 | Class:TestAOTAutogradWithCache | Case:test_mark_activations_dynamic_with_nested
+[2026-04-29 01:00:43]            Ops:aten.linear,aten.matmul,aten.add | Time:21.277s | Method:LLM
+[2026-04-29 01:01:07]   [PASS2] Issue:3501 | Class:TestAOTAutogradWithCache | Case:test_mark_outputs_dynamic_use_autograd_False
+[2026-04-29 01:01:07]            Ops:aten.add,aten.mm,aten.conv2d | Time:23.195s | Method:LLM
+[2026-04-29 01:01:26]   [PASS2] Issue:3501 | Class:TestAOTAutogradWithCache | Case:test_mark_outputs_dynamic_use_autograd_True
+[2026-04-29 01:01:26]            Ops:aten.add,aten.mm,aten.conv2d | Time:19.863s | Method:LLM
+[2026-04-29 01:10:25]   Matching CI results from test_cases_all.xlsx...
+[2026-04-29 01:10:25]     Progress: 500/1678
+[2026-04-29 01:10:25]     Progress: 1000/1678
+[2026-04-29 01:10:25]     Progress: 1500/1678
+[2026-04-29 01:10:25]   PASS 1 complete: 1081 matched, 597 not found
+[2026-04-29 05:57:06]   Matching CI results from test_cases_all.xlsx...
+[2026-04-29 05:57:06]     Progress: 500/1482
+[2026-04-29 05:57:06]     Progress: 1000/1482
+[2026-04-29 05:57:06]   PASS 1 complete: 1035 matched, 447 not found
