@@ -20,7 +20,7 @@ This report groups the 379 tracked torch-xpu-ops issues into action buckets deri
 | External dependency (non-upstream-pytorch, non-SYCL-kernel) | — | 103 |
 | Upstream-pytorch | — | 114 |
 | CPU fallback | — | 11 |
-| Filed within last 7 days | — | 32 |
+| Filed within last 7 days | — | 31 |
 
 <a id="sec-2"></a>
 ## 2. Index
@@ -900,7 +900,7 @@ Issues where the XPU operator is missing and a CPU fallback is registered in tor
 
 _[↑ Back to Index](#sec-2)_
 
-Issues created on or after 2026-04-22, excluding terminal-QA rows.  —  32 issues.
+Issues created on or after 2026-04-22, excluding terminal-QA rows.  —  31 issues.
 
 | Issue | Created | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -927,7 +927,6 @@ Issues created on or after 2026-04-22, excluding terminal-QA rows.  —  32 issu
 | [#3445](https://github.com/intel/torch-xpu-ops/issues/3445) | 2026-04-23 | [ai_generated] XPU misses out-of-bounds check for<br>empty source tensor and diverges from CPU |  |  | No action — investigate further | In src/ATen/native/xpu/sycl/Indexing.cpp index_select kernel: add explicit TORCH_CHECK that self.si…<br>[→ details](details/3445.md) | P2 | V0 GraphQL closedByPullRequestsReferences: empty. \| VA timeline cross-references: none. \| VB body refs after stripping ### Versions / cod… | laifenxiawucha | ai_generated |
 | [#3439](https://github.com/intel/torch-xpu-ops/issues/3439) | 2026-04-23 | [ai_generated] Low-level _fft_c2r accepts<br>inconsistent last_dim_size and can crash instead<br>of validating input | Stonepia, Copilot | Stonepia | Track PR intel/torch-xpu-ops#3458 to merge | Mirror upstream pytorch/pytorch#181060 in third_party/torch-xpu-ops/src/ATen/native/xpu/mkl/Spectra…<br>[→ details](details/3439.md) | P2 | PR #3458 is OPEN (draft, mergeable_state=blocked) with reviewDecision=REVIEW_REQUIRED and Stonepia requested as reviewer; no CI checks repo… | laifenxiawucha | ai_generated |
 | [#3431](https://github.com/intel/torch-xpu-ops/issues/3431) | 2026-04-23 | [ai_generated] XPU FFT rejects bfloat16 inputs<br>instead of promoting to float32 |  | Alokksinha00 | Track PR pytorch/pytorch#180766 to merge | Land/cherry-pick upstream pytorch/pytorch#180766 to extend `promote_type_fft` in SpectralOps.cpp to…<br>[→ details](details/3431.md) | P2 | Verified upstream PR pytorch/pytorch#180766 explicitly referenced in the issue body is currently OPEN, has no formal review decision yet, a… | laifenxiawucha | ai_generated |
-| [#3418](https://github.com/intel/torch-xpu-ops/issues/3418) | 2026-04-22 | sdpa crash in torch.export.export, same case pass<br>in cuda(A100) | LuFinch | LuFinch | Track PR pytorch/pytorch#181084 to merge \| Resolve unresolved review comments on PR pytorch/pytorc… | Track upstream pytorch/pytorch#181084 to land/cherry-pick<br>[→ details](details/3418.md) | P2 | Assignee LuFinch identified pytorch/pytorch#181084 as the fix; PR is OPEN, not merged. \| PR reviewDecision is CHANGES_REQUESTED — author m… | sywangyi |  |
 | [#3485](https://github.com/intel/torch-xpu-ops/issues/3485) | 2026-04-27 | [Bug Skip]: UT new failure: AssertionError: False<br>is not true |  | kaileiyx | No action — investigate further \| check_case_avaliablity | Upstream fix: in the OpInfo for nn.functional.linear_cross_entropy (torch/testing/_internal/opinfo/…<br>[→ details](details/3485.md) | P3 | V0 closedByPullRequestsReferences returned no PRs. Timeline cross-refs returned no PRs. Issue body contains no PR references (only error lo… | kaileiyx | skipped |
 | [#3484](https://github.com/intel/torch-xpu-ops/issues/3484) | 2026-04-27 | [Bug Skip]: UT new failure :<br>torch.autograd.gradcheck.GradcheckError: Backward<br>is not reentrant |  | kaileiyx | No action — investigate further \| check_case_avaliablity | Upstream fix in the linear_cross_entropy OpInfo: set gradcheck_nondet_tol to a small positive value…<br>[→ details](details/3484.md) | P3 | Issue has no linked PR via GraphQL/timeline, no body PR refs, and no authoritative not-target declaration. Upstream candidate PR pytorch/py… | kaileiyx | skipped |
 | [#3480](https://github.com/intel/torch-xpu-ops/issues/3480) | 2026-04-26 | [upstream_ut] test_custom_ops.py RuntimeError:<br>element 0 of tensors does not require grad and<br>does not have a grad_fn | BartoszKokoszko |  | No action — investigate further | Update the assertRaisesRegex pattern in test_custom_ops_xpu.py to match the current upstream error…<br>[→ details](details/3480.md) | P3 |  | zxd1997066 | module: ut, skipped |

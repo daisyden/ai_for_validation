@@ -416,22 +416,24 @@ ul { margin: .3em 0; padding-left: 1.5em; }
   border: 1px solid var(--border); border-radius: 3px; font-size: 12px;
 }
 .ms-dd-item {
-  display: flex; flex-direction: row; align-items: center; gap: 8px;
-  padding: 4px 10px; cursor: pointer; font-size: 12px; user-select: none;
+  display: flex; flex-direction: row; align-items: center; gap: 4px;
+  padding: 3px 10px; cursor: pointer; font-size: 12px; user-select: none;
   color: var(--fg);
 }
 .ms-dd-item:hover { background: #f1f3f5; }
 .ms-dd-item input[type=checkbox] {
   margin: 0; flex: 0 0 auto; width: 14px; height: 14px; accent-color: var(--accent);
 }
-.ms-dd-item > span:not(.count) {
-  flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.ms-dd-item .label {
+  flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 220px;
 }
 .ms-dd-item .count {
   flex: 0 0 auto; color: var(--muted); font-size: 11px;
-  background: #f1f3f5; padding: 0 6px; border-radius: 8px; min-width: 24px;
-  text-align: center;
+  background: #f1f3f5; padding: 0 6px; border-radius: 8px; min-width: 22px;
+  text-align: center; margin-right: auto;
 }
+.ms-dd-item.none-opt .label { font-style: italic; color: var(--muted); }
 .ms-dd-actions {
   display: flex; gap: 4px; padding: 4px 6px; border-top: 1px solid var(--border);
   margin-top: 2px; position: sticky; bottom: 0; background: white;
@@ -482,52 +484,63 @@ const FILTER_LABELS = {
   milestone: 'Milestone', dependency: 'Dependency'
 };
 
-// Dimensions whose raw cell value may carry multiple comma-separated
-// owners (e.g. "daisyden, CuiYifeng"). Selecting "daisyden" should match
-// any row that contains that token.
+// Dimensions whose raw cell value may carry multiple owners separated
+// by ',', ';', or '|' (e.g. "chunhuanMeng | daisyden"). Each owner
+// becomes its own filter token.
 const MULTI_VALUE_DIMS = new Set(['assignee', 'owner_transferred']);
+const MULTI_SPLIT_RE = /[,;|]/;
+const NONE_TOKEN = '(none)';
 const SYCL_KERNEL_GROUP = 'SYCL kernel';
 
 // Map a raw cell value to the list of canonical filter tokens it
-// contributes. For multi-owner cells we split on `,`; for Dependency we
-// collapse every "SYCL kernel: <file>.cpp" into a single "SYCL kernel"
-// group so users don't have to scroll through 50 file-specific options.
+// contributes. Empty cells contribute the synthetic NONE_TOKEN so users
+// can include / exclude unowned, unmilestoned, etc. rows explicitly.
 function tokensFor(dim, raw) {
-  if (!raw) return [];
+  const r = (raw || '').trim();
+  if (!r) return [NONE_TOKEN];
   if (dim === 'dependency') {
-    return [/^SYCL kernel:/i.test(raw) ? SYCL_KERNEL_GROUP : raw];
+    return [/^SYCL kernel:/i.test(r) ? SYCL_KERNEL_GROUP : r];
   }
   if (MULTI_VALUE_DIMS.has(dim)) {
-    return raw.split(',').map(s => s.trim()).filter(Boolean);
+    const out = r.split(MULTI_SPLIT_RE).map(s => s.trim()).filter(Boolean);
+    return out.length ? Array.from(new Set(out)) : [NONE_TOKEN];
   }
-  return [raw];
+  return [r];
 }
 
 function collectValues(dim) {
-  // {token -> count} so we can label grouped options like "SYCL kernel (50)".
+  // {token -> count}. Iterate every row in every ar-table so we capture
+  // the synthetic NONE_TOKEN for rows where this dimension is empty.
   const counts = new Map();
   // For the Assignee dropdown, also surface owner_transferred tokens so a
   // user can pick a person who has only ever appeared via transfer.
   const sourceDims = (dim === 'assignee') ? ['assignee', 'owner_transferred'] : [dim];
-  for (const sd of sourceDims) {
-    document.querySelectorAll(`[data-${sd}]`).forEach(tr => {
-      const raw = (tr.dataset[sd] || '').trim();
-      for (const tok of tokensFor(sd, raw)) {
-        counts.set(tok, (counts.get(tok) || 0) + 1);
-      }
-    });
-  }
-  return Array.from(counts.entries())
-    .sort((a, b) => a[0].localeCompare(b[0], undefined, {numeric: true}));
+  document.querySelectorAll('table.ar-table tbody tr[data-issue]').forEach(tr => {
+    const tokenSet = new Set();
+    for (const sd of sourceDims) {
+      for (const tok of tokensFor(sd, tr.dataset[sd])) tokenSet.add(tok);
+    }
+    // For merged-source dims, if any concrete token is present drop NONE.
+    if (sourceDims.length > 1 && tokenSet.size > 1) tokenSet.delete(NONE_TOKEN);
+    for (const tok of tokenSet) counts.set(tok, (counts.get(tok) || 0) + 1);
+  });
+  // Sort: real tokens alphabetically (numeric-aware), (none) last.
+  return Array.from(counts.entries()).sort((a, b) => {
+    if (a[0] === NONE_TOKEN) return 1;
+    if (b[0] === NONE_TOKEN) return -1;
+    return a[0].localeCompare(b[0], undefined, {numeric: true});
+  });
 }
 
-// Selected-token state, per dimension.
+// Selected-token state, per dimension. Populated default-all-checked in
+// buildMultiSelect after the option list is built.
 const SELECTED = Object.fromEntries(FILTER_DIMS.map(d => [d, new Set()]));
 
 function buildMultiSelect(dim, items) {
   const dd = document.createElement('div');
   dd.className = 'ms-dd';
   dd.dataset.dim = dim;
+  dd.dataset.totalOptions = String(items.length);
 
   const btn = document.createElement('button');
   btn.type = 'button';
@@ -550,10 +563,12 @@ function buildMultiSelect(dim, items) {
 
   for (const [tok, count] of items) {
     const label = document.createElement('label');
-    label.className = 'ms-dd-item';
+    label.className = 'ms-dd-item' + (tok === NONE_TOKEN ? ' none-opt' : '');
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.value = tok;
+    cb.checked = true;                   // default: all selected
+    SELECTED[dim].add(tok);
     cb.addEventListener('change', () => {
       if (cb.checked) SELECTED[dim].add(tok);
       else SELECTED[dim].delete(tok);
@@ -561,9 +576,9 @@ function buildMultiSelect(dim, items) {
       applyFilters();
     });
     const txt = document.createElement('span');
-    const display = (dim === 'dependency' && tok === SYCL_KERNEL_GROUP)
-      ? `${tok}` : tok;
-    txt.textContent = display;
+    txt.className = 'label';
+    txt.textContent = tok;
+    txt.title = tok;
     const cnt = document.createElement('span');
     cnt.className = 'count';
     cnt.textContent = count;
@@ -576,17 +591,26 @@ function buildMultiSelect(dim, items) {
   search.addEventListener('input', () => {
     const q = search.value.trim().toLowerCase();
     list.querySelectorAll('.ms-dd-item').forEach(it => {
-      const t = it.querySelector('span').textContent.toLowerCase();
+      const t = it.querySelector('.label').textContent.toLowerCase();
       it.style.display = (!q || t.includes(q)) ? '' : 'none';
     });
   });
 
   const actions = document.createElement('div');
   actions.className = 'ms-dd-actions';
-  const clr = document.createElement('button');
-  clr.type = 'button';
-  clr.textContent = 'Clear';
-  clr.addEventListener('click', () => {
+  const allBtn = document.createElement('button');
+  allBtn.type = 'button';
+  allBtn.textContent = 'All';
+  allBtn.addEventListener('click', () => {
+    for (const [tok] of items) SELECTED[dim].add(tok);
+    list.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = true);
+    updateButtonLabel(dd, dim);
+    applyFilters();
+  });
+  const noneBtn = document.createElement('button');
+  noneBtn.type = 'button';
+  noneBtn.textContent = 'None';
+  noneBtn.addEventListener('click', () => {
     SELECTED[dim].clear();
     list.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
     updateButtonLabel(dd, dim);
@@ -596,7 +620,8 @@ function buildMultiSelect(dim, items) {
   close.type = 'button';
   close.textContent = 'Close';
   close.addEventListener('click', () => dd.classList.remove('open'));
-  actions.appendChild(clr);
+  actions.appendChild(allBtn);
+  actions.appendChild(noneBtn);
   actions.appendChild(close);
   panel.appendChild(actions);
 
@@ -610,13 +635,18 @@ function buildMultiSelect(dim, items) {
   });
   panel.addEventListener('click', (e) => e.stopPropagation());
 
+  updateButtonLabel(dd, dim);
   return dd;
 }
 
 function updateButtonLabel(dd, dim) {
   const btn = dd.querySelector('.ms-dd-btn');
   const sel = SELECTED[dim];
+  const total = parseInt(dd.dataset.totalOptions || '0', 10);
   if (sel.size === 0) {
+    btn.textContent = '(none)';
+    btn.title = 'No values selected — all rows hidden by this filter';
+  } else if (sel.size === total) {
     btn.textContent = '(all)';
     btn.title = '';
   } else if (sel.size === 1) {
@@ -625,7 +655,7 @@ function updateButtonLabel(dd, dim) {
     btn.title = v;
   } else {
     const vs = Array.from(sel).join(', ');
-    btn.textContent = `${sel.size} selected`;
+    btn.textContent = `${sel.size} of ${total}`;
     btn.title = vs;
   }
 }
@@ -665,14 +695,17 @@ function buildFilterBar() {
   hideWrap.appendChild(document.createTextNode('Hide Done'));
   bar.appendChild(hideWrap);
 
-  // reset button
+  // reset button — restore default (all dims fully selected)
   const reset = document.createElement('button');
   reset.textContent = 'Reset filters';
   reset.addEventListener('click', () => {
     for (const dim of FILTER_DIMS) {
-      SELECTED[dim].clear();
       const dd = document.getElementById('filter-' + dim);
-      dd.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+      SELECTED[dim].clear();
+      dd.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        cb.checked = true;
+        SELECTED[dim].add(cb.value);
+      });
       updateButtonLabel(dd, dim);
     }
     document.getElementById('filter-search').value = '';
@@ -714,14 +747,19 @@ function buildFilterBar() {
 }
 
 function rowMatchesDim(tr, dim, selectedSet) {
-  if (selectedSet.size === 0) return true;
+  // No checkboxes selected → user has explicitly excluded everything in
+  // this dimension, so no row passes.
+  if (selectedSet.size === 0) return false;
   // Assignee filter also matches owner_transferred tokens.
   const sourceDims = (dim === 'assignee') ? ['assignee', 'owner_transferred'] : [dim];
+  const rowTokens = new Set();
   for (const sd of sourceDims) {
-    const tokens = tokensFor(sd, (tr.dataset[sd] || '').trim());
-    for (const t of tokens) {
-      if (selectedSet.has(t)) return true;
-    }
+    for (const t of tokensFor(sd, tr.dataset[sd])) rowTokens.add(t);
+  }
+  // Drop NONE if the row also has a concrete token under any source dim.
+  if (sourceDims.length > 1 && rowTokens.size > 1) rowTokens.delete(NONE_TOKEN);
+  for (const t of rowTokens) {
+    if (selectedSet.has(t)) return true;
   }
   return false;
 }
