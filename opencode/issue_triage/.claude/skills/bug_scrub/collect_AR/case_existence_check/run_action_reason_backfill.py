@@ -40,7 +40,7 @@ def main() -> None:
     cases = wb["Test Cases"]
 
     ci_iid = col_idx(cases, "Issue ID")
-    ci_cmnt = col_idx(cases, "case_existence_comments")
+    ci_cmnt = col_idx(cases, "case_existence_explanation")
 
     # issue_id -> list of distinct non-empty comments (preserve insertion order)
     comments: dict[int, list[str]] = defaultdict(list)

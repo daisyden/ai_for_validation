@@ -9,6 +9,7 @@ sentences contain commas. Existing comma-separated 4a/4c tokens are
 preserved intact; dedupe uses substring membership.
 """
 import json
+import os
 from pathlib import Path
 from collections import defaultdict
 
@@ -16,14 +17,17 @@ import openpyxl
 
 REPO   = Path(__file__).resolve().parents[7]
 EXCEL  = REPO / "opencode/issue_triage/result/torch_xpu_ops_issues.xlsx"
-WAVES  = REPO / "agent_space/phase4b"
+# WAVES dir defaults to <repo>/agent_space/phase4b but can be overridden
+# via PHASE4B_WAVES env var (e.g. when results live in a sibling clone).
+WAVES  = Path(os.environ.get("PHASE4B_WAVES", REPO / "agent_space/phase4b"))
 
 SEP = " | "
 
 # ---- load all 305 results --------------------------------------------------
 results = {}
-for wave in range(1, 8):
-    for f in sorted((WAVES / f"wave{wave}").glob("result_*.json")):
+wave_dirs = sorted(WAVES.glob("wave*"), key=lambda p: int(p.name.replace("wave", "")))
+for wave_dir in wave_dirs:
+    for f in sorted(wave_dir.glob("result_*.json")):
         with open(f) as fh:
             r = json.load(fh)
         iid = r["issue_number"]
@@ -79,6 +83,10 @@ for row in ws.iter_rows(min_row=2):
     acts = r.get("action_TBD") or []
     rsns = r.get("action_reason") or []
     owns = r.get("owner_transferred") or []
+    # Coerce string -> single-element list (some agents emitted a bare string)
+    if isinstance(acts, str): acts = [acts]
+    if isinstance(rsns, str): rsns = [rsns]
+    if isinstance(owns, str): owns = [owns]
     if not (acts or rsns or owns):
         continue
     if acts:

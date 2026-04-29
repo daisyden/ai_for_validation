@@ -62,6 +62,10 @@ def classify(s: str) -> list[str]:
     if "re-evaluate" in low and "closed unmerged" in low: cats.add("RETRIAGE_PRS")
     if "closed unmerged; reassess fix path" in low:       cats.add("RETRIAGE_PRS")
     if "re-validate cross-referenced prs" in low:         cats.add("RETRIAGE_PRS")
+    # Phase 4b standalone token + variants
+    if re.search(r"\bretriage_prs\b", low):               cats.add("RETRIAGE_PRS")
+    if "resolve unresolved review comments on pr" in low: cats.add("RETRIAGE_PRS")
+    if "address ci failures on pr" in low:                cats.add("RETRIAGE_PRS")
 
     # --- TRACK_PR ---
     if re.search(r"track.*to merge", low):       cats.add("TRACK_PR")
@@ -75,6 +79,9 @@ def classify(s: str) -> list[str]:
     if "land follow-up" in low or "land remaining" in low: cats.add("TRACK_PR")
     if re.search(r"move pr .* (out of wip )?and land", low): cats.add("TRACK_PR")
     if re.search(r"push pytorch/pytorch#\d+ review", low):   cats.add("TRACK_PR")
+    if re.search(r"track pr\s+\S+#\d+", low):                cats.add("TRACK_PR")
+    # Phase 4b: "Re-merge main into <branch> ..." (interim re-base)
+    if "re-merge main into" in low:                          cats.add("TRACK_PR")
 
     # --- WAIT_EXTERNAL ---
     if "wait for onednn" in low:                 cats.add("WAIT_EXTERNAL")
@@ -85,6 +92,10 @@ def classify(s: str) -> list[str]:
     if "after oneapi dle" in low or "revisit after" in low or "dle 2026" in low:
         cats.add("WAIT_EXTERNAL")
     if "track upstream" in low:                  cats.add("WAIT_EXTERNAL")
+    # Phase 4b external trackers
+    if "track driver/oneapi fix" in low:         cats.add("WAIT_EXTERNAL")
+    if re.search(r"track dependency .*#\d+", low): cats.add("WAIT_EXTERNAL")
+    if "gsd-" in low or "preqs-" in low:         cats.add("WAIT_EXTERNAL")
 
     # --- IMPLEMENT ---
     if "file fix pr" in low:                     cats.add("IMPLEMENT")
@@ -96,6 +107,8 @@ def classify(s: str) -> list[str]:
     if "migrate" in low and "usages off" in low: cats.add("IMPLEMENT")
     if "fix the duplicate division" in low:      cats.add("IMPLEMENT")
     if re.search(r"owner @\S+.* to skip .* tests", low): cats.add("IMPLEMENT")
+    # Phase 4b "File upstream PR to ..."
+    if "file upstream pr" in low:                cats.add("IMPLEMENT")
 
     # --- FILE_ISSUE (was INV_FILE_UPSTREAM) ---
     if "file upstream issue" in low:             cats.add("FILE_ISSUE")
@@ -103,11 +116,15 @@ def classify(s: str) -> list[str]:
 
     # --- AWAIT_REPLY ---
     if "respond to open requests" in low:        cats.add("AWAIT_REPLY")
+    # Phase 4b "Address comment AR from <user>: ..." -> AWAIT_REPLY (waiting on a person)
+    if "address comment ar from" in low:         cats.add("AWAIT_REPLY")
 
     # --- INVESTIGATE sub-categories ---
     # NEED_ACTION (was NO_EVIDENCE): Phase 4b "no PR + no decision"
     if "needs owner investigation" in low:       cats.add("NEED_ACTION")
     if "weak/closed cross-ref candidates" in low: cats.add("NEED_ACTION")
+    # Phase 4b "No action — investigate further" (em dash or hyphen)
+    if "no action" in low and "investigate further" in low: cats.add("NEED_ACTION")
 
     # NEEDS_OWNER: no owner assigned / Phase 3 triage stub
     if "needs investigation / owner assignment" in low: cats.add("NEEDS_OWNER")
