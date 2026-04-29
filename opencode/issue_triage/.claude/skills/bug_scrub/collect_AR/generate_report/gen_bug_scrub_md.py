@@ -205,6 +205,68 @@ def fmt_list(v) -> str:
     return s
 
 
+def split_action_tbd(v) -> list[str]:
+    """Split an action_TBD cell into a list of items.
+
+    The cell may be:
+      - JSON array (legacy)
+      - Phase 4b style: "tok_a, tok_b | sentence c | sentence d"
+        where ' | ' separates Phase 4b additions and ', ' separates 4a/4c tokens.
+    Returns a flat list of trimmed non-empty items.
+    """
+    s = clean(v)
+    if not s:
+        return []
+    # JSON array
+    if s.startswith("["):
+        try:
+            import json as _j
+            parsed = _j.loads(s)
+            if isinstance(parsed, list):
+                return [str(x).strip() for x in parsed if str(x).strip()]
+        except Exception:
+            pass
+    # Pipe-separated; first segment may itself be comma-separated 4a/4c tokens
+    items: list[str] = []
+    for part in s.split("|"):
+        part = part.strip()
+        if not part:
+            continue
+        # Only split commas in the FIRST segment if it looks like short tokens
+        # (4a/4c tokens never contain spaces in their canonical form). To be
+        # safe, split only when no embedded sentence punctuation is present.
+        if "," in part and len(part) < 80 and ":" not in part:
+            for sub in part.split(","):
+                sub = sub.strip()
+                if sub:
+                    items.append(sub)
+        else:
+            items.append(part)
+    return items
+
+
+def fmt_action_tbd_cell(v, max_item_len: int = 0) -> str:
+    """Render action_TBD as a multi-line bulleted cell.
+
+    Each pipe-separated segment becomes its own bullet line. We emit inline
+    HTML (`<ul><li>...</li></ul>`) rather than markdown bullets because
+    markdown table cells don't honor list syntax, and `* item *` would
+    collide with the inline italic regex in the HTML renderer. Pipes inside
+    the cell are escaped as `\\|`. Long items can be optionally truncated.
+    """
+    items = split_action_tbd(v)
+    if not items:
+        return ""
+    out = []
+    for it in items:
+        it = it.replace("\r", " ").replace("\n", " ").replace("|", "\\|")
+        it = re.sub(r"\s+", " ", it).strip()
+        if max_item_len and len(it) > max_item_len:
+            it = it[: max_item_len - 1] + "…"
+        out.append(f"<li>{it}</li>")
+    return "<ul>" + "".join(out) + "</ul>"
+
+
 def wrap_cell(s, width: int = 80) -> str:
     """Soft-wrap a cell to `width` chars per visual line using <br>.
     Escapes pipes, collapses whitespace, word-wraps at word boundaries."""
@@ -335,8 +397,11 @@ def _bullets(raw) -> str:
         except Exception:
             items = [s]
     if not items:
+        # Phase 4b pipe-separated list (and possibly comma-separated 4a/4c tokens)
+        items = split_action_tbd(s)
+    if not items:
         items = [s]
-    return "\n".join(f"- {it}" for it in items)
+    return "\n".join(f"* {it}" for it in items)
 
 def _fix_approach_md(raw) -> str:
     """Render Fix Approach as bulleted markdown for detail files."""
@@ -599,7 +664,7 @@ def render_table(row_list) -> str:
             wrap_cell(r[C["Title"]], 50),
             esc(assignee_only(r), 25),
             esc(owner_transferred_cell(r), 25),
-            esc(fmt_list(r[C["action_TBD"]]), 100),
+            fmt_action_tbd_cell(r[C["action_TBD"]], 200),
             fix_approach_cell(r),
             esc(clean(r[C["Priority"]]), 6),
             esc(fmt_list(r[C["action_reason"]]), 140),
@@ -654,7 +719,7 @@ def render_dep_table(row_list) -> str:
             wrap_cell(r[C["Title"]], 50),
             esc(assignee_only(r), 25),
             esc(owner_transferred_cell(r), 25),
-            esc(fmt_list(r[C["action_TBD"]]), 100),
+            fmt_action_tbd_cell(r[C["action_TBD"]], 200),
             fix_approach_cell(r),
             esc(clean(r[C["Priority"]]), 6),
             esc(fmt_list(r[C["action_reason"]]), 140),
@@ -681,7 +746,7 @@ def render_recent(row_list) -> str:
             wrap_cell(r[C["Title"]], 50),
             esc(assignee_only(r), 25),
             esc(owner_transferred_cell(r), 25),
-            esc(fmt_list(r[C["action_TBD"]]), 100),
+            fmt_action_tbd_cell(r[C["action_TBD"]], 200),
             fix_approach_cell(r),
             esc(clean(r[C["Priority"]]), 6),
             esc(fmt_list(r[C["action_reason"]]), 140),
@@ -714,7 +779,7 @@ def render_dup_table(row_list) -> str:
             wrap_cell(r[C["Title"]], 50),
             esc(assignee_only(r), 25),
             esc(owner_transferred_cell(r), 25),
-            esc(fmt_list(r[C["action_TBD"]]), 100),
+            fmt_action_tbd_cell(r[C["action_TBD"]], 200),
             fix_approach_cell(r),
             esc(clean(r[C["Priority"]]), 6),
             esc(fmt_list(r[C["action_reason"]]), 140),

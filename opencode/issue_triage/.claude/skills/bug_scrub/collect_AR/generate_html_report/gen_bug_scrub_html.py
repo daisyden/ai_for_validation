@@ -63,16 +63,23 @@ INLINE_CODE = re.compile(r"`([^`]+)`")
 INLINE_BOLD = re.compile(r"\*\*([^*]+)\*\*")
 INLINE_ITAL = re.compile(r"(?<!\*)\*([^*]+)\*(?!\*)")
 INLINE_BR   = re.compile(r"<br\s*/?>", re.IGNORECASE)
+INLINE_LIST = re.compile(r"</?(?:ul|li)>", re.IGNORECASE)
 ANCHOR_TAG  = re.compile(r'<a id="([^"]+)"></a>')
 TABLE_SEP   = re.compile(r"^\|\s*[-:]+\s*(\|\s*[-:]+\s*)+\|?\s*$")
 
 
 def render_inline(text: str) -> str:
     """Inline markdown → HTML. Order matters: escape first, then expand."""
-    # extract <br> placeholders before escaping
+    # extract <br> and <ul>/<li>/</ul>/</li> placeholders before escaping
     text = INLINE_BR.sub("\x00BR\x00", text)
+    LIST_TAGS = {"<ul>": "\x00ULO\x00", "</ul>": "\x00ULC\x00",
+                 "<li>": "\x00LIO\x00", "</li>": "\x00LIC\x00"}
+    for k, v in LIST_TAGS.items():
+        text = re.sub(re.escape(k), v, text, flags=re.IGNORECASE)
     text = html.escape(text, quote=False)
     text = text.replace("\x00BR\x00", "<br>")
+    for k, v in LIST_TAGS.items():
+        text = text.replace(v, k)
     text = INLINE_LINK.sub(
         lambda m: f'<a href="{html.escape(m.group(2), quote=True)}">{m.group(1)}</a>',
         text,
@@ -385,6 +392,9 @@ table.ar-table tr.done td a { color: var(--done-fg); }
 table.ar-table tr.done td:not(.done-col) { text-decoration: line-through; }
 table.ar-table tr.hidden { display: none; }
 table.ar-table tr.hl td { background: var(--hl) !important; }
+table.ar-table td ul { margin: 0; padding-left: 1.1em; }
+table.ar-table td li { margin: 0 0 2px; }
+table.ar-table td:has(ul) { min-width: 320px; }
 
 /* Whole sections (and TOC entries) collapsed when a filter empties them. */
 .section-hidden { display: none !important; }
