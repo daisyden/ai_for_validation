@@ -63,7 +63,7 @@ _No issues._
 
 
 <a id="sec-3-1-need-pr"></a>
-- **NEED PR**  ·  80 issues
+- **NEED PR**  ·  57 issues
 
 **NEED PR — a PR must be produced or continued (no PR yet, or owner actively debugging root cause, or new code needed)**
 
@@ -85,51 +85,39 @@ _[↑ Back to Index](#sec-2)_
 
 
 <a id="sec-3-1-2-flash-attention"></a>
-#### 3.1.2 Flash Attention  ·  2 issues
+#### 3.1.2 Flash Attention  ·  1 issues
 
 _[↑ Back to Index](#sec-2)_
 
 | Issue | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |
 |---|---|---|---|---|---|---|---|---|---|
 | [#3140](https://github.com/intel/torch-xpu-ops/issues/3140) | [upstream_ut] RuntimeError:<br>FlashAttentionForwardXPU does not only support<br>dropout > 0.0 yet | LuFinch | LuFinch | <ul><li>No action — investigate further</li></ul> | Either (a) implement dropout support in mha_fwd.cpp / mha_bwd.cpp sycltla kernels, or (b) fix the S…<br>[→ details](details/3140.md) | P1 | No fix PR exists for the dropout>0 dispatch gap in FlashAttentionForwardXPU; assignee LuFinch needs to either implement dropout in sycltla … | daisyden | module: ut, skipped, ut_upstream |
-| [#3195](https://github.com/intel/torch-xpu-ops/issues/3195) | test_sdpa_unbacked_no_dde_xpu crashed |  |  | <ul><li>No action — investigate further</li></ul> | Run the test in isolation under cgdb/sycl-sanitizer to capture the crash.<br>[→ details](details/3195.md) | P2 | Issue is OPEN with no linked PRs across V0/VA/VB/VC/VD/VE; intermittent crash needs reproduction under sycl-sanitizer per fix_approach. No … | daisyden | skipped, random |
 
 
 <a id="sec-3-1-3-inductor"></a>
-#### 3.1.3 Inductor  ·  18 issues
+#### 3.1.3 Inductor  ·  8 issues
 
 _[↑ Back to Index](#sec-2)_
 
 | Issue | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |
 |---|---|---|---|---|---|---|---|---|---|
-| [#1970](https://github.com/intel/torch-xpu-ops/issues/1970) | torch._dynamo.exc.BackendCompilerFailed:<br>backend='inductor' raised: RuntimeError: CUDA not<br>available |  |  | <ul><li>No action — investigate further</li></ul> | Submit upstream-pytorch PR generalizing CUDARngStateHelper to a device-agnostic AcceleratorRngState…<br>[→ details](details/1970.md) | P1 | Issue is OPEN with no VERIFIED PR candidates from any vector (V0/VA/VB/VC/VD/VE) in either intel/torch-xpu-ops or pytorch/pytorch; root cau… | shangerxin | module: ut |
-| [#3080](https://github.com/intel/torch-xpu-ops/issues/3080) | cudagraph tests blocked by feature gap |  |  | <ul><li>No action — investigate further</li></ul> | Implement xpugraph (SYCL command-graph capture) as a torch.xpu.Graph runtime API in upstream pytorc…<br>[→ details](details/3080.md) | P1 | No PRs found via any vector (V0/VA/VB/VC/VD/VE); xpugraph (SYCL ext_oneapi_command_graph runtime + torch.xpu.Graph + cudagraph_trees device… | daisyden | module: ut |
-| [#3094](https://github.com/intel/torch-xpu-ops/issues/3094) | XPUGraph tree support |  |  | <ul><li>No action — investigate further</li></ul> | Implement XPUGraph (SYCL graph based capture/replay) runtime APIs in torch/xpu and an XPU branch in…<br>[→ details](details/3094.md) | P1 | Issue is OPEN with no VERIFIED PR candidates; XPUGraph trees infrastructure does not yet exist and requires a large upstream design effort … | daisyden | module: inductor, ut_upstream |
 | [#3342](https://github.com/intel/torch-xpu-ops/issues/3342) | c-shim implementation is missing for<br>aten.unsqueeze,expand and split_with_sizes | CuiYifeng | CuiYifeng | <ul><li>No action — investigate further</li></ul> | 1) Upstream PyTorch fix: add 'aten.unsqueeze.default', 'aten.expand.default', 'aten.split_with_size…<br>[→ details](details/3342.md) | P1 | OPEN issue with zero VERIFIED PR candidates: V0/timeline empty; no upstream PyTorch PR found via VC searches for fallback_ops aten.unsqueez… | kaixuanliu |  |
 | [#1969](https://github.com/intel/torch-xpu-ops/issues/1969) | torch._dynamo.exc.InternalTorchDynamoError:<br>TypeError: cannot create weak reference to<br>'torch.Event' object | guangyey | guangyey | <ul><li>No action — investigate further</li></ul> | Upstream-pytorch fix: add weakref support to the generic torch.Event class (define __weakref__ slot…<br>[→ details](details/1969.md) | P2 | All candidate upstream PRs (pytorch/pytorch#164522, #163168, #151213) addressing torch.Event weakref support are CLOSED unmerged with no me… | shangerxin | module: ut |
-| [#2605](https://github.com/intel/torch-xpu-ops/issues/2605) | [int4][inductor] Add freezing pattern for fusing<br>int4 mm kernel as #170341 |  |  | <ul><li>No action — investigate further</li></ul> | Add an XPU-specific freezing pattern in torch/_inductor/fx_passes (mirror cuda int4-mm horizontal-f…<br>[→ details](details/2605.md) | P2 | Open feature-gap with no fix PR identified across V0/VA/VB/VC/VD/VE; XPU int4-mm freezing pattern still needs to be authored upstream. | liangan1 |  |
 | [#2693](https://github.com/intel/torch-xpu-ops/issues/2693) | Title: [upstream_ut] AssertionError: Scalars are<br>not equal! | hoshibara | hoshibara | <ul><li>No action — investigate further</li><li>Address comment AR from hoshibara: confirm platform/run config; either skip-list test_flash_attention_dynamic for XPU or explain why it is reaching XPU dispatch</li></ul> | Investigate the additional graph break under dynamic shapes for SDPA on XPU (likely in SDPA backend…<br>[→ details](details/2693.md) | P2 | Issue is OPEN with zero VERIFIED PR candidates; canonical NEED_ACTION verb required. \| Unresolved blocking question from MEMBER hoshibara … | daisyden | module: inductor, skipped, ut_upstream |
 | [#2715](https://github.com/intel/torch-xpu-ops/issues/2715) | [upstream_ut] torch._dynamo.exc.Unsupported:<br>Attempted to inline function marked as skipped | CuiYifeng | CuiYifeng | <ul><li>No action — investigate further</li></ul> | In upstream PyTorch torch/_dynamo/trace_rules.py, allow tracing of torch.xpu.device.__init__ (mirro…<br>[→ details](details/2715.md) | P2 | Issue is OPEN, no VERIFIED PR addresses the dynamo MOD_SKIPLIST exemption for torch.xpu.device.__init__; assignee CuiYifeng needs to invest… | daisyden | skipped, ut_upstream |
 | [#2922](https://github.com/intel/torch-xpu-ops/issues/2922) | [release/2.11] UT inductor AssertionError:<br>pass_fds not supported on Windows. | tadkrawiec | tadkrawiec | <ul><li>No action — investigate further</li></ul> | File upstream pytorch fix to guard pass_fds usage on Windows in the inductor subprocess test harnes…<br>[→ details](details/2922.md) | P2 | Issue OPEN with zero VERIFIED PR candidates from any vector; an upstream pytorch PR to guard pass_fds on Windows or skip the inductor subpr… | bjarzemb | os: Windows |
-| [#2953](https://github.com/intel/torch-xpu-ops/issues/2953) | [release/2.11][wsl] huggingface TrOCRForCausalLM<br>and XGLMForCausalLM pass but has RuntimeError:<br>value cannot be converted to type float without<br>overflow |  |  | <ul><li>No action — investigate further</li></ul> | Bisect upstream PyTorch between 2.10 and 2.11 to find the dtype-handling regression in benchmarks/d…<br>[→ details](details/2953.md) | P2 | No PR candidates found across both repos. Issue is a 2.10→2.11 upstream regression in benchmark/dynamo bf16 finfo handling; needs upstream … | bjarzemb | os: Windows |
 | [#3058](https://github.com/intel/torch-xpu-ops/issues/3058) | [E2E] hf_GPT2_large amp_fp16/amp_bf16 training got<br>fail_accuracy | weishi-deng | weishi-deng | <ul><li>Address comment AR from weishi-deng: decide whether to add device-type guard in unfuse_bias_add_to_pointwise and submit upstream PR</li><li>No action — investigate further</li></ul> | Submit an upstream PR (pytorch/pytorch) relaxing the dtype guard in unfuse_bias_add_to_pointwise /…<br>[→ details](details/3058.md) | P2 | Latest blocking comment asks jianyizh to confirm the proposed upstream fix (device check in unfuse_bias_add_to_pointwise / should_prefer_un… | kaileiyx | E2E, hw: PVC |
-| [#3334](https://github.com/intel/torch-xpu-ops/issues/3334) | [upstream_ut] test_repros.py ReproTests.test_parti<br>tioner_activation_memory_budget_with_unbacked_symi<br>nts failed with error Tensor-likes are not close! |  |  | <ul><li>No action — investigate further</li></ul> | 1) Wait for upstream PR pytorch/pytorch#174370 to land and re-run<br>[→ details](details/3334.md) | P2 | OPEN issue with zero VERIFIED PR candidates: the upstream PR linked in the body (pytorch/pytorch#174370) does not actually address the part… | shangerxin | skipped, ut_upstream |
-| [#3388](https://github.com/intel/torch-xpu-ops/issues/3388) | [Bug Skip] XPU Dynamo Graph Lowering -<br>stream_index None |  |  | <ul><li>No action — investigate further</li></ul> | Fix is in pytorch (not torch-xpu-ops).<br>[→ details](details/3388.md) | P2 | Issue body links pytorch#180179 (closed issue, not a PR) and other DISABLED-test issues (pytorch#178155/#134746/#138557) — none are fix PRs… | daisyden | module: ut, skipped, module: dynamo |
 | [#3509](https://github.com/intel/torch-xpu-ops/issues/3509) | [ai_generated] [PyTorch CI] DISABLED<br>test_max_reads_limits_fusion (OverFusionTest) on<br>XPU |  | Stonepia | <ul><li>No action — investigate further</li><li>Address comment AR from Stonepia: agent private_review step is failing (agent:blocked); upstream pytorch/pytorch fix PR has not been opened publicly</li></ul> | Land an upstream PyTorch PR that decouples the rejection-metric assertion from the transformer mode…<br>[→ details](details/3509.md) | P2 | No public upstream pytorch/pytorch fix PR exists yet — only a personal-fork tracking PR (chuanqi129/pytorch#5) and the upstream DISABLED-te… | Stonepia | ai_generated, agent:blocked |
-| [#3519](https://github.com/intel/torch-xpu-ops/issues/3519) | [upstream_ut] AOTAutogradCache<br>`compiler_config_extra` has no XPU equivalent of<br>`cudagraphs` -> `test_aot_autograd_cache_xpu.py::A<br>OTAutogradCachePicklerTests` fails with<br>`AttributeError: 'dict' object has no attribute<br>'cudagraphs'` |  |  | <ul><li>No action — investigate further</li></ul> | Upstream PyTorch fix: either add an 'xpugraphs' field to CompilerConfigExtra and torch._inductor.co…<br>[→ details](details/3519.md) | P2 | No VERIFIED fix PR. The real fix is upstream pytorch/pytorch (add xpugraphs to CompilerConfigExtra and torch._inductor.config.triton, or ge… | daisyden | module: ut, skipped |
 | [#2958](https://github.com/intel/torch-xpu-ops/issues/2958) | AssertionError of test_dtensor_basic_compile | daisyden | daisyden | <ul><li>Submit upstream PR from daisyden/missing_test to remove skipIfXpu on test_dtensor_basic_export and close this issue</li><li>File separate upstream issue for test-ordering / DTensorSpec flatten regression from pytorch/pytorch#178115</li></ul> | Re-run on current main to confirm<br>[→ details](details/2958.md) | P3 | Owner has already verified the fix on main and prepared a branch; only remaining step is to land the skip-removal PR. \| The ordering-depen… | daisyden | module: inductor, ut_upstream |
-| [#3095](https://github.com/intel/torch-xpu-ops/issues/3095) | cutlass support blocks some unit test cases |  |  | <ul><li>No action — investigate further</li></ul> | Either (a) add device skip markers for XPU on test_cudacodecache.py upstream until an Inductor CUTL…<br>[→ details](details/3095.md) | P3 | Issue is OPEN with no PR candidates found via V0/VA/VB/VC/VD/VE; CUTLASS-equivalent backend / XPU skip for test_cudacodecache.py has not be… | daisyden | module: inductor, ut_upstream |
-| [#3096](https://github.com/intel/torch-xpu-ops/issues/3096) | VISIBLE_DEVICE support |  |  | <ul><li>No action — investigate further</li></ul> | Extend TuningProcessPool/select_device logic in torch/_inductor/autotune_process.py to set ZE_AFFIN…<br>[→ details](details/3096.md) | P3 | Issue is OPEN with no PR candidates found via V0/VA/VB/VC/VD/VE for ZE_AFFINITY_MASK / TuningProcessPool XPU support in torch/_inductor/aut… | daisyden | module: ut |
 
 
 <a id="sec-3-1-4-others"></a>
-#### 3.1.4 Others  ·  16 issues
+#### 3.1.4 Others  ·  13 issues
 
 _[↑ Back to Index](#sec-2)_
 
 | Issue | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |
 |---|---|---|---|---|---|---|---|---|---|
-| [#2912](https://github.com/intel/torch-xpu-ops/issues/2912) | [release/2.11] UT extended 220 new failures |  |  | <ul><li>No action — investigate further</li></ul> | Bucket the 220 regressions in changed_tests.log by op/module, file child issues per cluster, and bi…<br>[→ details](details/2912.md) | P1 | Open meta-tracking issue with 220 pass->fail regressions on PT2.11/Windows/BMG; no fix PR yet, oneAPI swap ruled out compiler regression, s… | bjarzemb | os: Windows, hw: BMG |
 | [#2463](https://github.com/intel/torch-xpu-ops/issues/2463) | [Bug Skip]: OSError: SYCL runtime is not dected. | xuhancn | xuhancn | <ul><li>No action — investigate further</li></ul> | Fix in pytorch/pytorch torch/utils/cpp_extension.py: make _join_sycl_home robustly locate Windows o…<br>[→ details](details/2463.md) | P2 | Issue is OPEN with no PR candidates from any vector. The fix lives in upstream pytorch/pytorch (torch/utils/cpp_extension.py: SYCL home det… | RUIJIEZHONG66166 | skipped_windows |
 | [#3259](https://github.com/intel/torch-xpu-ops/issues/3259) | New failed test cases 2026-04-02 | SlawomirLaba | SlawomirLaba | <ul><li>No action — investigate further</li></ul> | Update the XPU skip list in third_party/torch-xpu-ops/test/xpu/skip_list_common.py to permanently s…<br>[→ details](details/3259.md) | P2 | No VERIFIED PR candidate found via V0/VA/VB/VC/VD/VE. Two original conv2d hipdnn cases need a permanent skip-list update in test/xpu/skip_l… | Silv3S | skipped |
 | [#146](https://github.com/intel/torch-xpu-ops/issues/146) | Evaluate register spill in SYCL kernel | CuiYifeng, jianyizh, men… | CuiYifeng, jianyizh, men… | <ul><li>No action — investigate further</li></ul> | Performance tuning task: collect SYCL compiler register-spill warnings across all xpu sycl kernels,…<br>[→ details](details/146.md) | P3 | Performance-tuning enhancement (low priority per fengyuan14); no PR candidates surfaced via any vector (V0/VA empty, VB/VC/VD/VE no concret… | fengyuan14 | enhancement |
@@ -142,8 +130,6 @@ _[↑ Back to Index](#sec-2)_
 | [#2215](https://github.com/intel/torch-xpu-ops/issues/2215) | Find use case example for torch-xpu-ops.lib in<br>sycl cpp extension | dvrogozh | dvrogozh | <ul><li>No action — investigate further</li></ul> | Construct a minimal SYCL cpp_extension sample that calls a symbol exported from torch-xpu-ops (e.g.…<br>[→ details](details/2215.md) | P3 | Open issue is a documentation/justification follow-up; no fix PR exists. Assignee dvrogozh needs to either provide a SYCL cpp_extension exa… | dvrogozh |  |
 | [#2400](https://github.com/intel/torch-xpu-ops/issues/2400) | [ut_upstream] tf32_on_and_off() need xpu support | chunhuanMeng | chunhuanMeng | <ul><li>No action — investigate further</li></ul> | Add an XPU equivalent (e.g., `tf32_on_and_off` in torch/testing/_internal/common_xpu.py or generali…<br>[→ details](details/2400.md) | P3 | OPEN issue with no VERIFIED PR candidates and no comments; per DERIVATION RULE emit investigate-further. Owner chunhuanMeng (assignee) need… | daisyden |  |
 | [#2783](https://github.com/intel/torch-xpu-ops/issues/2783) | [Bug Skip]: Key "xpu" is missing from dict<br>"driver" in test_svd | daisyden | daisyden | <ul><li>Open upstream PR to pytorch/pytorch from branch daisyden/missing_test (adds 'xpu' entry to SVD drivers dict in test/test_linalg.py)</li><li>No action — investigate further</li></ul> | Upstream patch in pytorch/test/test_linalg.py: add an 'xpu' entry to the SVD driver dict (or extend…<br>[→ details](details/2783.md) | P3 | Assignee daisyden has a verified local fix on a personal branch but no upstream PR has been filed yet; landing that PR (or equivalent) is t… | CuiYifeng | module: ut, skipped |
-| [#3025](https://github.com/intel/torch-xpu-ops/issues/3025) | New failing test in Nightly Wheel test_decomp_xpu.<br>HasDecompTest,test_has_decomposition |  |  | <ul><li>No action — investigate further</li></ul> | Either (a) stop vendoring the .expect file and load it at test time from the installed PyTorch (tor…<br>[→ details](details/3025.md) | P3 | Issue is OPEN with no VERIFIED fix PR. Long-term fix (load .expect from installed PyTorch at runtime, or auto-sync during CI build) has not… | BBBela | skipped, random |
-| [#3086](https://github.com/intel/torch-xpu-ops/issues/3086) | nvml support blocks some test cases |  |  | <ul><li>No action — investigate further</li></ul> | Exclude test_cuda_nvml_based_avail.py from the XPU UT runner (test/xpu/run_test_with_skip.py or ski…<br>[→ details](details/3086.md) | P3 | Issue is OPEN with zero comments and no VERIFIED PR candidates. The reporter (daisyden) explicitly asks an owner to confirm whether nvml is… | daisyden | module: ut |
 | [#3300](https://github.com/intel/torch-xpu-ops/issues/3300) | [CI] When creating PR, several pull workflows are<br>launched and then all but one are immediately<br>cancelled. | mengfei25 | mengfei25 | <ul><li>No action — investigate further</li><li>Address comment AR from BBBela: investigate concurrency cancel-in-progress on label-add for pull workflows</li></ul> | Inspect .github/workflows/_linux_ut.yml / pull.yml concurrency: definition<br>[→ details](details/3300.md) | P3 | Issue is OPEN with zero VERIFIED PR candidates (no PR found across V0/VA/VB/VC/VD/VE). \| BBBela's blocking ping to chuanqi129/mengfei25/RU… | BBBela |  |
 
 
@@ -159,36 +145,30 @@ _[↑ Back to Index](#sec-2)_
 
 
 <a id="sec-3-1-6-torch-operations"></a>
-#### 3.1.6 Torch Operations  ·  20 issues
+#### 3.1.6 Torch Operations  ·  14 issues
 
 _[↑ Back to Index](#sec-2)_
 
 | Issue | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |
 |---|---|---|---|---|---|---|---|---|---|
 | [#1951](https://github.com/intel/torch-xpu-ops/issues/1951) | Functionality issues in TestCommon.test_out. | AKloniecki | AKloniecki | <ul><li>No action — investigate further</li></ul> | Split into sub-issues. (a) Fix BatchNormKernels.cpp:595 by relaxing the assertion or ensuring resiz…<br>[→ details](details/1951.md) | P1 | Bucket issue with multiple distinct sub-cases (triangular_solve, addmv/mv, cholesky_inverse, geqrf, narrow_copy, ormqr) and no VERIFIED PR … | daisyden | module: ut, skipped, ut_upstream |
-| [#3445](https://github.com/intel/torch-xpu-ops/issues/3445) | [ai_generated] XPU misses out-of-bounds check for<br>empty source tensor and diverges from CPU |  |  | <ul><li>No action — investigate further</li></ul> | In torch-xpu-ops Indexing kernels (src/ATen/native/xpu/sycl/Indexing.h around line 136 and the inde…<br>[→ details](details/3445.md) | P1 | Upstream pytorch/pytorch#77881 already added the CPU-side bounds/empty-source checks long ago, but the XPU index_select kernel in torch-xpu… | laifenxiawucha | ai_generated |
 | [#2479](https://github.com/intel/torch-xpu-ops/issues/2479) | [Bug] torch.rand output different result on bmg<br>and pvc | Stonepia, CuiYifeng | Stonepia, CuiYifeng | <ul><li>No action — investigate further</li></ul> | Make the Philox per-element counter assignment independent of work-group/subgroup size by using a d…<br>[→ details](details/2479.md) | P2 | Issue is OPEN with assignees Stonepia/CuiYifeng; no PR filed. XPU Philox/uniform RNG produces architecture-dependent streams (BMG vs PVC); … | zufangzhu |  |
 | [#3084](https://github.com/intel/torch-xpu-ops/issues/3084) | torch.library.register_autocast does not support<br>xpu | CuiYifeng | CuiYifeng | <ul><li>No action — investigate further</li></ul> | Upstream PR to pytorch/pytorch: in torch/library.py register_autocast, accept all autocast-capable…<br>[→ details](details/3084.md) | P2 | Issue is OPEN with no linked PRs from any of V0/VA/VB/VC/VD/VE; an upstream pytorch/pytorch fix to torch/library.py register_autocast is re… | daisyden | module: ut |
 | [#3243](https://github.com/intel/torch-xpu-ops/issues/3243) | AssertionError: False is not true | pponikox | pponikox | <ul><li>No action — investigate further</li></ul> | Implement torch.xpu._sleep (a busy-wait SYCL kernel that holds the stream for N cycles) as part of…<br>[→ details](details/3243.md) | P2 | Issue is OPEN with zero VERIFIED PR candidates; fix is blocked on prerequisite torch-xpu-ops issue #1986 (torch.xpu._sleep). Test remains i… | zxd1997066 | module: ut, skipped |
 | [#3426](https://github.com/intel/torch-xpu-ops/issues/3426) | [ai_generated] torch.topk raises RuntimeError for<br>dimensions larger than INT_MAX on XPU | BartoszKokoszko | BartoszKokoszko | <ul><li>No action — investigate further</li></ul> | Port pytorch/pytorch#176095-style 64-bit indexing into TensorTopKKernel.cpp: template the kernel on…<br>[→ details](details/3426.md) | P2 | No VERIFIED PR fixes this XPU issue (the referenced upstream CUDA PR is CLOSED unmerged and only used as a porting template); a torch-xpu-o… | laifenxiawucha | ai_generated |
 | [#3480](https://github.com/intel/torch-xpu-ops/issues/3480) | [upstream_ut] test_custom_ops.py RuntimeError:<br>element 0 of tensors does not require grad and<br>does not have a grad_fn | BartoszKokoszko | BartoszKokoszko | <ul><li>No action — investigate further</li><li>Address comment AR from daisyden: un-strikethrough regressed cases in issue body and triage the grad_fn dispatch loss</li></ul> | Reproduce the two cases directly on XPU and inspect the dispatch path with TORCH_LOGS='+dispatch' t…<br>[→ details](details/3480.md) | P2 | Issue is OPEN with no PR candidate; assignee BartoszKokoszko must reproduce on XPU (TORCH_LOGS=+dispatch), re-sync the XPU mirror with upst… | zxd1997066 | module: ut, skipped |
 | [#3500](https://github.com/intel/torch-xpu-ops/issues/3500) | [Bug Skip]: New failed test cases 2026-4-28 | Silv3S | Silv3S | <ul><li>No action — investigate further</li></ul> | For test_opcheck_fails_basic_xpu: register the test custom op for XPU (or fall back to CPU) inside…<br>[→ details](details/3500.md) | P2 | No VERIFIED fix PRs found via V0/VA/VB/VC/VD/VE in intel/torch-xpu-ops or pytorch/pytorch for either test_opcheck_fails_basic_xpu or test_d… | kaileiyx | skipped |
-| [#3511](https://github.com/intel/torch-xpu-ops/issues/3511) | [Bug Skip] test_pool3d_large_size_int64_xpu: XPU<br>max_pool3d numerical mismatch vs CPU fp32<br>reference |  |  | <ul><li>No action — investigate further</li></ul> | Audit DilatedMaxPool3d.cpp for any int/int32 index, stride or offset arithmetic and convert to int6…<br>[→ details](details/3511.md) | P2 | No VERIFIED fix PR. Action: assign an XPU SYCL kernel owner to audit src/ATen/native/xpu/sycl/DilatedMaxPool3d.cpp for int32 index/stride/o… | daisyden | module: ut, skipped |
 | [#1856](https://github.com/intel/torch-xpu-ops/issues/1856) | channel last aten::hardswish_ will call extra copy | chunhuanMeng | chunhuanMeng | <ul><li>No action — investigate further</li></ul> | Make hardswish_kernel (and related pointwise activations) channels-last aware in TensorIterator set…<br>[→ details](details/1856.md) | P3 | Issue is OPEN, has no linked PRs across V0/VA/VB/VC/VD/VE, and no comments; assignee @chunhuanMeng needs to investigate channels-last suppo… | jianyizh | performance, hw: BMG |
-| [#2196](https://github.com/intel/torch-xpu-ops/issues/2196) | Fix DistributionElementwiseKernelFunctor register<br>spill |  |  | <ul><li>No action — investigate further</li></ul> | Refactor DistributionElementwiseKernelFunctor in DistributionTemplates.h to reduce live state: stor…<br>[→ details](details/2196.md) | P3 | Issue is OPEN with zero VERIFIED PR candidates across V0/VA/VB/VC/VD/VE; refactor task on DistributionTemplates.h has no fix PR yet. | jianyizh | enhancement |
-| [#2199](https://github.com/intel/torch-xpu-ops/issues/2199) | Fix reduction and norm register spill |  |  | <ul><li>No action — investigate further</li></ul> | Tune Reduce.h: lower vt (vec_size) for argmin/argmax instantiations, force SIMD16 (sub_group_size 1…<br>[→ details](details/2199.md) | P3 | Issue is OPEN with zero VERIFIED PR candidates across V0/VA/VB/VC/VD/VE; perf-cleanup task to refactor Reduce.h has no fix PR yet. | jianyizh | enhancement |
 | [#2436](https://github.com/intel/torch-xpu-ops/issues/2436) | [upstream_ut] AttributeError: 'NoneType' object<br>has no attribute 'clone' | daisyden | daisyden | <ul><li>No action — investigate further</li><li>Address comment AR from CuiYifeng: re-check case design</li></ul> | Keep cases in skip list as 'random/community'<br>[→ details](details/2436.md) | P3 | Issue is OPEN with zero VERIFIED PR candidates (root cause is upstream test-design issue pytorch/pytorch#97395, which is itself an open iss… | daisyden | skipped, dependency component: communit… |
 | [#2689](https://github.com/intel/torch-xpu-ops/issues/2689) | [LNL][Windows] AssertionError: 'Assertion<br>`cur_target >= 0 && cur_target < n_classes`<br>failed' not found in 'PYTORCH_API_USAGE<br>torch.python | draghan, tadkrawiec | draghan, tadkrawiec | <ul><li>No action — investigate further</li><li>Address comment AR from chuanqi129: confirm duplicate-of-#1171 status and whether SYCL_KERNEL_ASSERT message propagation gap on LNL Windows is reproducible/random</li></ul> | Either (a) loosen the test's assertIn to match the substring actually emitted on Windows (skip/xfai…<br>[→ details](details/2689.md) | P3 | Issue is OPEN with zero VERIFIED PR candidates; canonical NEED_ACTION verb required. \| Unresolved blocking triage question from MEMBER chu… | kaileiyx | os: Windows, module: ut |
 | [#2766](https://github.com/intel/torch-xpu-ops/issues/2766) | MaxPool2d - investigate memory layout performance | BBBela | BBBela | <ul><li>Open layout-aware-dispatch PR for DilatedMaxPool2d (assignee BBBela): pick kernel by suggested memory format, add regression perf test for both layouts at >500M elements</li><li>No action — investigate further</li></ul> | Make the dispatcher in DilatedMaxPool2d.cpp choose kernel by suggested memory format of the input:…<br>[→ details](details/2766.md) | P3 | Investigation phase is complete (BBBela's benchmark report); the productization PR implementing the layout-aware dispatch and adding the pe… | pbielak |  |
 | [#3041](https://github.com/intel/torch-xpu-ops/issues/3041) | AssertionError: Expected len(flat_diff_results) ><br>0 in test_fake_crossref_backward_amp_normal_number<br>_mean_xpu_float32 | daisyden | daisyden | <ul><li>No action — investigate further</li></ul> | Add device_type='xpu' (or replace with allowed_dtypes/skip across non-CPU) to the existing Decorate…<br>[→ details](details/3041.md) | P3 | Issue is OPEN with no VERIFIED fix PR yet (cited PR 176690 is the trigger, not the fix, and is closed unmerged). Owner daisyden is assigned… | daisyden | ut_upstream |
 | [#3150](https://github.com/intel/torch-xpu-ops/issues/3150) | [Task] Align XPU kernel's implementation to stock<br>PyTorch | guangyey | guangyey | <ul><li>No action — investigate further</li></ul> | Treat as a meta/tracking issue.<br>[→ details](details/3150.md) | P3 | Meta/tracking enhancement (no failing test). No PR explicitly fixes this aggregate issue; sub-tasks (LayerNorm, GroupNorm, ...) need to be … | guangyey | enhancement |
 | [#3390](https://github.com/intel/torch-xpu-ops/issues/3390) | Clarification requested on mixed non-atomic load<br>and atomic CAS in Atomics.h | CuiYifeng | CuiYifeng | <ul><li>No action — investigate further</li></ul> | Reply on the issue clarifying that the non-atomic load is a speculative initial guess (not a correc…<br>[→ details](details/3390.md) | P3 | Clarification request on Atomics.h CAS pattern with zero VERIFIED PR candidates (V0/VA/VB/VC/VD/VE all empty). Owner CuiYifeng should reply… | tonghaining |  |
-| [#3425](https://github.com/intel/torch-xpu-ops/issues/3425) | [ai_generated] torch.clip with float16 overflow<br>scalar does not raise RuntimeError on XPU |  |  | <ul><li>No action — investigate further</li></ul> | In launch_clamp_scalar (TensorCompareKernels.cpp:129-142), perform an overflow-checked cast to scal…<br>[→ details](details/3425.md) | P3 | Referenced upstream PR pytorch/pytorch#173776 is closed unmerged and does not target XPU; no torch-xpu-ops PR exists. A new XPU-side fix in… | laifenxiawucha | ai_generated |
-| [#3518](https://github.com/intel/torch-xpu-ops/issues/3518) | [Bug Skip]: Functionality error of test_torchvisio<br>n_roi_ops.py::TestRoIAlign::test_autocast |  |  | <ul><li>No action — investigate further</li></ul> | Inspect RoiAlignKernels.cpp accumulator type: ensure bilinear-interpolation accumulators use at::ac…<br>[→ details](details/3518.md) | P3 | No VERIFIED fix PR found via V0/VA/VB/VC/VD/VE. Action: assign an XPU SYCL kernel owner to audit RoiAlignKernels.cpp accumulator types (use… | CuiYifeng | skipped |
 
 
 <a id="sec-3-1-7-torch-runtime"></a>
-#### 3.1.7 Torch Runtime  ·  8 issues
+#### 3.1.7 Torch Runtime  ·  7 issues
 
 _[↑ Back to Index](#sec-2)_
 
@@ -201,11 +181,10 @@ _[↑ Back to Index](#sec-2)_
 | [#3481](https://github.com/intel/torch-xpu-ops/issues/3481) | [upstream_ut] test_dataloader.py RuntimeError:<br>_share_fd_: only available on CPU | DamJanusz | DamJanusz | <ul><li>No action — investigate further</li></ul> | Fix in pytorch upstream: in torch/multiprocessing/reductions.py reduce_storage(), add an XPU branch…<br>[→ details](details/3481.md) | P2 | Issue is OPEN with no PR candidate; assignee DamJanusz needs to either implement upstream pytorch fix to add XPU branch in reduce_storage()… | zxd1997066 | module: ut, skipped |
 | [#1986](https://github.com/intel/torch-xpu-ops/issues/1986) | torch.xpu._sleep is missing, | guangyey | guangyey | <ul><li>No action — investigate further</li></ul> | Implement torch.xpu._sleep in pytorch/pytorch: add Python binding in torch/xpu/__init__.py and C++…<br>[→ details](details/1986.md) | P3 | Issue is OPEN with zero VERIFIED PR candidates; no progress visible. Assignee guangyey needs to implement torch.xpu._sleep in pytorch/pytor… | githubsgi | dependency component: oneAPI |
 | [#2392](https://github.com/intel/torch-xpu-ops/issues/2392) | [Bug Skip]: torch.OutOfMemoryError: XPU out of<br>memory | xuhancn | xuhancn | <ul><li>No action — investigate further</li></ul> | Either skip on Windows/iGPU (current `skipped_windows` label) or harden the test: call `gc.collect()<br>[→ details](details/2392.md) | P3 | OPEN issue with no VERIFIED PR candidates and no comments; per DERIVATION RULE emit investigate-further. xuhancn (assignee) should either k… | RUIJIEZHONG66166 | skipped_windows |
-| [#3483](https://github.com/intel/torch-xpu-ops/issues/3483) | FX profiler tests fail on XPU due to Level Zero /<br>Unified Runtime event names in trace |  |  | <ul><li>No action — investigate further</li></ul> | Implement option 1 from the issue: in third_party/torch-xpu-ops/test/xpu/test_fx_xpu.py, override _…<br>[→ details](details/3483.md) | P3 | Issue is OPEN, no PR fix exists yet; reporter (daisyden) needs to implement the proposed _enrich_profiler_traces test-level filter or simil… | daisyden | skipped, module: profiler |
 
 
 <a id="sec-3-1-8-torchao"></a>
-#### 3.1.8 TorchAO  ·  6 issues
+#### 3.1.8 TorchAO  ·  4 issues
 
 _[↑ Back to Index](#sec-2)_
 
@@ -213,10 +192,8 @@ _[↑ Back to Index](#sec-2)_
 |---|---|---|---|---|---|---|---|---|---|
 | [#3368](https://github.com/intel/torch-xpu-ops/issues/3368) | [TorchAO][BMG] DeepSeek-R1-Distill-Llama-8B RTN<br>INT4 got 7 performance regression after upgrading<br>transformers from 4.55.4 to 5.4.0 | Stonepia | Stonepia | <ul><li>No action — investigate further</li></ul> | Profile both runs (already linked) to confirm whether the 7% gap lives in (a) Dynamo guard eval ove…<br>[→ details](details/3368.md) | P1 | Open issue with zero VERIFIED PR candidates: V0/VA empty, body has only an inner-source (intel-innersource) link plus private Jenkins URLs,… | LifengWang | module: ao |
 | [#2201](https://github.com/intel/torch-xpu-ops/issues/2201) | [TorchAO][BMG] When using paged attention backend,<br>all cases failed with "assert vr is not None" | Stonepia | Stonepia | <ul><li>No action — investigate further</li></ul> | Implement/enable PagedAttention kv-cache plumbing on XPU: ensure transformers paged_attention_forwa…<br>[→ details](details/2201.md) | P2 | Assignee Stonepia deferred paged-attention enablement to 2.13; no fix PR exists. Owner should keep the issue tracked under 2.13 milestone a… | MingxuZh | module: ao |
-| [#3474](https://github.com/intel/torch-xpu-ops/issues/3474) | [Bug Skip] test_scaled_mm_deepseek_error_messages:<br>XPU raises ValueError, test expects<br>NotImplementedError |  |  | <ul><li>No action — investigate further</li></ul> | Preferred: in the XPU _scaled_mm_v2 dispatch (aten/src/ATen/native/mkldnn/xpu/ScaledBlas.cpp), dete…<br>[→ details](details/3474.md) | P2 | CuiYifeng (MEMBER) confirmed block-wise scaling support is needed, but no owner has been assigned and no fix PR exists. V0/VA/VC searches (… | daisyden | module: ut, skipped |
 | [#2327](https://github.com/intel/torch-xpu-ops/issues/2327) | [TorchAO] benchmark enabling on XPU | LifengWang, xiaowangintel | LifengWang, xiaowangintel | <ul><li>Address comment AR from chuanqi129: confirm whether torchao XPU benchmark enabling is still planned, and assign concrete owner among LifengWang/xiaowangintel</li><li>No action — investigate further</li></ul> | Owner (liangan1) to (1) audit benchmarks/ in pytorch/ao for hardcoded `cuda` device strings and rep…<br>[→ details](details/2327.md) | P3 | chuanqi129 asked liangan1 (reporter) on 2026-03-25 whether this is still planned and there has been no response; the meta-task cannot progr… | liangan1 |  |
 | [#2533](https://github.com/intel/torch-xpu-ops/issues/2533) | Title: [upstream_ut] AttributeError:<br>'TestQuantizedOpsXPU' object has no attribute<br>'test_qsoftmax' | astachowiczhabana | astachowiczhabana | <ul><li>No action — investigate further</li></ul> | Upstream PyTorch fix: guard test_qsoftmax_qnnpack with @skipIfNoQNNPACK plus device filter, or skip…<br>[→ details](details/2533.md) | P3 | Issue is OPEN, has no linked or referenced PRs in V0/VA/VB/VC/VD/VE searches, and the only timeline cross-reference (#2843) is an unrelated… | daisyden | skipped, port_from_skiplist |
-| [#2948](https://github.com/intel/torch-xpu-ops/issues/2948) | [AO] Benchmark enabling on XPU |  |  | <ul><li>No action — investigate further</li></ul> | Port pytorch/ao benchmark scripts to accept device='xpu', add an XPU CI lane invoking the AO benchm…<br>[→ details](details/2948.md) | P3 | No PR candidates discovered across V0/VA/VB/VC/VD/VE; the only body reference is to pytorch/ao#3576, which is the upstream RFC tracking iss… | liangan1 | module: ao, bug_fix_stage6 |
 
 
 <a id="sec-3-2-track-pr"></a>
@@ -426,28 +403,96 @@ _[↑ Back to Index](#sec-2)_
 
 
 <a id="sec-3-3-needs-owner"></a>
-- **NEEDS_OWNER**  ·  2 issues
+- **NEEDS_OWNER**  ·  25 issues
 
 **NEEDS_OWNER — awaiting triage-lead to assign an owner**
 
-<a id="sec-3-3-1-others"></a>
-#### 3.3.1 Others  ·  1 issues
+<a id="sec-3-3-1-flash-attention"></a>
+#### 3.3.1 Flash Attention  ·  1 issues
 
 _[↑ Back to Index](#sec-2)_
 
 | Issue | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |
 |---|---|---|---|---|---|---|---|---|---|
+| [#3195](https://github.com/intel/torch-xpu-ops/issues/3195) | test_sdpa_unbacked_no_dde_xpu crashed |  |  | <ul><li>No action — investigate further</li></ul> | Run the test in isolation under cgdb/sycl-sanitizer to capture the crash.<br>[→ details](details/3195.md) | P2 | Issue is OPEN with no linked PRs across V0/VA/VB/VC/VD/VE; intermittent crash needs reproduction under sycl-sanitizer per fix_approach. No … | daisyden | skipped, random |
+
+
+<a id="sec-3-3-2-inductor"></a>
+#### 3.3.2 Inductor  ·  10 issues
+
+_[↑ Back to Index](#sec-2)_
+
+| Issue | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |
+|---|---|---|---|---|---|---|---|---|---|
+| [#1970](https://github.com/intel/torch-xpu-ops/issues/1970) | torch._dynamo.exc.BackendCompilerFailed:<br>backend='inductor' raised: RuntimeError: CUDA not<br>available |  |  | <ul><li>No action — investigate further</li></ul> | Submit upstream-pytorch PR generalizing CUDARngStateHelper to a device-agnostic AcceleratorRngState…<br>[→ details](details/1970.md) | P1 | Issue is OPEN with no VERIFIED PR candidates from any vector (V0/VA/VB/VC/VD/VE) in either intel/torch-xpu-ops or pytorch/pytorch; root cau… | shangerxin | module: ut |
+| [#3080](https://github.com/intel/torch-xpu-ops/issues/3080) | cudagraph tests blocked by feature gap |  |  | <ul><li>No action — investigate further</li></ul> | Implement xpugraph (SYCL command-graph capture) as a torch.xpu.Graph runtime API in upstream pytorc…<br>[→ details](details/3080.md) | P1 | No PRs found via any vector (V0/VA/VB/VC/VD/VE); xpugraph (SYCL ext_oneapi_command_graph runtime + torch.xpu.Graph + cudagraph_trees device… | daisyden | module: ut |
+| [#3094](https://github.com/intel/torch-xpu-ops/issues/3094) | XPUGraph tree support |  |  | <ul><li>No action — investigate further</li></ul> | Implement XPUGraph (SYCL graph based capture/replay) runtime APIs in torch/xpu and an XPU branch in…<br>[→ details](details/3094.md) | P1 | Issue is OPEN with no VERIFIED PR candidates; XPUGraph trees infrastructure does not yet exist and requires a large upstream design effort … | daisyden | module: inductor, ut_upstream |
+| [#2605](https://github.com/intel/torch-xpu-ops/issues/2605) | [int4][inductor] Add freezing pattern for fusing<br>int4 mm kernel as #170341 |  |  | <ul><li>No action — investigate further</li></ul> | Add an XPU-specific freezing pattern in torch/_inductor/fx_passes (mirror cuda int4-mm horizontal-f…<br>[→ details](details/2605.md) | P2 | Open feature-gap with no fix PR identified across V0/VA/VB/VC/VD/VE; XPU int4-mm freezing pattern still needs to be authored upstream. | liangan1 |  |
+| [#2953](https://github.com/intel/torch-xpu-ops/issues/2953) | [release/2.11][wsl] huggingface TrOCRForCausalLM<br>and XGLMForCausalLM pass but has RuntimeError:<br>value cannot be converted to type float without<br>overflow |  |  | <ul><li>No action — investigate further</li></ul> | Bisect upstream PyTorch between 2.10 and 2.11 to find the dtype-handling regression in benchmarks/d…<br>[→ details](details/2953.md) | P2 | No PR candidates found across both repos. Issue is a 2.10→2.11 upstream regression in benchmark/dynamo bf16 finfo handling; needs upstream … | bjarzemb | os: Windows |
+| [#3334](https://github.com/intel/torch-xpu-ops/issues/3334) | [upstream_ut] test_repros.py ReproTests.test_parti<br>tioner_activation_memory_budget_with_unbacked_symi<br>nts failed with error Tensor-likes are not close! |  |  | <ul><li>No action — investigate further</li></ul> | 1) Wait for upstream PR pytorch/pytorch#174370 to land and re-run<br>[→ details](details/3334.md) | P2 | OPEN issue with zero VERIFIED PR candidates: the upstream PR linked in the body (pytorch/pytorch#174370) does not actually address the part… | shangerxin | skipped, ut_upstream |
+| [#3388](https://github.com/intel/torch-xpu-ops/issues/3388) | [Bug Skip] XPU Dynamo Graph Lowering -<br>stream_index None |  |  | <ul><li>No action — investigate further</li></ul> | Fix is in pytorch (not torch-xpu-ops).<br>[→ details](details/3388.md) | P2 | Issue body links pytorch#180179 (closed issue, not a PR) and other DISABLED-test issues (pytorch#178155/#134746/#138557) — none are fix PRs… | daisyden | module: ut, skipped, module: dynamo |
+| [#3519](https://github.com/intel/torch-xpu-ops/issues/3519) | [upstream_ut] AOTAutogradCache<br>`compiler_config_extra` has no XPU equivalent of<br>`cudagraphs` -> `test_aot_autograd_cache_xpu.py::A<br>OTAutogradCachePicklerTests` fails with<br>`AttributeError: 'dict' object has no attribute<br>'cudagraphs'` |  |  | <ul><li>No action — investigate further</li></ul> | Upstream PyTorch fix: either add an 'xpugraphs' field to CompilerConfigExtra and torch._inductor.co…<br>[→ details](details/3519.md) | P2 | No VERIFIED fix PR. The real fix is upstream pytorch/pytorch (add xpugraphs to CompilerConfigExtra and torch._inductor.config.triton, or ge… | daisyden | module: ut, skipped |
+| [#3095](https://github.com/intel/torch-xpu-ops/issues/3095) | cutlass support blocks some unit test cases |  |  | <ul><li>No action — investigate further</li></ul> | Either (a) add device skip markers for XPU on test_cudacodecache.py upstream until an Inductor CUTL…<br>[→ details](details/3095.md) | P3 | Issue is OPEN with no PR candidates found via V0/VA/VB/VC/VD/VE; CUTLASS-equivalent backend / XPU skip for test_cudacodecache.py has not be… | daisyden | module: inductor, ut_upstream |
+| [#3096](https://github.com/intel/torch-xpu-ops/issues/3096) | VISIBLE_DEVICE support |  |  | <ul><li>No action — investigate further</li></ul> | Extend TuningProcessPool/select_device logic in torch/_inductor/autotune_process.py to set ZE_AFFIN…<br>[→ details](details/3096.md) | P3 | Issue is OPEN with no PR candidates found via V0/VA/VB/VC/VD/VE for ZE_AFFINITY_MASK / TuningProcessPool XPU support in torch/_inductor/aut… | daisyden | module: ut |
+
+
+<a id="sec-3-3-3-others"></a>
+#### 3.3.3 Others  ·  4 issues
+
+_[↑ Back to Index](#sec-2)_
+
+| Issue | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |
+|---|---|---|---|---|---|---|---|---|---|
+| [#2912](https://github.com/intel/torch-xpu-ops/issues/2912) | [release/2.11] UT extended 220 new failures |  |  | <ul><li>No action — investigate further</li></ul> | Bucket the 220 regressions in changed_tests.log by op/module, file child issues per cluster, and bi…<br>[→ details](details/2912.md) | P1 | Open meta-tracking issue with 220 pass->fail regressions on PT2.11/Windows/BMG; no fix PR yet, oneAPI swap ruled out compiler regression, s… | bjarzemb | os: Windows, hw: BMG |
+| [#3025](https://github.com/intel/torch-xpu-ops/issues/3025) | New failing test in Nightly Wheel test_decomp_xpu.<br>HasDecompTest,test_has_decomposition |  |  | <ul><li>No action — investigate further</li></ul> | Either (a) stop vendoring the .expect file and load it at test time from the installed PyTorch (tor…<br>[→ details](details/3025.md) | P3 | Issue is OPEN with no VERIFIED fix PR. Long-term fix (load .expect from installed PyTorch at runtime, or auto-sync during CI build) has not… | BBBela | skipped, random |
+| [#3086](https://github.com/intel/torch-xpu-ops/issues/3086) | nvml support blocks some test cases |  |  | <ul><li>No action — investigate further</li></ul> | Exclude test_cuda_nvml_based_avail.py from the XPU UT runner (test/xpu/run_test_with_skip.py or ski…<br>[→ details](details/3086.md) | P3 | Issue is OPEN with zero comments and no VERIFIED PR candidates. The reporter (daisyden) explicitly asks an owner to confirm whether nvml is… | daisyden | module: ut |
 | [#3477](https://github.com/intel/torch-xpu-ops/issues/3477) | [upstream_ut] export/test_torchbind.py<br>NotImplementedError: The operator<br>'_TorchScriptTesting::queue_push' is not currently<br>implemented for the XPU device |  |  | <ul><li>check_case_avaliablity</li></ul> | Add a TORCH_LIBRARY_IMPL(_TorchScriptTesting, XPU, m) block in pytorch/test/cpp/jit/test_custom_cla…<br>[→ details](details/3477.md) | P3 | Issue is OPEN with no assignee. V0 closedBy is empty, VA timeline has no cross-references, VB body's only #N reference (PR #3309) sits insi… | zxd1997066 | module: ut, skipped |
 
 
-<a id="sec-3-3-2-sparse"></a>
-#### 3.3.2 Sparse  ·  1 issues
+<a id="sec-3-3-4-sparse"></a>
+#### 3.3.4 Sparse  ·  1 issues
 
 _[↑ Back to Index](#sec-2)_
 
 | Issue | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |
 |---|---|---|---|---|---|---|---|---|---|
 | [#2663](https://github.com/intel/torch-xpu-ops/issues/2663) | test_sparse_semi_structured.py gaps |  |  | <ul><li>No action — investigate further</li></ul> | Either (a) explicitly skipIf(not _has_semi_structured_backend) at the suite level so coverage repor…<br>[→ details](details/2663.md) | P3 | Issue is OPEN with zero VERIFIED PR candidates and no comments; the test gap (test_sparse_semi_structured.py) currently produces no-op cove… | wincent8 | module: ut, ut_upstream |
+
+
+<a id="sec-3-3-5-torch-operations"></a>
+#### 3.3.5 Torch Operations  ·  6 issues
+
+_[↑ Back to Index](#sec-2)_
+
+| Issue | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |
+|---|---|---|---|---|---|---|---|---|---|
+| [#3445](https://github.com/intel/torch-xpu-ops/issues/3445) | [ai_generated] XPU misses out-of-bounds check for<br>empty source tensor and diverges from CPU |  |  | <ul><li>No action — investigate further</li></ul> | In torch-xpu-ops Indexing kernels (src/ATen/native/xpu/sycl/Indexing.h around line 136 and the inde…<br>[→ details](details/3445.md) | P1 | Upstream pytorch/pytorch#77881 already added the CPU-side bounds/empty-source checks long ago, but the XPU index_select kernel in torch-xpu… | laifenxiawucha | ai_generated |
+| [#3511](https://github.com/intel/torch-xpu-ops/issues/3511) | [Bug Skip] test_pool3d_large_size_int64_xpu: XPU<br>max_pool3d numerical mismatch vs CPU fp32<br>reference |  |  | <ul><li>No action — investigate further</li></ul> | Audit DilatedMaxPool3d.cpp for any int/int32 index, stride or offset arithmetic and convert to int6…<br>[→ details](details/3511.md) | P2 | No VERIFIED fix PR. Action: assign an XPU SYCL kernel owner to audit src/ATen/native/xpu/sycl/DilatedMaxPool3d.cpp for int32 index/stride/o… | daisyden | module: ut, skipped |
+| [#2196](https://github.com/intel/torch-xpu-ops/issues/2196) | Fix DistributionElementwiseKernelFunctor register<br>spill |  |  | <ul><li>No action — investigate further</li></ul> | Refactor DistributionElementwiseKernelFunctor in DistributionTemplates.h to reduce live state: stor…<br>[→ details](details/2196.md) | P3 | Issue is OPEN with zero VERIFIED PR candidates across V0/VA/VB/VC/VD/VE; refactor task on DistributionTemplates.h has no fix PR yet. | jianyizh | enhancement |
+| [#2199](https://github.com/intel/torch-xpu-ops/issues/2199) | Fix reduction and norm register spill |  |  | <ul><li>No action — investigate further</li></ul> | Tune Reduce.h: lower vt (vec_size) for argmin/argmax instantiations, force SIMD16 (sub_group_size 1…<br>[→ details](details/2199.md) | P3 | Issue is OPEN with zero VERIFIED PR candidates across V0/VA/VB/VC/VD/VE; perf-cleanup task to refactor Reduce.h has no fix PR yet. | jianyizh | enhancement |
+| [#3425](https://github.com/intel/torch-xpu-ops/issues/3425) | [ai_generated] torch.clip with float16 overflow<br>scalar does not raise RuntimeError on XPU |  |  | <ul><li>No action — investigate further</li></ul> | In launch_clamp_scalar (TensorCompareKernels.cpp:129-142), perform an overflow-checked cast to scal…<br>[→ details](details/3425.md) | P3 | Referenced upstream PR pytorch/pytorch#173776 is closed unmerged and does not target XPU; no torch-xpu-ops PR exists. A new XPU-side fix in… | laifenxiawucha | ai_generated |
+| [#3518](https://github.com/intel/torch-xpu-ops/issues/3518) | [Bug Skip]: Functionality error of test_torchvisio<br>n_roi_ops.py::TestRoIAlign::test_autocast |  |  | <ul><li>No action — investigate further</li></ul> | Inspect RoiAlignKernels.cpp accumulator type: ensure bilinear-interpolation accumulators use at::ac…<br>[→ details](details/3518.md) | P3 | No VERIFIED fix PR found via V0/VA/VB/VC/VD/VE. Action: assign an XPU SYCL kernel owner to audit RoiAlignKernels.cpp accumulator types (use… | CuiYifeng | skipped |
+
+
+<a id="sec-3-3-6-torch-runtime"></a>
+#### 3.3.6 Torch Runtime  ·  1 issues
+
+_[↑ Back to Index](#sec-2)_
+
+| Issue | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |
+|---|---|---|---|---|---|---|---|---|---|
+| [#3483](https://github.com/intel/torch-xpu-ops/issues/3483) | FX profiler tests fail on XPU due to Level Zero /<br>Unified Runtime event names in trace |  |  | <ul><li>No action — investigate further</li></ul> | Implement option 1 from the issue: in third_party/torch-xpu-ops/test/xpu/test_fx_xpu.py, override _…<br>[→ details](details/3483.md) | P3 | Issue is OPEN, no PR fix exists yet; reporter (daisyden) needs to implement the proposed _enrich_profiler_traces test-level filter or simil… | daisyden | skipped, module: profiler |
+
+
+<a id="sec-3-3-7-torchao"></a>
+#### 3.3.7 TorchAO  ·  2 issues
+
+_[↑ Back to Index](#sec-2)_
+
+| Issue | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |
+|---|---|---|---|---|---|---|---|---|---|
+| [#3474](https://github.com/intel/torch-xpu-ops/issues/3474) | [Bug Skip] test_scaled_mm_deepseek_error_messages:<br>XPU raises ValueError, test expects<br>NotImplementedError |  |  | <ul><li>No action — investigate further</li></ul> | Preferred: in the XPU _scaled_mm_v2 dispatch (aten/src/ATen/native/mkldnn/xpu/ScaledBlas.cpp), dete…<br>[→ details](details/3474.md) | P2 | CuiYifeng (MEMBER) confirmed block-wise scaling support is needed, but no owner has been assigned and no fix PR exists. V0/VA/VC searches (… | daisyden | module: ut, skipped |
+| [#2948](https://github.com/intel/torch-xpu-ops/issues/2948) | [AO] Benchmark enabling on XPU |  |  | <ul><li>No action — investigate further</li></ul> | Port pytorch/ao benchmark scripts to accept device='xpu', add an XPU CI lane invoking the AO benchm…<br>[→ details](details/2948.md) | P3 | No PR candidates discovered across V0/VA/VB/VC/VD/VE; the only body reference is to pytorch/ao#3576, which is the upstream RFC tracking iss… | liangan1 | module: ao, bug_fix_stage6 |
 
 
 
@@ -951,9 +996,9 @@ Merged buckets (as rendered in §3 and §4):
 
 | Bucket | Issues |
 |---|---:|
-| NEED PR | 148 |
+| NEED PR | 117 |
 | TRACK PR | 129 |
-| NEEDS_OWNER | 3 |
+| NEEDS_OWNER | 34 |
 | CLOSE or SKIP | 71 |
 | AWAIT_REPLY | 4 |
 | MONITOR | 1 |
@@ -971,8 +1016,8 @@ Raw atoms (pre-merge, for reference):
 | RETRIAGE_PRS | 12 |
 | WAIT_EXTERNAL | 6 |
 | MONITOR | 1 |
-| NEEDS_OWNER | 3 |
-| NEED_ACTION | 145 |
+| NEEDS_OWNER | 34 |
+| NEED_ACTION | 114 |
 | AWAIT_REPLY | 4 |
 | CHECK_CASES | 8 |
 
@@ -991,7 +1036,7 @@ _[↑ Back to Index](#sec-2)_
 | WAIT_EXTERNAL | 10 |
 | FILE_ISSUE | 1 |
 | MONITOR | 1 |
-| NEEDS_OWNER | 3 |
+| NEEDS_OWNER | 34 |
 | NEED_ACTION | 185 |
 | AWAIT_REPLY | 65 |
 | CHECK_CASES | 33 |
