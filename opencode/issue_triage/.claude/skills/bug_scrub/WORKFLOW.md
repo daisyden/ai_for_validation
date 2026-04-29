@@ -363,7 +363,6 @@ flowchart TD
     XLSX[(result/torch_xpu_ops_issues.xlsx<br/>Issues sheet — appended)]:::art
 
     POST1["run_phase4b_merge.py<br/><sub>merge per-issue AR JSON → Excel</sub>"]:::script
-    POST2["run_pass_backfill.py<br/><sub>repair: backfill missing pass rows</sub>"]:::script
 
     %% ========== FLOW ==========
     IN_ROW --> P3
@@ -396,8 +395,6 @@ flowchart TD
     OUT --> XLSX
     XLSX --> POST1
     POST1 --> XLSX
-    XLSX --> POST2
-    POST2 --> XLSX
 
     %% ========== STYLES ==========
     classDef inp fill:#f4e8d8,stroke:#8b6f47,stroke-width:2px,color:#000
@@ -432,12 +429,13 @@ flowchart TD
 - Vector 0 (GraphQL `closedByPullRequestsReferences`) auto-verifies; Vectors A–E still run for completeness (catches follow-up fixes, Copilot PRs, and PRs named only in the Fix Approach).
 - Step 2.5 (live PR-state re-check) is **mandatory** before any verdict verb is emitted; it prevents stale-snapshot mis-verdicts (e.g., a now-merged PR being reported as CLOSED). For CLOSED-only verified sets, the replacement-PR search re-runs Vectors C/D/E before falling through to RETRIAGE_PRS.
 - Inner-source / private-repo PRs cannot be verified via public API → flagged `UNVERIFIABLE_PRIVATE`, treated as informational.
-- `run_phase4b_merge.py` and `run_pass_backfill.py` run **once after the full Phase-4b pass**, not per-issue.
+- `run_phase4b_merge.py` runs **once after the full Phase-4b pass**, not per-issue. The agent emits `action_TBD`/`action_reason`/`action_Type` directly via the **DERIVATION RULE** during deep analysis (§6.4); no post-pass backfill script is needed.
 
 ---
 
 ## Version
 
+v1.6 — 2026-04-29 — Retired `run_pass_backfill.py` post-pass node from §6 sub-workflow. Its classification rule (VERIFIED+MERGED→VERIFY_AND_CLOSE / +OPEN→TRACK_PR / +CLOSED-unmerged→RETRIAGE_PRS) was inlined into the Phase 4b agent prompt as the **DERIVATION RULE** (`agent_space/phase4b/AGENT_INSTRUCTIONS.md`), so verdicts are emitted during deep analysis rather than patched after merge.
 v1.5 — 2026-04-27 — Added Phase 5b (`generate_html_report`) node to §1 master diagram: `gen_bug_scrub_html.py` consumes `bug_scrub.md` + `Issues` sheet (for Category/Dependency backfill) and emits self-contained `bug_scrub.html`. Phase 5 markdown remains canonical and unchanged.
 v1.4 — 2026-04-27 — Reverted Phase 5 reconciliation node added in v1.3. PR-state fixes belong in Phase 4b only (Vector E + Step 2.5 in §6 sub-workflow remain). Phase 5 is purely presentational: `run_action_type.py` → `gen_bug_scrub_md.py`.
 v1.3 — 2026-04-27 — Phase 4b: added Vector E (Fix-Approach text scan) and Step 2.5 (live PR-state re-check + replacement-PR search) to §6 sub-workflow; Phase 5: inserted `run_fix_approach_reconcile.py` between `run_action_type.py` and `gen_bug_scrub_md.py` in §1, §2, §3.

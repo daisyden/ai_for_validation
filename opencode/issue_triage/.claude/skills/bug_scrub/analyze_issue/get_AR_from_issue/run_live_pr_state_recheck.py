@@ -1,11 +1,10 @@
 """Step 2.5 helper: live PR-state re-check + replacement-PR search.
 
 `pr_analysis.state` recorded at Phase-4b run time is a point-in-time snapshot.
-By the time the report is rendered (or `run_pass_backfill.py` runs), that
-state may be stale — a CLOSED PR may have been re-opened or replaced, an
-OPEN PR may have been merged. Emitting verdicts from stale state is the
-documented failure mode that produced wrong "closed unmerged; reassess"
-verbiage in past reports.
+By the time the report is rendered, that state may be stale — a CLOSED PR
+may have been re-opened or replaced, an OPEN PR may have been merged.
+Emitting verdicts from stale state is the documented failure mode that
+produced wrong "closed unmerged; reassess" verbiage in past reports.
 
 This module exposes two pure-ish functions:
 

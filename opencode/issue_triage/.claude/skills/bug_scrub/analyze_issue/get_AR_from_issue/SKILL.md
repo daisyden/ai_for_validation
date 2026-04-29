@@ -396,8 +396,8 @@ days later), a PR's state may have changed:
 A skill that emits "PR #N closed unmerged; reassess fix path" based on
 a stale snapshot will mislead the triager. To prevent this, every
 verified PR must be re-queried for its current state immediately
-before the verdict verb is emitted (in `run_pass_backfill.py` and in
-the Phase 5 reconciliation script):
+before the verdict verb is emitted (in the Phase 4b agent itself, and
+in the Phase 5 reconciliation script):
 
 ```bash
 gh pr view <pr_number> --repo <owner/name> \
@@ -419,8 +419,38 @@ when the issue itself is still open. The replacement-PR re-search is
 
 The helper script
 [`run_live_pr_state_recheck.py`](./run_live_pr_state_recheck.py)
-implements this rule and is invoked by both `run_pass_backfill.py` and
-the Phase 5 reconciliation step.
+implements this rule and is invoked by the Phase 4b agent during
+Step 2.5 and by the Phase 5 reconciliation step.
+
+### DERIVATION RULE: action_TBD from pr_analysis (mandatory)
+
+After Step 2.5 the agent has, for each VERIFIED PR, a fresh
+`live_state ∈ {MERGED, OPEN, CLOSED}`. The verb to emit in
+`action_TBD` is derived deterministically per the precedence
+**MERGED > OPEN > CLOSED-unmerged** of the highest-priority VERIFIED PR:
+
+| Highest-priority live_state | action_Type      | Verb                                                          |
+|-----------------------------|------------------|---------------------------------------------------------------|
+| MERGED                      | VERIFY_AND_CLOSE | `"Verify fix from merged PR <ref> and close"`                 |
+| OPEN                        | TRACK_PR         | `"Track PR <ref> to merge"` + any Step-3 gate-specific verbs  |
+| CLOSED unmerged (no replacement) | RETRIAGE_PRS | `"PR <ref> closed unmerged; reassess fix path"`               |
+
+If all VERIFIED PRs are CLOSED-unmerged, the agent **must** re-run
+Vectors C/D/E to look for a replacement; if found, recurse the rule on
+the replacement's live_state. If still no replacement, emit
+RETRIAGE_PRS.
+
+If `pr_candidates` contains zero VERIFIED entries on an OPEN issue,
+emit `"No action — investigate further"` (NEED_ACTION); never leave
+`action_TBD` blank when `validation_status == "OK"`.
+
+> **History (v1.6):** This rule was previously implemented as a
+> post-pass backfill script (`run_pass_backfill.py`) that ran after
+> the wave-merge step to repair rows where the agent had returned
+> `validation_status:"PASS"` with empty `action_TBD`. Inlining it into
+> the agent prompt eliminates the post-pass repair step and produces
+> deeper, per-issue justifications written directly into
+> `action_reason` from the agent's own analysis context.
 
 ### Step 3: Deep PR Analysis Using check_pr_status
 
@@ -1411,22 +1441,30 @@ Helper scripts co-located with this skill. All use `Path(__file__).resolve().par
 
 | Script | Purpose |
 |---|---|
+| [`AGENT_INSTRUCTIONS.md`](./AGENT_INSTRUCTIONS.md) | Canonical Phase 4b explore-agent prompt. Copied into `agent_space/phase4b/` at runtime by wave-builder scripts. Encodes the 6-vector PR discovery, 3-tier verification, Step 2.5 live re-check, 4-gate analysis, and the **DERIVATION RULE** that emits `action_TBD`/`action_reason`/`action_Type` from `pr_analysis`. |
 | [`run_phase4b_merge.py`](./run_phase4b_merge.py) | Merge Phase 4b per-issue AR JSON results (from `agent_space/phase4b/wave*/`) into the Issues sheet of `result/torch_xpu_ops_issues.xlsx`. Populates `action_TBD`, `action_reason`, `owner_transferred`. |
-| [`run_pass_backfill.py`](./run_pass_backfill.py) | Backfill Phase 4b rows whose AR columns came back blank by classifying them from existing signals (all tests PASS → `VERIFY_AND_CLOSE`; open linked PR → `TRACK_PR`; merged but still-failing → `RETRIAGE_PRS`). Internally calls `run_live_pr_state_recheck.refresh_pr_state` so a stale `CLOSED` snapshot does not produce a wrong verdict. |
-| [`run_live_pr_state_recheck.py`](./run_live_pr_state_recheck.py) | Step 2.5 helper. `refresh_pr_state(pr)` re-queries `gh pr view` for the live `state` / `mergedAt` of a single PR. `find_replacement_prs(issue_number, repo, dead_prs)` re-runs Vectors C/D/E when the only verified candidates are CLOSED-unmerged. Used by `run_pass_backfill.py` and by the Phase 5 reconciliation script. |
+| [`run_live_pr_state_recheck.py`](./run_live_pr_state_recheck.py) | Step 2.5 helper. `refresh_pr_state(pr)` re-queries `gh pr view` for the live `state` / `mergedAt` of a single PR. `find_replacement_prs(issue_number, repo, dead_prs)` re-runs Vectors C/D/E when the only verified candidates are CLOSED-unmerged. Used by Phase 4b agents directly and by the Phase 5 reconciliation script. |
+
+> **Note (v1.6 — 2026-04-29):** The previous helper `run_pass_backfill.py`
+> was retired. Its rule (VERIFIED + MERGED → VERIFY_AND_CLOSE,
+> VERIFIED + OPEN → TRACK_PR, VERIFIED + CLOSED-unmerged → RETRIAGE_PRS)
+> was inlined into the Phase 4b agent prompt as the **DERIVATION RULE**
+> (see `agent_space/phase4b/AGENT_INSTRUCTIONS.md`). Agents now emit the
+> correct `action_TBD` verb during deep analysis, eliminating the need
+> for a post-pass backfill pass.
 
 Typical run:
 ```bash
 python3 opencode/issue_triage/.claude/skills/bug_scrub/analyze_issue/get_AR_from_issue/run_phase4b_merge.py
-python3 opencode/issue_triage/.claude/skills/bug_scrub/analyze_issue/get_AR_from_issue/run_pass_backfill.py
 ```
 
 ---
 
 ## Skill Metadata
 
-- **Version**: 1.5.0
+- **Version**: 1.6.0
 - **Created**: 2026-04-20
+- **Updated**: 2026-04-29 v1.6 (retired `run_pass_backfill.py`; its classification rule is now the agent-side **DERIVATION RULE** in `AGENT_INSTRUCTIONS.md` — verdicts emitted during deep analysis instead of post-pass backfill)
 - **Updated**: 2026-04-27 v1.5 (Vector E: scan `Fix Approach` text for PR references; Step 2.5 live PR-state re-check with replacement-PR search to prevent stale-snapshot verdicts; new helper `run_live_pr_state_recheck.py`)
 - **Updated**: 2026-04-21 v1.4 (Part 1 Vector 0: GitHub linked PRs via GraphQL `closedByPullRequestsReferences` — auto-verifies; highest authority)
 - **Updated**: 2026-04-21 v1.3 (Part 1 PR discovery rewritten: exclude `### Versions` section, add title-keyword + file-path search vectors, content-match verification path)
