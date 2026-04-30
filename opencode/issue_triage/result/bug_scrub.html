@@ -178,6 +178,11 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 <td>—</td>
 <td>38</td>
 </tr>
+<tr data-search="requests pending &gt; 1 week — 75">
+<td>Requests pending &gt; 1 week</td>
+<td>—</td>
+<td>75</td>
+</tr>
 </tbody>
 </table>
 
@@ -200,7 +205,8 @@ ul { margin: .3em 0; padding-left: 1.5em; }
   <li><a href="#sec-6-2-upstream-pytorch">upstream-pytorch</a></li>
   <li><a href="#sec-6-3-cpu-fallback">CPU fallback</a></li>
   <li><a href="#sec-7">7. New submitted issues (&lt;7 days)</a></li>
-  <li><a href="#sec-8">8. Statistics</a></li>
+  <li><a href="#sec-8">8. Requests pending &gt; 1 week</a></li>
+  <li><a href="#sec-9">9. Statistics</a></li>
 </ul>
 
 <h2 id="sec-3">3. Action required (Developer)</h2>
@@ -8858,7 +8864,704 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 </table>
 
 
-<h2 id="sec-8">8. Statistics</h2>
+<h2 id="sec-8">8. Requests pending &gt; 1 week</h2>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<p>Issues whose <code>action_TBD</code> contains one or more verbs flagged <code>(&gt;1 week)</code> — an unresolved comment AR, unresolved PR review comments, or unaddressed CI failures that have been sitting more than 7 days. These are the highest-priority candidates for owner follow-up.</p>
+
+<table class="ar-table" data-section="8">
+<thead>
+<tr>
+<th>Issue</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Stale Requests</th>
+<th>Priority</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="Inductor" data-dependency="triton" data-priority="P0" data-assignee="jianyizh" data-owner_transferred="jianyizh" data-milestone="PT2.13" data-search="[#2935](https://github.com/intel/torch-xpu-ops/issues/2935) [release/2.11][inductor] huggingface amp_fp16 and float16 training xlnetlmheadmodel perf regression jianyizh   resolve unresolved review comments on pr pytorch/pytorch#176049 (&gt;1 week)   p0" data-issue="2935">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2935">#2935</a></td>
+<td>[release/2.11][inductor] huggingface amp_fp16 and<br>float16 training XLNetLMHeadModel perf regression</td>
+<td>jianyizh</td>
+<td><ul><li>Resolve unresolved review comments on PR pytorch/pytorch#176049 (&gt;1 week)</li></ul></td>
+<td>P0</td>
+<td>agnottaski</td>
+<td>performance</td>
+</tr>
+<tr data-category="Distributed" data-dependency="xccl" data-priority="P1" data-assignee="zhangxiaoli73" data-owner_transferred="zhangxiaoli73" data-milestone="PT2.12" data-search="[#1571](https://github.com/intel/torch-xpu-ops/issues/1571) [distributed] valueerror: cannot use reduceop.premul_sum with xccl zhangxiaoli73   address comment ar from zhangxiaoli73 (&gt;1 week): confirm closure now that #3173 (reland of premul_sum for xccl) and #2903 (scaleout workaround) are merged   p1" data-issue="1571">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/1571">#1571</a></td>
+<td>[distributed] ValueError: Cannot use<br>ReduceOp.PREMUL_SUM with XCCL</td>
+<td>zhangxiaoli73</td>
+<td><ul><li>Address comment AR from zhangxiaoli73 (&gt;1 week): confirm closure now that #3173 (reland of premul_sum for XCCL) and #2903 (scaleout workaround) are merged</li></ul></td>
+<td>P1</td>
+<td>daisyden</td>
+<td>module: distributed</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="SYCL kernel: Indexing.cpp" data-priority="P1" data-assignee="gplutop7" data-owner_transferred="gplutop7" data-milestone="UT Backlog" data-search="[#1973](https://github.com/intel/torch-xpu-ops/issues/1973) assertionerror: scalars or tensor-likes are not equal or close! gplutop7   resolve unresolved review comments on pr pytorch/pytorch#176726 (&gt;1 week)  resolve unresolved review comments on pr pytorch/pytorch#176857 (&gt;1 week)   p1" data-issue="1973">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/1973">#1973</a></td>
+<td>AssertionError: Scalars or Tensor-likes are not<br>equal or close!</td>
+<td>gplutop7</td>
+<td><ul><li>Resolve unresolved review comments on PR pytorch/pytorch#176726 (&gt;1 week)</li><li>Resolve unresolved review comments on PR pytorch/pytorch#176857 (&gt;1 week)</li></ul></td>
+<td>P1</td>
+<td>mengfei25</td>
+<td>hw: PVC, module: ut, skipped, bug_fix_s…</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P1" data-assignee="yucai-intel" data-owner_transferred="yucai-intel" data-milestone="UT Backlog" data-search="[#2015](https://github.com/intel/torch-xpu-ops/issues/2015) inf is returned by nn.transformerencoderlayer yucai-intel   resolve unresolved review comments on pr intel/torch-xpu-ops#2336 (&gt;1 week)   p1" data-issue="2015">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2015">#2015</a></td>
+<td>inf is returned by nn.TransformerEncoderLayer</td>
+<td>yucai-intel</td>
+<td><ul><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#2336 (&gt;1 week)</li></ul></td>
+<td>P1</td>
+<td>daisyden</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Sparse" data-dependency="CPU fallback" data-priority="P1" data-assignee="jenniew" data-owner_transferred="jenniew" data-milestone="UT Backlog" data-search="[#2283](https://github.com/intel/torch-xpu-ops/issues/2283) [upstream_ut] sparse._sampled_addmm is not supported jenniew   address ci failures on pr intel/torch-xpu-ops#3018 (&gt;1 week)   p1" data-issue="2283">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2283">#2283</a></td>
+<td>[upstream_ut] sparse._sampled_addmm is not<br>supported</td>
+<td>jenniew</td>
+<td><ul><li>Address CI failures on PR intel/torch-xpu-ops#3018 (&gt;1 week)</li></ul></td>
+<td>P1</td>
+<td>daisyden</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="TorchAO" data-dependency="SYCL kernel: LinearInt4.cpp" data-priority="P1" data-assignee="xiaowangintel" data-owner_transferred="xiaowangintel" data-milestone="PT2.13" data-search="[#2572](https://github.com/intel/torch-xpu-ops/issues/2572) [torchao][ut] test/dtypes/test_affine_quantized.py assertionerror: tensor-likes are not close! xiaowangintel   address comment ar from xiaowangintel (&gt;1 week): provide status update on int4wo copy_/slice correctness   p1" data-issue="2572">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2572">#2572</a></td>
+<td>[TorchAO][UT] test/dtypes/test_affine_quantized.py<br>AssertionError: Tensor-likes are not close!</td>
+<td>xiaowangintel</td>
+<td><ul><li>Address comment AR from xiaowangintel (&gt;1 week): provide status update on int4wo copy_/slice correctness</li></ul></td>
+<td>P1</td>
+<td>zxd1997066</td>
+<td>module: ao</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P1" data-assignee="mengfei25" data-owner_transferred="mengfei25" data-milestone="PT2.12" data-search="[#2619](https://github.com/intel/torch-xpu-ops/issues/2619) [release/2.10] some models inductor performance dropped ~ 10% - 30% mengfei25   address comment ar from chuanqi129 (&gt;1 week): re-baseline 2.11 vs 2.9 to confirm closure   p1" data-issue="2619">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2619">#2619</a></td>
+<td>[release/2.10] Some models inductor performance<br>dropped ~ 10% - 30%</td>
+<td>mengfei25</td>
+<td><ul><li>Address comment AR from chuanqi129 (&gt;1 week): re-baseline 2.11 vs 2.9 to confirm closure</li></ul></td>
+<td>P1</td>
+<td>mengfei25</td>
+<td>E2E, performance, regression</td>
+</tr>
+<tr data-category="Distributed" data-dependency="xccl" data-priority="P1" data-assignee="Chao1Han" data-owner_transferred="Chao1Han" data-search="[#2659](https://github.com/intel/torch-xpu-ops/issues/2659) [distributed] test_dist2.py runtimeerror: backend xccl does not implement getbackendoptions. chao1han   address comment ar from chao1han (&gt;1 week): provide status update on processgroupxccl split_group/getbackendoptions implementation   p1" data-issue="2659">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2659">#2659</a></td>
+<td>[distributed] test_dist2.py RuntimeError: Backend<br>xccl does not implement getBackendOptions.</td>
+<td>Chao1Han</td>
+<td><ul><li>Address comment AR from Chao1Han (&gt;1 week): provide status update on ProcessGroupXCCL split_group/getBackendOptions implementation</li></ul></td>
+<td>P1</td>
+<td>zxd1997066</td>
+<td>module: distributed</td>
+</tr>
+<tr data-category="Distributed" data-dependency="xccl" data-priority="P1" data-assignee="frost-intel" data-owner_transferred="frost-intel" data-milestone="PT2.12" data-search="[#2686](https://github.com/intel/torch-xpu-ops/issues/2686) [distributed] accuracy issues with test_distributed_spawn.py frost-intel   address comment ar from frost-intel (&gt;1 week): decide whether to skip the test internally or pursue root-cause investigation   p1" data-issue="2686">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2686">#2686</a></td>
+<td>[distributed] Accuracy issues with<br>test_distributed_spawn.py</td>
+<td>frost-intel</td>
+<td><ul><li>Address comment AR from frost-intel (&gt;1 week): decide whether to skip the test internally or pursue root-cause investigation</li></ul></td>
+<td>P1</td>
+<td>madhumitha0102</td>
+<td>bug, module: distributed</td>
+</tr>
+<tr data-category="Distributed" data-dependency="xccl" data-priority="P1" data-assignee="syedshahbaaz" data-owner_transferred="syedshahbaaz" data-milestone="PT2.12" data-search="[#2700](https://github.com/intel/torch-xpu-ops/issues/2700) [distributed] hang issues with test_distributed_spawn.py syedshahbaaz   address comment ar from madhumitha0102 (&gt;1 week): validate inner-source oneccl pr #3665 fixes batch_isend_irecv hang   p1" data-issue="2700">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2700">#2700</a></td>
+<td>[distributed] Hang issues with<br>test_distributed_spawn.py</td>
+<td>syedshahbaaz</td>
+<td><ul><li>Address comment AR from madhumitha0102 (&gt;1 week): validate inner-source oneCCL PR #3665 fixes batch_isend_irecv hang</li></ul></td>
+<td>P1</td>
+<td>madhumitha0102</td>
+<td>bug, module: distributed</td>
+</tr>
+<tr data-category="Distributed" data-dependency="xccl" data-priority="P1" data-assignee="syedshahbaaz" data-owner_transferred="syedshahbaaz" data-milestone="PT2.12" data-search="[#2701](https://github.com/intel/torch-xpu-ops/issues/2701) [distributed] barrier timeout error with test_distributed_spawn.py syedshahbaaz   address comment ar from madhumitha0102 (&gt;1 week): respond on env-var export approach so a pr can land   p1" data-issue="2701">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2701">#2701</a></td>
+<td>[distributed] Barrier Timeout Error with<br>test_distributed_spawn.py</td>
+<td>syedshahbaaz</td>
+<td><ul><li>Address comment AR from madhumitha0102 (&gt;1 week): respond on env-var export approach so a PR can land</li></ul></td>
+<td>P1</td>
+<td>madhumitha0102</td>
+<td>bug, module: distributed</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="oneDNN" data-priority="P1" data-assignee="mengfei25" data-owner_transferred="mengfei25" data-milestone="PT2.12" data-search="[#2769](https://github.com/intel/torch-xpu-ops/issues/2769) [onednn] new failed test cases with 3.11 compared with 3.10 mengfei25   address comment ar from chuanqi129 (&gt;1 week): verify whether onednn 3.11.1 fixes the conv regression   p1" data-issue="2769">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2769">#2769</a></td>
+<td>[oneDNN] New failed test cases with 3.11 compared<br>with 3.10</td>
+<td>mengfei25</td>
+<td><ul><li>Address comment AR from chuanqi129 (&gt;1 week): verify whether oneDNN 3.11.1 fixes the conv regression</li></ul></td>
+<td>P1</td>
+<td>mengfei25</td>
+<td>hw: PVC, dependency component: oneDNN, …</td>
+</tr>
+<tr data-category="Inductor" data-dependency="triton" data-priority="P1" data-assignee="jianyizh" data-owner_transferred="jianyizh" data-milestone="PT2.13" data-search="[#2939](https://github.com/intel/torch-xpu-ops/issues/2939) [release/2.11] gmlp_s16_224 inference amp performance dropped ~15% jianyizh   resolve unresolved review comments on pr pytorch/pytorch#176049 (&gt;1 week)   p1" data-issue="2939">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2939">#2939</a></td>
+<td>[release/2.11] gmlp_s16_224 inference amp<br>performance dropped ~15%</td>
+<td>jianyizh</td>
+<td><ul><li>Resolve unresolved review comments on PR pytorch/pytorch#176049 (&gt;1 week)</li></ul></td>
+<td>P1</td>
+<td>mengfei25</td>
+<td>performance</td>
+</tr>
+<tr data-category="Inductor" data-dependency="driver" data-priority="P1" data-assignee="mengfei25" data-owner_transferred="mengfei25" data-milestone="PT2.13" data-search="[#2979](https://github.com/intel/torch-xpu-ops/issues/2979) eca_halonext26ts got runtimeerror: ze_result_error_module_build_failure mengfei25   address comment ar from mengfei25 (&gt;1 week): file igc 2.28.4 internal-compiler-error bug to driver team and pin ci to libigc2 2.24.8 / driver 25.48   p1" data-issue="2979">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2979">#2979</a></td>
+<td>eca_halonext26ts got RuntimeError:<br>ZE_RESULT_ERROR_MODULE_BUILD_FAILURE</td>
+<td>mengfei25</td>
+<td><ul><li>Address comment AR from mengfei25 (&gt;1 week): file IGC 2.28.4 internal-compiler-error bug to driver team and pin CI to libigc2 2.24.8 / driver 25.48</li></ul></td>
+<td>P1</td>
+<td>mengfei25</td>
+<td>hw: BMG, dependency component: driver</td>
+</tr>
+<tr data-category="Distributed" data-dependency="xccl" data-priority="P1" data-assignee="zhangxiaoli73" data-owner_transferred="zhangxiaoli73" data-search="[#3022](https://github.com/intel/torch-xpu-ops/issues/3022) [distributed] batch_isend_irecv compatibility issue on b60/xccl zhangxiaoli73   address comment ar from mingfeima (&gt;1 week): verify fix on dle 2026.0 and close   p1" data-issue="3022">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3022">#3022</a></td>
+<td>[distributed] batch_isend_irecv Compatibility<br>Issue on B60/XCCL</td>
+<td>zhangxiaoli73</td>
+<td><ul><li>Address comment AR from mingfeima (&gt;1 week): verify fix on DLE 2026.0 and close</li></ul></td>
+<td>P1</td>
+<td>xiangyuT</td>
+<td>module: distributed</td>
+</tr>
+<tr data-category="TorchAO" data-dependency="triton" data-priority="P1" data-assignee="hoshibara" data-owner_transferred="hoshibara" data-milestone="PT2.13" data-search="[#3088](https://github.com/intel/torch-xpu-ops/issues/3088) [torchao][bmg] int4 rtn flex-attention got 5% performance drop hoshibara   address comment ar from liangan1 (&gt;1 week): report register-spill regression to triton team   p1" data-issue="3088">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3088">#3088</a></td>
+<td>[TorchAO][BMG] INT4 RTN Flex-attention got 5%<br>performance drop</td>
+<td>hoshibara</td>
+<td><ul><li>Address comment AR from liangan1 (&gt;1 week): report register-spill regression to triton team</li></ul></td>
+<td>P1</td>
+<td>LifengWang</td>
+<td>dependency component: Triton, module: ao</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P1" data-assignee="mengfei25" data-owner_transferred="mengfei25" data-milestone="PT2.12" data-search="[#3191](https://github.com/intel/torch-xpu-ops/issues/3191) torch._inductor.exc.inductorerror: assertionerror: both a fallback and a decomp for same op: aten.index_add.default mengfei25   resolve unresolved review comments on pr intel/torch-xpu-ops#3218 (&gt;1 week)   p1" data-issue="3191">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3191">#3191</a></td>
+<td>torch._inductor.exc.InductorError: AssertionError:<br>both a fallback and a decomp for same op:<br>aten.index_add.default</td>
+<td>mengfei25</td>
+<td><ul><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#3218 (&gt;1 week)</li></ul></td>
+<td>P1</td>
+<td>mengfei25</td>
+<td>E2E, hw: PVC</td>
+</tr>
+<tr data-category="Inductor" data-dependency="triton" data-priority="P1" data-assignee="Copilot" data-search="[#3331](https://github.com/intel/torch-xpu-ops/issues/3331) [ai_generated] torch.compile with slice_scatter produces incorrect backward gradient on xpu copilot   address ci failures on pr intel/torch-xpu-ops#3338 (&gt;1 week)   p1" data-issue="3331">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3331">#3331</a></td>
+<td>[ai_generated] torch.compile with slice_scatter<br>produces incorrect backward gradient on XPU</td>
+<td>Copilot</td>
+<td><ul><li>Address CI failures on PR intel/torch-xpu-ops#3338 (&gt;1 week)</li></ul></td>
+<td>P1</td>
+<td>laifenxiawucha</td>
+<td>ai_generated</td>
+</tr>
+<tr data-category="Inductor" data-dependency="triton" data-priority="P2" data-milestone="PT2.13" data-assignee="" data-search="[#1505](https://github.com/intel/torch-xpu-ops/issues/1505) [arc-wsl-ubuntu24.04] 15 timm models got fail_accuracy    address comment ar from libohao1201 (&gt;1 week): retest 10 failing timm/hf accuracy cases on bmg wsl with pt 2.10   p2" data-issue="1505">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/1505">#1505</a></td>
+<td>[ARC-WSL-Ubuntu24.04] 15 Timm models got<br>fail_accuracy</td>
+<td></td>
+<td><ul><li>Address comment AR from libohao1201 (&gt;1 week): retest 10 failing timm/HF accuracy cases on BMG WSL with PT 2.10</li></ul></td>
+<td>P2</td>
+<td>libohao1201</td>
+<td>bug, E2E, client, os: Windows, module: …</td>
+</tr>
+<tr data-category="Distributed" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="pkourdis" data-owner_transferred="pkourdis" data-milestone="PT2.12" data-search="[#1556](https://github.com/intel/torch-xpu-ops/issues/1556) [distributed] notimplementederror: operator aten._ scaled_dot_product_fused_attention_overrideable.de fault does not have a sharding strategy registered. pkourdis   address comment ar from pkourdis (&gt;1 week): reassign to kernel team for onednn fused-attention kernel   p2" data-issue="1556">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/1556">#1556</a></td>
+<td>[distributed] NotImplementedError: Operator aten._<br>scaled_dot_product_fused_attention_overrideable.de<br>fault does not have a sharding strategy<br>registered.</td>
+<td>pkourdis</td>
+<td><ul><li>Address comment AR from pkourdis (&gt;1 week): reassign to kernel team for oneDNN fused-attention kernel</li></ul></td>
+<td>P2</td>
+<td>PenghuiCheng</td>
+<td>module: distributed, dependency compone…</td>
+</tr>
+<tr data-category="Torch Runtime" data-dependency="oneAPI" data-priority="P2" data-milestone="PT2.13" data-assignee="" data-search="[#1678](https://github.com/intel/torch-xpu-ops/issues/1678) missing op support for `model.share_memory()`    address comment ar from guangyey (&gt;1 week): clarify xpu ipc scope (single issue vs split), expected feature set, and sycl runtime ipc readiness now that marekstrachacki confirmed oneapi 2026.1 / pt2.14 timeline   p2" data-issue="1678">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/1678">#1678</a></td>
+<td>missing op support for <code>model.share_memory()</code></td>
+<td></td>
+<td><ul><li>Address comment AR from guangyey (&gt;1 week): clarify XPU IPC scope (single issue vs split), expected feature set, and SYCL runtime IPC readiness now that MarekStrachacki confirmed oneAPI 2026.1 / PT2.14 timeline</li></ul></td>
+<td>P2</td>
+<td>jafraustro</td>
+<td>bug_fix_stage3</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="SYCL kernel: GroupNormKernels.cpp" data-priority="P2" data-assignee="kdrozd-dev" data-owner_transferred="libohao1201 | kdrozd-dev" data-milestone="PT2.13" data-search="[#1818](https://github.com/intel/torch-xpu-ops/issues/1818) [bmg-windows][pt2.8]torch-xpu-ops ut got accuracy issue kdrozd-dev   resolve unresolved review comments on pr intel/torch-xpu-ops#3072 (&gt;1 week)   p2" data-issue="1818">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/1818">#1818</a></td>
+<td>[BMG-Windows][PT2.8]Torch-xpu-ops UT got accuracy<br>issue</td>
+<td>kdrozd-dev</td>
+<td><ul><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#3072 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>libohao1201</td>
+<td>os: Windows, hw: BMG, bug_fix_stage5</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="oneMKL" data-priority="P2" data-assignee="pbielak" data-owner_transferred="pbielak" data-milestone="PT2.13" data-search="[#1900](https://github.com/intel/torch-xpu-ops/issues/1900) implement torch.linalg.qr xpu backend pbielak   resolve unresolved review comments on pr intel/torch-xpu-ops#2399 (&gt;1 week)  address ci failures on pr intel/torch-xpu-ops#2399 (&gt;1 week)   p2" data-issue="1900">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/1900">#1900</a></td>
+<td>implement torch.linalg.qr xpu backend</td>
+<td>pbielak</td>
+<td><ul><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#2399 (&gt;1 week)</li><li>Address CI failures on PR intel/torch-xpu-ops#2399 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>yao-matrix</td>
+<td>module: op impl, bug_fix_stage3</td>
+</tr>
+<tr data-category="Distributed" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="libohao1201" data-owner_transferred="libohao1201" data-milestone="PT2.12" data-search="[#2004](https://github.com/intel/torch-xpu-ops/issues/2004) [distributed][shared_tensor] test\distributed\_sha rd\shared_tensor\test_sharded_tensor.py has 12 cases failed with &quot;runtimeerror: eof (this error originated at tensorpipe/transport/shm/connection_impl.cc:259)&quot; libohao1201   address comment ar from kpjeeja (&gt;1 week): exclude/skip deprecated shardedtensor tests for xpu   p2" data-issue="2004">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2004">#2004</a></td>
+<td>[distributed][shared_tensor] test\distributed\_sha<br>rd\shared_tensor\test_sharded_tensor.py has 12<br>cases failed with "RuntimeError: eof (this error<br>originated at<br>tensorpipe/transport/shm/connection_impl.cc:259)"</td>
+<td>libohao1201</td>
+<td><ul><li>Address comment AR from kpjeeja (&gt;1 week): exclude/skip deprecated ShardedTensor tests for XPU</li></ul></td>
+<td>P2</td>
+<td>libohao1201</td>
+<td>bug, module: distributed</td>
+</tr>
+<tr data-category="Flash Attention" data-dependency="oneDNN" data-priority="P2" data-milestone="PT2.13" data-assignee="" data-search="[#2200](https://github.com/intel/torch-xpu-ops/issues/2200) support flash attention op on xpu device    address comment ar from chuanqi129 (&gt;1 week): clarify whether &#x27;1/3 of 4090d&#x27; b60 perf target is general or shape-specific so onednn team can scope work   p2" data-issue="2200">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2200">#2200</a></td>
+<td>support flash attention op on XPU device</td>
+<td></td>
+<td><ul><li>Address comment AR from chuanqi129 (&gt;1 week): clarify whether '1/3 of 4090D' B60 perf target is general or shape-specific so oneDNN team can scope work</li></ul></td>
+<td>P2</td>
+<td>Zjq9409</td>
+<td>dependency component: oneDNN</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="SYCL kernel: Copy.cpp" data-priority="P2" data-assignee="Stonepia, CuiYifeng, LuFinch" data-owner_transferred="Stonepia" data-milestone="PT2.13" data-search="[#2207](https://github.com/intel/torch-xpu-ops/issues/2207) enable fp8/mxfp8 ops with requests and cuda alignment stonepia, cuiyifeng, luf…   address comment ar from chuanqi129 (&gt;1 week): @daisyden add specific fp8 ut_upstream requests   p2" data-issue="2207">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2207">#2207</a></td>
+<td>Enable FP8/MXFP8 Ops with requests and CUDA<br>alignment</td>
+<td>Stonepia, CuiYifeng, LuF…</td>
+<td><ul><li>Address comment AR from chuanqi129 (&gt;1 week): @daisyden add specific FP8 ut_upstream requests</li></ul></td>
+<td>P2</td>
+<td>CuiYifeng</td>
+<td>dtype: float8</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="oneDNN" data-priority="P2" data-assignee="BartoszKokoszko" data-owner_transferred="BartoszKokoszko" data-milestone="UT Backlog" data-search="[#2239](https://github.com/intel/torch-xpu-ops/issues/2239) exception: could not create a primitive descriptor for the deconvolution forward propagation primitive. in test/functorch/test_ops.py bartoszkokoszko   resolve unresolved review comments on pr pytorch/pytorch#176420 (&gt;1 week)   p2" data-issue="2239">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2239">#2239</a></td>
+<td>Exception: could not create a primitive descriptor<br>for the deconvolution forward propagation<br>primitive. in test/functorch/test_ops.py</td>
+<td>BartoszKokoszko</td>
+<td><ul><li>Resolve unresolved review comments on PR pytorch/pytorch#176420 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>zxd1997066</td>
+<td>skipped, bug_fix_stage5</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="jkosnox" data-owner_transferred="jkosnox" data-milestone="UT Backlog" data-search="[#2250](https://github.com/intel/torch-xpu-ops/issues/2250) found mismatch when comparing the output of aten.view.default on faketensor and concrete tensors jkosnox   resolve unresolved review comments on pr pytorch/pytorch#175965 (&gt;1 week)   p2" data-issue="2250">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2250">#2250</a></td>
+<td>Found mismatch when comparing the output of<br>aten.view.default on FakeTensor and concrete<br>Tensors</td>
+<td>jkosnox</td>
+<td><ul><li>Resolve unresolved review comments on PR pytorch/pytorch#175965 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>daisyden</td>
+<td>skipped, bug_fix_stage3</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="SYCL kernel: UnaryComplexKernels.cpp" data-priority="P2" data-assignee="pbielak" data-owner_transferred="pbielak" data-milestone="UT Backlog" data-search="[#2257](https://github.com/intel/torch-xpu-ops/issues/2257) accuracy failures in test/xpu/test_unary_ufuncs_xpu.py pbielak   address ci failures on pr intel/torch-xpu-ops#2884 (&gt;1 week)   p2" data-issue="2257">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2257">#2257</a></td>
+<td>Accuracy failures in<br>test/xpu/test_unary_ufuncs_xpu.py</td>
+<td>pbielak</td>
+<td><ul><li>Address CI failures on PR intel/torch-xpu-ops#2884 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>zxd1997066</td>
+<td>skipped, bug_fix_stage4</td>
+</tr>
+<tr data-category="Torch Runtime" data-dependency="oneAPI" data-priority="P2" data-assignee="riverliuintel" data-owner_transferred="riverliuintel" data-milestone="PT2.13" data-search="[#2349](https://github.com/intel/torch-xpu-ops/issues/2349) [oneapi][backward compatibility] libur_loader.so.0: version `libur_loader_0.11&#x27; not found riverliuintel   address ci failures on pr intel/torch-xpu-ops#2388 (&gt;1 week)   p2" data-issue="2349">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2349">#2349</a></td>
+<td>[oneAPI][backward compatibility]<br>libur_loader.so.0: version `LIBUR_LOADER_0.11' not<br>found</td>
+<td>riverliuintel</td>
+<td><ul><li>Address CI failures on PR intel/torch-xpu-ops#2388 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>dvrogozh</td>
+<td></td>
+</tr>
+<tr data-category="Distributed" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="astachowiczhabana" data-owner_transferred="astachowiczhabana" data-milestone="UT Backlog" data-search="[#2404](https://github.com/intel/torch-xpu-ops/issues/2404) [distributed][checkpoint] assertionerror: booleans mismatch: false is not true astachowiczhabana   address comment ar from astachowiczhabana (&gt;1 week): file internal pytorch jira for dcp stager xpu pin_memory bug  address comment ar from riverliuintel (&gt;1 week): reassign to appropriate owner (single-rank failure confirmed)  address comment ar from riverliuintel (&gt;1 week): provide status update on ut-fixing-sequence triage   p2" data-issue="2404">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2404">#2404</a></td>
+<td>[distributed][checkpoint] AssertionError: Booleans<br>mismatch: False is not True</td>
+<td>astachowiczhabana</td>
+<td><ul><li>Address comment AR from astachowiczhabana (&gt;1 week): file internal PyTorch JIRA for DCP stager XPU pin_memory bug</li><li>Address comment AR from riverliuintel (&gt;1 week): reassign to appropriate owner (single-rank failure confirmed)</li><li>Address comment AR from riverliuintel (&gt;1 week): provide status update on UT-fixing-sequence triage</li></ul></td>
+<td>P2</td>
+<td>zxd1997066</td>
+<td>bug</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="yucai-intel, BBBela" data-owner_transferred="BBBela" data-milestone="UT Backlog" data-search="[#2412](https://github.com/intel/torch-xpu-ops/issues/2412) some nestedtensor missing xpu support yucai-intel, bbbela   address ci failures on pr intel/torch-xpu-ops#2483 (&gt;1 week)  resolve unresolved review comments on pr intel/torch-xpu-ops#2483 (&gt;1 week)   p2" data-issue="2412">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2412">#2412</a></td>
+<td>Some NestedTensor missing XPU support</td>
+<td>yucai-intel, BBBela</td>
+<td><ul><li>Address CI failures on PR intel/torch-xpu-ops#2483 (&gt;1 week)</li><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#2483 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>daisyden</td>
+<td>module: ut</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="BBBela" data-owner_transferred="BBBela" data-milestone="UT Backlog" data-search="[#2425](https://github.com/intel/torch-xpu-ops/issues/2425) [upstream_ut] runtimeerror: expected both self and other to be nested, but got a nested self and non-nested other bbbela   address ci failures on pr intel/torch-xpu-ops#2483 (&gt;1 week)  resolve unresolved review comments on pr intel/torch-xpu-ops#2483 (&gt;1 week)   p2" data-issue="2425">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2425">#2425</a></td>
+<td>[upstream_ut] RuntimeError: Expected both self and<br>other to be nested, but got a nested self and<br>non-nested other</td>
+<td>BBBela</td>
+<td><ul><li>Address CI failures on PR intel/torch-xpu-ops#2483 (&gt;1 week)</li><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#2483 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>daisyden</td>
+<td>skipped, bug_fix_stage4</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="PatrykWilczewski" data-owner_transferred="PatrykWilczewski" data-milestone="UT Backlog" data-search="[#2530](https://github.com/intel/torch-xpu-ops/issues/2530) title: [upstream_ut] assertionerror: runtimeerror not raised patrykwilczewski   resolve unresolved review comments on pr intel/torch-xpu-ops#3104 (&gt;1 week)  address ci failures on pr intel/torch-xpu-ops#3104 (&gt;1 week)  address ci failures on pr pytorch/pytorch#178372 (&gt;1 week)   p2" data-issue="2530">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2530">#2530</a></td>
+<td>Title: [upstream_ut] AssertionError: RuntimeError<br>not raised</td>
+<td>PatrykWilczewski</td>
+<td><ul><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#3104 (&gt;1 week)</li><li>Address CI failures on PR intel/torch-xpu-ops#3104 (&gt;1 week)</li><li>Address CI failures on PR pytorch/pytorch#178372 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>daisyden</td>
+<td>skipped, bug_fix_stage5, port_from_skip…</td>
+</tr>
+<tr data-category="TorchAO" data-dependency="SYCL kernel: WeightInt4PackKernel.cpp" data-priority="P2" data-assignee="yucai-intel" data-owner_transferred="yucai-intel" data-milestone="UT Backlog" data-search="[#2532](https://github.com/intel/torch-xpu-ops/issues/2532) title: [upstream_ut] assertionerror: wrong number of dimensions2 for op: torch.ops.aten._convert_weight_to_int4pack.defa yucai-intel   resolve unresolved review comments on pr intel/torch-xpu-ops#3090 (&gt;1 week)  address ci failures on pr intel/torch-xpu-ops#3090 (&gt;1 week)   p2" data-issue="2532">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2532">#2532</a></td>
+<td>Title: [upstream_ut] AssertionError: wrong number<br>of dimensions2 for op:<br>torch.ops.aten._convert_weight_to_int4pack.defa</td>
+<td>yucai-intel</td>
+<td><ul><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#3090 (&gt;1 week)</li><li>Address CI failures on PR intel/torch-xpu-ops#3090 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>daisyden</td>
+<td>skipped, port_from_skiplist</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="SYCL kernel: PointwiseOpsKernels.cpp" data-priority="P2" data-assignee="CuiYifeng" data-owner_transferred="CuiYifeng" data-milestone="UT Backlog" data-search="[#2560](https://github.com/intel/torch-xpu-ops/issues/2560) [ut] &quot;runtimeerror: iter.device(arg).is_xpu()&quot; in test_torch_xpu.py cuiyifeng   address comment ar from libohao1201 (&gt;1 week): confirm ci enablement of test_torch_xpu.py   p2" data-issue="2560">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2560">#2560</a></td>
+<td>[UT] "RuntimeError: iter.device(arg).is_xpu()" in<br>test_torch_xpu.py</td>
+<td>CuiYifeng</td>
+<td><ul><li>Address comment AR from libohao1201 (&gt;1 week): confirm CI enablement of test_torch_xpu.py</li></ul></td>
+<td>P2</td>
+<td>libohao1201</td>
+<td>bug</td>
+</tr>
+<tr data-category="TorchAO" data-dependency="oneDNN" data-priority="P2" data-assignee="xiaowangintel" data-owner_transferred="xiaowangintel" data-milestone="PT2.13" data-search="[#2597](https://github.com/intel/torch-xpu-ops/issues/2597) [torchao][bmg] int4 gptq shows worse performance compared with rtn and awq. xiaowangintel   address comment ar from xiaowangintel (&gt;1 week): provide pt 2.12 plan for int4 gptq bmg perf gap and align int4 weight packing/g_idx with rtn&#x27;s _weight_int4pack_mm_xpu path   p2" data-issue="2597">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2597">#2597</a></td>
+<td>[TorchAO][BMG] INT4 GPTQ shows worse performance<br>compared with RTN and AWQ.</td>
+<td>xiaowangintel</td>
+<td><ul><li>Address comment AR from xiaowangintel (&gt;1 week): provide PT 2.12 plan for INT4 GPTQ BMG perf gap and align int4 weight packing/g_idx with RTN's _weight_int4pack_mm_xpu path</li></ul></td>
+<td>P2</td>
+<td>LifengWang</td>
+<td>module: ao</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="etaf" data-owner_transferred="etaf" data-milestone="UT Backlog" data-search="[#2609](https://github.com/intel/torch-xpu-ops/issues/2609) [upstream_ut] torch._inductor.exc.inductorerror: cppcompileerror: c++ compile error etaf   address ci failures on pr pytorch/pytorch#171154 (&gt;1 week)   p2" data-issue="2609">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2609">#2609</a></td>
+<td>[upstream_ut] torch._inductor.exc.InductorError:<br>CppCompileError: C++ compile error</td>
+<td>etaf</td>
+<td><ul><li>Address CI failures on PR pytorch/pytorch#171154 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>daisyden</td>
+<td>module: inductor, skipped, ut_upstream</td>
+</tr>
+<tr data-category="Inductor" data-dependency="driver" data-priority="P2" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#2613](https://github.com/intel/torch-xpu-ops/issues/2613) [upstream_ut] assertionerror: tensor-likes are not equal! in test_compile_subprocess.py daisyden   address comment ar from daisyden (&gt;1 week): re-verify argmax/argmin tie-break tests with the new driver per gsd-11415   p2" data-issue="2613">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2613">#2613</a></td>
+<td>[upstream_ut] AssertionError: Tensor-likes are not<br>equal! in test_compile_subprocess.py</td>
+<td>daisyden</td>
+<td><ul><li>Address comment AR from daisyden (&gt;1 week): re-verify argmax/argmin tie-break tests with the new driver per GSD-11415</li></ul></td>
+<td>P2</td>
+<td>daisyden</td>
+<td>dependency component: driver, module: i…</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="oneMKL" data-priority="P2" data-assignee="jmamzax" data-owner_transferred="jmamzax" data-milestone="UT Backlog" data-search="[#2618](https://github.com/intel/torch-xpu-ops/issues/2618) [bug skip]: [regression] assertionerror: scalars are not close! assertionerror: tensor-likes are not close! jmamzax   address ci failures on pr intel/torch-xpu-ops#3219 (&gt;1 week)   p2" data-issue="2618">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2618">#2618</a></td>
+<td>[Bug Skip]: [regression] AssertionError: Scalars<br>are not close! AssertionError: Tensor-likes are<br>not close!</td>
+<td>jmamzax</td>
+<td><ul><li>Address CI failures on PR intel/torch-xpu-ops#3219 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>kaileiyx</td>
+<td>skipped, bug_fix_stage5</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="SYCL kernel: BinaryRemainderKernel.cpp" data-priority="P2" data-assignee="jmamzax" data-owner_transferred="jmamzax" data-milestone="UT Backlog" data-search="[#2630](https://github.com/intel/torch-xpu-ops/issues/2630) title: [upstream_ut] assertionerror: scalars are not equal! jmamzax   address ci failures on pr intel/torch-xpu-ops#3401 (&gt;1 week)  resolve unresolved review comments on pr intel/torch-xpu-ops#3401 (&gt;1 week)   p2" data-issue="2630">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2630">#2630</a></td>
+<td>Title: [upstream_ut] AssertionError: Scalars are<br>not equal!</td>
+<td>jmamzax</td>
+<td><ul><li>Address CI failures on PR intel/torch-xpu-ops#3401 (&gt;1 week)</li><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#3401 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>daisyden</td>
+<td>skipped, bug_fix_stage5, port_from_skip…</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="hoshibara" data-owner_transferred="hoshibara" data-milestone="UT Backlog" data-search="[#2693](https://github.com/intel/torch-xpu-ops/issues/2693) title: [upstream_ut] assertionerror: scalars are not equal! hoshibara   address comment ar from daisyden (&gt;1 week): confirm platform / whether the test should be enabled on xpu   p2" data-issue="2693">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2693">#2693</a></td>
+<td>Title: [upstream_ut] AssertionError: Scalars are<br>not equal!</td>
+<td>hoshibara</td>
+<td><ul><li>Address comment AR from daisyden (&gt;1 week): confirm platform / whether the test should be enabled on XPU</li></ul></td>
+<td>P2</td>
+<td>daisyden</td>
+<td>module: inductor, skipped, ut_upstream</td>
+</tr>
+<tr data-category="Flash Attention" data-dependency="SYCL kernel: mha_fwd.cpp" data-priority="P2" data-assignee="LuFinch" data-owner_transferred="LuFinch" data-milestone="UT Backlog" data-search="[#2698](https://github.com/intel/torch-xpu-ops/issues/2698) title: [upstream_ut] runtimeerror: flashattentionforwardxpu only support headdim 64,96,128,192 lufinch   address ci failures on pr pytorch/pytorch#180646 (&gt;1 week)   p2" data-issue="2698">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2698">#2698</a></td>
+<td>Title: [upstream_ut] RuntimeError:<br>FlashAttentionForwardXPU only support headdim<br>64,96,128,192</td>
+<td>LuFinch</td>
+<td><ul><li>Address CI failures on PR pytorch/pytorch#180646 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>daisyden</td>
+<td>module: inductor, skipped, ut_upstream</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="tszulist-hbn" data-owner_transferred="tszulist-hbn" data-milestone="UT Backlog" data-search="[#2712](https://github.com/intel/torch-xpu-ops/issues/2712) [upstream_ut] runtimeerror: cannot swap t2 because it has weakref associated with it ; runtimeerror: _apply(): co tszulist-hbn   address ci failures on pr intel/torch-xpu-ops#3199 (&gt;1 week)   p2" data-issue="2712">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2712">#2712</a></td>
+<td>[upstream_ut] RuntimeError: Cannot swap t2 because<br>it has weakref associated with it ; RuntimeError:<br>_apply(): Co</td>
+<td>tszulist-hbn</td>
+<td><ul><li>Address CI failures on PR intel/torch-xpu-ops#3199 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>daisyden</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="Silv3S" data-owner_transferred="Silv3S" data-milestone="UT Backlog" data-search="[#2714](https://github.com/intel/torch-xpu-ops/issues/2714) [upstream_ut] assertionerror: object comparison failed: torch.float32 != torch.float64 silv3s   resolve unresolved review comments on pr pytorch/pytorch#179141 (&gt;1 week)  address ci failures on pr pytorch/pytorch#179141 (&gt;1 week)   p2" data-issue="2714">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2714">#2714</a></td>
+<td>[upstream_ut] AssertionError: Object comparison<br>failed: torch.float32 != torch.float64</td>
+<td>Silv3S</td>
+<td><ul><li>Resolve unresolved review comments on PR pytorch/pytorch#179141 (&gt;1 week)</li><li>Address CI failures on PR pytorch/pytorch#179141 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>daisyden</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="PatrykWilczewski" data-owner_transferred="PatrykWilczewski" data-milestone="UT Backlog" data-search="[#2767](https://github.com/intel/torch-xpu-ops/issues/2767) [ut] test_control_flow_xpu.py got assertionerror patrykwilczewski   address ci failures on pr intel/torch-xpu-ops#3050 (&gt;1 week)   p2" data-issue="2767">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2767">#2767</a></td>
+<td>[UT] test_control_flow_xpu.py got AssertionError</td>
+<td>PatrykWilczewski</td>
+<td><ul><li>Address CI failures on PR intel/torch-xpu-ops#3050 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>libohao1201</td>
+<td>module: ut, skipped, bug_fix_stage5</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="weishi-deng" data-owner_transferred="weishi-deng" data-milestone="PT2.13" data-search="[#3058](https://github.com/intel/torch-xpu-ops/issues/3058) [e2e] hf_gpt2_large amp_fp16/amp_bf16 training got fail_accuracy weishi-deng   address comment ar from weishi-deng (&gt;1 week): decide on device-gated fix for unfuse_bias_add_to_pointwise (ping @jianyizh)   p2" data-issue="3058">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3058">#3058</a></td>
+<td>[E2E] hf_GPT2_large amp_fp16/amp_bf16 training got<br>fail_accuracy</td>
+<td>weishi-deng</td>
+<td><ul><li>Address comment AR from weishi-deng (&gt;1 week): decide on device-gated fix for unfuse_bias_add_to_pointwise (ping @jianyizh)</li></ul></td>
+<td>P2</td>
+<td>kaileiyx</td>
+<td>E2E, hw: PVC</td>
+</tr>
+<tr data-category="Inductor" data-dependency="triton" data-priority="P2" data-assignee="mengfei25" data-owner_transferred="mengfei25" data-milestone="PT2.12" data-search="[#3148](https://github.com/intel/torch-xpu-ops/issues/3148) [triton] huggingface openai/whisper-tiny got fail_accuracy mengfei25   address comment ar from mengfei25 (&gt;1 week): enlarge whisper-tiny tolerance   p2" data-issue="3148">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3148">#3148</a></td>
+<td>[Triton] Huggingface openai/whisper-tiny got<br>fail_accuracy</td>
+<td>mengfei25</td>
+<td><ul><li>Address comment AR from mengfei25 (&gt;1 week): enlarge whisper-tiny tolerance</li></ul></td>
+<td>P2</td>
+<td>mengfei25</td>
+<td>Accuracy, hw: BMG, hw: PVC, dependency …</td>
+</tr>
+<tr data-category="Sparse" data-dependency="CPU fallback" data-priority="P2" data-assignee="jkosnox" data-owner_transferred="jkosnox" data-milestone="UT Backlog" data-search="[#3169](https://github.com/intel/torch-xpu-ops/issues/3169) notimplementederror: could not run &#x27;aten::hspmm&#x27; with arguments from the &#x27;sparsexpu&#x27; backend jkosnox   resolve unresolved review comments on pr intel/torch-xpu-ops#3293 (&gt;1 week)   p2" data-issue="3169">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3169">#3169</a></td>
+<td>NotImplementedError: Could not run 'aten::hspmm'<br>with arguments from the 'SparseXPU' backend</td>
+<td>jkosnox</td>
+<td><ul><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#3293 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>CuiYifeng</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Sparse" data-dependency="SYCL kernel: SparseCsrTensorMathKernels.cpp" data-priority="P2" data-assignee="jenniew" data-owner_transferred="jenniew" data-milestone="UT Backlog" data-search="[#3177](https://github.com/intel/torch-xpu-ops/issues/3177) accuracy gap of bf16/fp16 test_block_addmm jenniew   resolve unresolved review comments on pr intel/torch-xpu-ops#3273 (&gt;1 week)   p2" data-issue="3177">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3177">#3177</a></td>
+<td>Accuracy gap of BF16/FP16 test_block_addmm</td>
+<td>jenniew</td>
+<td><ul><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#3273 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>CuiYifeng</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Others" data-priority="P2" data-assignee="Copilot" data-owner_transferred="Copilot" data-milestone="PT2.13" data-search="[#3209](https://github.com/intel/torch-xpu-ops/issues/3209) [win][build] there is cyclic dependencies error when build with build_separate_ops=true copilot   address ci failures on pr intel/torch-xpu-ops#3217 (&gt;1 week)   p2" data-issue="3209">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3209">#3209</a></td>
+<td>[Win][Build] There is Cyclic dependencies error<br>when build with BUILD_SEPARATE_OPS=true</td>
+<td>Copilot</td>
+<td><ul><li>Address CI failures on PR intel/torch-xpu-ops#3217 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>NeoZhangJianyu</td>
+<td>module: build</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="pponikox" data-owner_transferred="pponikox" data-milestone="UT Backlog" data-search="[#3393](https://github.com/intel/torch-xpu-ops/issues/3393) [upstream_ut] test/dynamo/test_activation_checkpoi nting.py::activationcheckpointingviatagstestsxpu:: test_pattern_matcher failed with indexerror pponikox   resolve unresolved review comments on pr pytorch/pytorch#169241 (&gt;1 week)   p2" data-issue="3393">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3393">#3393</a></td>
+<td>[upstream_ut] test/dynamo/test_activation_checkpoi<br>nting.py::ActivationCheckpointingViaTagsTestsXPU::<br>test_pattern_matcher failed with IndexError</td>
+<td>pponikox</td>
+<td><ul><li>Resolve unresolved review comments on PR pytorch/pytorch#169241 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>shangerxin</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Others" data-priority="P3" data-assignee="CuiYifeng, chunhuanMeng" data-owner_transferred="CuiYifeng" data-milestone="PT2.13" data-search="[#1594](https://github.com/intel/torch-xpu-ops/issues/1594) keep track on the building warning cuiyifeng, chunhuanmeng   address comment ar from chunhuanmeng (&gt;1 week): provide status update on remaining onemkl set_value deprecation and igc generic-address-space warning bullets   p3" data-issue="1594">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/1594">#1594</a></td>
+<td>Keep track on the building warning</td>
+<td>CuiYifeng, chunhuanMeng</td>
+<td><ul><li>Address comment AR from chunhuanMeng (&gt;1 week): provide status update on remaining oneMKL set_value deprecation and IGC generic-address-space warning bullets</li></ul></td>
+<td>P3</td>
+<td>toyxu</td>
+<td>module: build</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="oneDNN" data-priority="P3" data-assignee="chunhuanMeng" data-owner_transferred="chunhuanMeng" data-milestone="UT Backlog" data-search="[#1893](https://github.com/intel/torch-xpu-ops/issues/1893) [upstream_ut] onednn accuracy issues in test_ops_xpu.py chunhuanmeng   address ci failures on pr pytorch/pytorch#179125 (&gt;1 week)   p3" data-issue="1893">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/1893">#1893</a></td>
+<td>[upstream_ut] oneDNN accuracy issues in<br>test_ops_xpu.py</td>
+<td>chunhuanMeng</td>
+<td><ul><li>Address CI failures on PR pytorch/pytorch#179125 (&gt;1 week)</li></ul></td>
+<td>P3</td>
+<td>daisyden</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Torch Runtime" data-dependency="driver" data-priority="P3" data-assignee="guangyey" data-owner_transferred="guangyey" data-milestone="PT2.13" data-search="[#2089](https://github.com/intel/torch-xpu-ops/issues/2089) need an implementation that won&#x27;t initialize gpu context for torch.xpu.is_available() guangyey   address comment ar from guangyey (&gt;1 week): provide concrete use case for fork-safe torch.xpu.is_available   p3" data-issue="2089">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2089">#2089</a></td>
+<td>need an implementation that won't initialize gpu<br>context for torch.xpu.is_available()</td>
+<td>guangyey</td>
+<td><ul><li>Address comment AR from guangyey (&gt;1 week): provide concrete use case for fork-safe torch.xpu.is_available</li></ul></td>
+<td>P3</td>
+<td>faaany</td>
+<td>dependency component: driver</td>
+</tr>
+<tr data-category="Sparse" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="jenniew" data-owner_transferred="jenniew" data-milestone="UT Backlog" data-search="[#2214](https://github.com/intel/torch-xpu-ops/issues/2214) test/test_sparse.py::testsparseanyxpu::test_gradch eck_mm expected error message not match jenniew   address comment ar from chuanqi129 (&gt;1 week): @wincent8 remove hardcoded skips in test files (use dynamic skip-by-issue)  address comment ar from daisyden (&gt;1 week): confirm/dedupe with #2283 (jenniew should triage)   p3" data-issue="2214">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2214">#2214</a></td>
+<td>test/test_sparse.py::TestSparseAnyXPU::test_gradch<br>eck_mm expected error message not match</td>
+<td>jenniew</td>
+<td><ul><li>Address comment AR from chuanqi129 (&gt;1 week): @wincent8 remove hardcoded skips in test files (use dynamic skip-by-issue)</li><li>Address comment AR from daisyden (&gt;1 week): confirm/dedupe with #2283 (jenniew should triage)</li></ul></td>
+<td>P3</td>
+<td>wincent8</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Sparse" data-dependency="CPU fallback" data-priority="P3" data-assignee="jenniew" data-owner_transferred="jenniew" data-milestone="UT Backlog" data-search="[#2229](https://github.com/intel/torch-xpu-ops/issues/2229) test/test_sparse_csr.py::testsparsecompressedcpu:: test_invalid_input meet message not match jenniew   address ci failures on pr intel/torch-xpu-ops#3073 (&gt;1 week)   p3" data-issue="2229">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2229">#2229</a></td>
+<td>test/test_sparse_csr.py::TestSparseCompressedCPU::<br>test_invalid_input meet message not match</td>
+<td>jenniew</td>
+<td><ul><li>Address CI failures on PR intel/torch-xpu-ops#3073 (&gt;1 week)</li></ul></td>
+<td>P3</td>
+<td>wincent8</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Torch Runtime" data-dependency="oneAPI" data-priority="P3" data-assignee="aostrowski-hbn" data-owner_transferred="aostrowski-hbn" data-milestone="UT Backlog" data-search="[#2261](https://github.com/intel/torch-xpu-ops/issues/2261) [xpu][profiler] run with fork process has extra warning aostrowski-hbn   address comment ar from moksiuc (&gt;1 week): pr 174673 stalled in review — needs assignee/owner to push it through   p3" data-issue="2261">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2261">#2261</a></td>
+<td>[xpu][profiler] Run with fork process has extra<br>warning</td>
+<td>aostrowski-hbn</td>
+<td><ul><li>Address comment AR from moksiuc (&gt;1 week): PR 174673 stalled in review — needs assignee/owner to push it through</li></ul></td>
+<td>P3</td>
+<td>chuanqi129</td>
+<td>dependency component: oneAPI, module: p…</td>
+</tr>
+<tr data-category="Others" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="yucai-intel" data-owner_transferred="yucai-intel" data-milestone="UT Backlog" data-search="[#2287](https://github.com/intel/torch-xpu-ops/issues/2287) [upstream_ut] test_python_ref issues yucai-intel   address ci failures on pr pytorch/pytorch#178734 (&gt;1 week)   p3" data-issue="2287">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2287">#2287</a></td>
+<td>[upstream_ut] test_python_ref issues</td>
+<td>yucai-intel</td>
+<td><ul><li>Address CI failures on PR pytorch/pytorch#178734 (&gt;1 week)</li></ul></td>
+<td>P3</td>
+<td>daisyden</td>
+<td>module: ut, ut_upstream</td>
+</tr>
+<tr data-category="TorchAO" data-priority="P3" data-assignee="LifengWang, xiaowangintel" data-owner_transferred="LifengWang" data-milestone="PT2.14" data-search="[#2327](https://github.com/intel/torch-xpu-ops/issues/2327) [torchao] benchmark enabling on xpu lifengwang, xiaowangintel   address comment ar from liangan1 (&gt;1 week): confirm whether torchao xpu benchmark enabling is still planned   p3" data-issue="2327">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2327">#2327</a></td>
+<td>[TorchAO] benchmark enabling on XPU</td>
+<td>LifengWang, xiaowangintel</td>
+<td><ul><li>Address comment AR from liangan1 (&gt;1 week): confirm whether torchao XPU benchmark enabling is still planned</li></ul></td>
+<td>P3</td>
+<td>liangan1</td>
+<td></td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="hoshibara" data-owner_transferred="hoshibara" data-milestone="UT Backlog" data-search="[#2331](https://github.com/intel/torch-xpu-ops/issues/2331) [upstream_ut] assertionerror: scalars are not equal! with test_prune_configs_over_shared_memory_limit hoshibara   address comment ar from hoshibara (&gt;1 week): land xpu ut fix for test_prune_configs_over_shared_memory_limit on top of pytorch/pytorch#172314   p3" data-issue="2331">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2331">#2331</a></td>
+<td>[upstream_ut] AssertionError: Scalars are not<br>equal! with<br>test_prune_configs_over_shared_memory_limit</td>
+<td>hoshibara</td>
+<td><ul><li>Address comment AR from hoshibara (&gt;1 week): land XPU UT fix for test_prune_configs_over_shared_memory_limit on top of pytorch/pytorch#172314</li></ul></td>
+<td>P3</td>
+<td>daisyden</td>
+<td>dependency component: oneAPI, module: i…</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#2436](https://github.com/intel/torch-xpu-ops/issues/2436) [upstream_ut] attributeerror: &#x27;nonetype&#x27; object has no attribute &#x27;clone&#x27; daisyden   address comment ar from daisyden (&gt;1 week): re-check case design per cuiyifeng&#x27;s request   p3" data-issue="2436">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2436">#2436</a></td>
+<td>[upstream_ut] AttributeError: 'NoneType' object<br>has no attribute 'clone'</td>
+<td>daisyden</td>
+<td><ul><li>Address comment AR from daisyden (&gt;1 week): re-check case design per CuiYifeng's request</li></ul></td>
+<td>P3</td>
+<td>daisyden</td>
+<td>skipped, dependency component: communit…</td>
+</tr>
+<tr data-category="Others" data-priority="P3" data-assignee="PatrykWilczewski" data-owner_transferred="PatrykWilczewski" data-milestone="UT Backlog" data-search="[#2537](https://github.com/intel/torch-xpu-ops/issues/2537) title: [upstream_ut] failed: unexpected success patrykwilczewski   resolve unresolved review comments on pr intel/torch-xpu-ops#3200 (&gt;1 week)   p3" data-issue="2537">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2537">#2537</a></td>
+<td>Title: [upstream_ut] Failed: Unexpected success</td>
+<td>PatrykWilczewski</td>
+<td><ul><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#3200 (&gt;1 week)</li></ul></td>
+<td>P3</td>
+<td>daisyden</td>
+<td>skipped, port_from_skiplist</td>
+</tr>
+<tr data-category="TorchAO" data-dependency="SYCL kernel: BinaryRemainderKernels.cpp" data-priority="P3" data-assignee="arlesniak" data-owner_transferred="arlesniak" data-milestone="UT Backlog" data-search="[#2580](https://github.com/intel/torch-xpu-ops/issues/2580) [torchao][ut] test/test_low_bit_optim.py assertionerror: tensor-likes are not close! arlesniak   address comment ar from arlesniak (&gt;1 week): investigate pvc-specific bf16 stochastic-rounding numeric drift confirmed by reporter on pvc1100   p3" data-issue="2580">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2580">#2580</a></td>
+<td>[TorchAO][UT] test/test_low_bit_optim.py<br>AssertionError: Tensor-likes are not close!</td>
+<td>arlesniak</td>
+<td><ul><li>Address comment AR from arlesniak (&gt;1 week): investigate PVC-specific bf16 stochastic-rounding numeric drift confirmed by reporter on PVC1100</li></ul></td>
+<td>P3</td>
+<td>zxd1997066</td>
+<td>module: ao</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="SYCL kernel: Indexing.cpp" data-priority="P3" data-assignee="BartoszKokoszko" data-owner_transferred="BartoszKokoszko" data-milestone="UT Backlog" data-search="[#2640](https://github.com/intel/torch-xpu-ops/issues/2640) random issue test_vjpvjp_index_reduce_prod_xpu_float32 bartoszkokoszko   resolve unresolved review comments on pr intel/torch-xpu-ops#3061 (&gt;1 week)   p3" data-issue="2640">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2640">#2640</a></td>
+<td>random issue<br>test_vjpvjp_index_reduce_prod_xpu_float32</td>
+<td>BartoszKokoszko</td>
+<td><ul><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#3061 (&gt;1 week)</li></ul></td>
+<td>P3</td>
+<td>daisyden</td>
+<td>skipped, random</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="SYCL kernel: LossNLL2dKernels.cpp" data-priority="P3" data-assignee="draghan, tadkrawiec" data-owner_transferred="draghan" data-milestone="UT Backlog" data-search="[#2689](https://github.com/intel/torch-xpu-ops/issues/2689) [lnl][windows] assertionerror: &#x27;assertion `cur_target &gt;= 0 &amp;&amp; cur_target  failed&#x27; not found in &#x27;pytorch_api_usage torch.python draghan, tadkrawiec   address comment ar from xuhancn (&gt;1 week): confirm whether this is a duplicate of #1171 / a random failure   p3" data-issue="2689">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2689">#2689</a></td>
+<td>[LNL][Windows] AssertionError: 'Assertion<br><code>cur_target &gt;= 0 &amp;&amp; cur_target &lt; n_classes</code><br>failed' not found in 'PYTORCH_API_USAGE<br>torch.python</td>
+<td>draghan, tadkrawiec</td>
+<td><ul><li>Address comment AR from xuhancn (&gt;1 week): confirm whether this is a duplicate of #1171 / a random failure</li></ul></td>
+<td>P3</td>
+<td>kaileiyx</td>
+<td>os: Windows, module: ut</td>
+</tr>
+<tr data-category="Others" data-priority="P3" data-assignee="AKloniecki" data-owner_transferred="AKloniecki" data-milestone="UT Backlog" data-search="[#2777](https://github.com/intel/torch-xpu-ops/issues/2777) [bug skip]: random failures 2026ww05 akloniecki   address comment ar from akloniecki (&gt;1 week): retry reproduction on ci docker image / wheel   p3" data-issue="2777">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2777">#2777</a></td>
+<td>[Bug Skip]: Random failures 2026WW05</td>
+<td>AKloniecki</td>
+<td><ul><li>Address comment AR from AKloniecki (&gt;1 week): retry reproduction on CI docker image / wheel</li></ul></td>
+<td>P3</td>
+<td>CuiYifeng</td>
+<td>skipped, random</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="kdrozd-dev" data-owner_transferred="kdrozd-dev" data-milestone="UT Backlog" data-search="[#2817](https://github.com/intel/torch-xpu-ops/issues/2817) expected error message is different than actual kdrozd-dev   address ci failures on pr pytorch/pytorch#174198 (&gt;1 week)   p3" data-issue="2817">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2817">#2817</a></td>
+<td>Expected error message is different than actual</td>
+<td>kdrozd-dev</td>
+<td><ul><li>Address CI failures on PR pytorch/pytorch#174198 (&gt;1 week)</li></ul></td>
+<td>P3</td>
+<td>Silv3S</td>
+<td>skipped, bug_fix_stage5</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="DamJanusz" data-owner_transferred="DamJanusz" data-milestone="UT Backlog" data-search="[#2837](https://github.com/intel/torch-xpu-ops/issues/2837) accuracy issue for muon optimizer damjanusz   resolve unresolved review comments on pr pytorch/pytorch#174864 (&gt;1 week)   p3" data-issue="2837">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2837">#2837</a></td>
+<td>Accuracy issue for Muon optimizer</td>
+<td>DamJanusz</td>
+<td><ul><li>Resolve unresolved review comments on PR pytorch/pytorch#174864 (&gt;1 week)</li></ul></td>
+<td>P3</td>
+<td>kdrozd-dev</td>
+<td>skipped, bug_fix_stage5</td>
+</tr>
+<tr data-category="Others" data-priority="P3" data-assignee="Silv3S" data-owner_transferred="Silv3S" data-search="[#3024](https://github.com/intel/torch-xpu-ops/issues/3024) enable clang-tidy checks silv3s   address ci failures on pr intel/torch-xpu-ops#3062 (&gt;1 week)  address ci failures on pr intel/torch-xpu-ops#3005 (&gt;1 week)   p3" data-issue="3024">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3024">#3024</a></td>
+<td>Enable clang-tidy checks</td>
+<td>Silv3S</td>
+<td><ul><li>Address CI failures on PR intel/torch-xpu-ops#3062 (&gt;1 week)</li><li>Address CI failures on PR intel/torch-xpu-ops#3005 (&gt;1 week)</li></ul></td>
+<td>P3</td>
+<td>Silv3S</td>
+<td>enhancement</td>
+</tr>
+<tr data-category="Sparse" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="libohao1201, jafraustro" data-owner_transferred="libohao1201" data-milestone="UT Backlog" data-search="[#3170](https://github.com/intel/torch-xpu-ops/issues/3170) unskip test_bmm_windows_error_xpu_float64 libohao1201, jafraustro   address comment ar from libohao1201 (&gt;1 week): verify the issue on windows   p3" data-issue="3170">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3170">#3170</a></td>
+<td>Unskip test_bmm_windows_error_xpu_float64</td>
+<td>libohao1201, jafraustro</td>
+<td><ul><li>Address comment AR from libohao1201 (&gt;1 week): verify the issue on windows</li></ul></td>
+<td>P3</td>
+<td>CuiYifeng</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Inductor" data-dependency="oneMKL" data-priority="P3" data-assignee="EikanWang, Copilot" data-owner_transferred="EikanWang" data-milestone="UT Backlog" data-search="[#3296](https://github.com/intel/torch-xpu-ops/issues/3296) accuracy gap of stft in float16 eikanwang, copilot   resolve unresolved review comments on pr intel/torch-xpu-ops#3313 (&gt;1 week)  address ci failures on pr intel/torch-xpu-ops#3313 (&gt;1 week)   p3" data-issue="3296">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3296">#3296</a></td>
+<td>accuracy gap of stft in float16</td>
+<td>EikanWang, Copilot</td>
+<td><ul><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#3313 (&gt;1 week)</li><li>Address CI failures on PR intel/torch-xpu-ops#3313 (&gt;1 week)</li></ul></td>
+<td>P3</td>
+<td>daisyden</td>
+<td>module: ut, ut_upstream</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="SYCL kernel: ReduceMomentKernels.cpp" data-priority="P3" data-assignee="Stonepia, Copilot" data-owner_transferred="Stonepia" data-search="[#3330](https://github.com/intel/torch-xpu-ops/issues/3330) [ai_generated] torch.std on large float32 input returns inf on xpu stonepia, copilot   address ci failures on pr intel/torch-xpu-ops#3337 (&gt;1 week)   p3" data-issue="3330">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3330">#3330</a></td>
+<td>[ai_generated] torch.std on large float32 input<br>returns inf on XPU</td>
+<td>Stonepia, Copilot</td>
+<td><ul><li>Address CI failures on PR intel/torch-xpu-ops#3337 (&gt;1 week)</li></ul></td>
+<td>P3</td>
+<td>laifenxiawucha</td>
+<td>ai_generated</td>
+</tr>
+<tr data-category="Torch Operations" data-priority="P3" data-assignee="jmamzax" data-owner_transferred="jmamzax" data-milestone="UT Backlog" data-search="[#3362](https://github.com/intel/torch-xpu-ops/issues/3362) test_nn_xpu.py::testnn::test_cudnn_weight_format skipped (cudnn not available) jmamzax   address ci failures on pr intel/torch-xpu-ops#3402 (&gt;1 week)  resolve unresolved review comments on pr intel/torch-xpu-ops#3402 (&gt;1 week)   p3" data-issue="3362">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3362">#3362</a></td>
+<td>test_nn_xpu.py::TestNN::test_cudnn_weight_format<br>SKIPPED (CUDNN not available)</td>
+<td>jmamzax</td>
+<td><ul><li>Address CI failures on PR intel/torch-xpu-ops#3402 (&gt;1 week)</li><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#3402 (&gt;1 week)</li></ul></td>
+<td>P3</td>
+<td>jmamzax</td>
+<td>bug_fix_stage5</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="" data-search="[#3428](https://github.com/intel/torch-xpu-ops/issues/3428) [ai_generated] inductor drops cudagraph skip reasons on non-cuda gpu backends    address ci failures on pr pytorch/pytorch#180971 (&gt;1 week)   p3" data-issue="3428">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3428">#3428</a></td>
+<td>[ai_generated] Inductor drops cudagraph skip<br>reasons on non-CUDA GPU backends</td>
+<td></td>
+<td><ul><li>Address CI failures on PR pytorch/pytorch#180971 (&gt;1 week)</li></ul></td>
+<td>P3</td>
+<td>laifenxiawucha</td>
+<td>ai_generated</td>
+</tr>
+</tbody>
+</table>
+
+
+<h2 id="sec-9">9. Statistics</h2>
 
 <p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
 
@@ -8877,7 +9580,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 
 <p>Merged buckets (as rendered in §3 and §4):</p>
 
-<table class="ar-table" data-section="8">
+<table class="ar-table" data-section="9">
 <thead>
 <tr>
 <th>Bucket</th>
@@ -8913,7 +9616,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 
 <p>Raw atoms (pre-merge, for reference):</p>
 
-<table class="ar-table" data-section="8">
+<table class="ar-table" data-section="9">
 <thead>
 <tr>
 <th>Category</th>
@@ -8973,7 +9676,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 
 <p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
 
-<table class="ar-table" data-section="8">
+<table class="ar-table" data-section="9">
 <thead>
 <tr>
 <th>Category</th>
@@ -9041,7 +9744,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 
 <p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
 
-<table class="ar-table" data-section="8">
+<table class="ar-table" data-section="9">
 <thead>
 <tr>
 <th>Priority</th>
@@ -9073,7 +9776,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 
 <p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
 
-<table class="ar-table" data-section="8">
+<table class="ar-table" data-section="9">
 <thead>
 <tr>
 <th>Status</th>
@@ -9093,7 +9796,7 @@ ul { margin: .3em 0; padding-left: 1.5em; }
 
 <p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
 
-<table class="ar-table" data-section="8">
+<table class="ar-table" data-section="9">
 <thead>
 <tr>
 <th>Category</th>

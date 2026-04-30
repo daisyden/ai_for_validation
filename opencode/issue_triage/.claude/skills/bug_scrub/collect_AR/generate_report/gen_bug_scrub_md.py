@@ -602,6 +602,12 @@ for r in rows:
 dup_rows = [r for r in rows if clean(r[C["duplicated_issue"]]) or
             "duplicate of" in clean(r[C["action_TBD"]]).lower()]
 
+# Stale requests: rows whose action_TBD contains one or more "(>1 week)" items.
+# We carry the per-row list of stale items so the renderer can show them.
+def stale_items(r) -> list[str]:
+    return [it for it in split_action_tbd(r[C["action_TBD"]]) if "(>1 week)" in it]
+stale_rows = [r for r in rows if stale_items(r)]
+
 # Dependency: non-blank AND not upstream-pytorch AND not SYCL kernel:* AND not CPU fallback
 def dep_ok(r) -> bool:
     d = clean(r[C["Dependency"]]).lower()
@@ -729,6 +735,31 @@ def render_dep_table(row_list) -> str:
     return "\n".join(out) + "\n"
 
 
+def render_stale_table(row_list) -> str:
+    """Table of issues with one or more action_TBD items containing '(>1 week)'."""
+    if not row_list:
+        return "_No issues._\n"
+    head = "| Issue | Title | Owner | Stale Requests | Priority | Reporter | Labels |"
+    sep  = "|---|---|---|---|---|---|---|"
+    out = [head, sep]
+    sorted_rows = sorted(row_list, key=lambda r: (
+        prio_key(r), str(r[C["Issue ID"]])
+    ))
+    for r in sorted_rows:
+        items = stale_items(r)
+        bullets = "<ul>" + "".join(f"<li>{esc(it, 0)}</li>" for it in items) + "</ul>"
+        out.append("| " + " | ".join([
+            issue_link(r[C["Issue ID"]]),
+            wrap_cell(r[C["Title"]], 50),
+            esc(assignee_only(r), 25),
+            bullets,
+            esc(clean(r[C["Priority"]]), 6),
+            esc(clean(r[C["Reporter"]]), 20),
+            esc(clean(r[C["Labels"]]), 40),
+        ]) + " |")
+    return "\n".join(out) + "\n"
+
+
 def render_recent(row_list) -> str:
     head = "| Issue | Created | Title | Owner | Owner Transferred | action_TBD | Fix Approach | Priority | action_reason | Reporter | Labels |"
     sep  = "|---|---|---|---|---|---|---|---|---|---|---|"
@@ -832,6 +863,7 @@ w(f"| External dependency (non-upstream-pytorch, non-SYCL-kernel) | — | {len(d
 w(f"| Upstream-pytorch | — | {len(upstream_rows)} |")
 w(f"| CPU fallback | — | {len(cpu_fb_rows)} |")
 w(f"| Filed within last 7 days | — | {len(recent_rows)} |")
+w(f"| Requests pending > 1 week | — | {len(stale_rows)} |")
 w()
 
 # -- Section 2: Index ------------------------------------------------------
@@ -851,7 +883,8 @@ w('  - [Third Parties](#sec-6-1-third-parties)')
 w('  - [upstream-pytorch](#sec-6-2-upstream-pytorch)')
 w('  - [CPU fallback](#sec-6-3-cpu-fallback)')
 w('- [7. New submitted issues (<7 days)](#sec-7)')
-w('- [8. Statistics](#sec-8)')
+w('- [8. Requests pending > 1 week](#sec-8)')
+w('- [9. Statistics](#sec-9)')
 w()
 
 # -- Section 3: Developer --------------------------------------------------
@@ -993,9 +1026,23 @@ w()
 w(render_recent(recent_rows))
 w()
 
-# -- Section 8: Statistics -------------------------------------------------
+# -- Section 8: Requests pending > 1 week ----------------------------------
 w('<a id="sec-8"></a>')
-w("## 8. Statistics")
+w("## 8. Requests pending > 1 week")
+w()
+w(BACK)
+w()
+w("Issues whose `action_TBD` contains one or more verbs flagged `(>1 week)` — "
+  "an unresolved comment AR, unresolved PR review comments, or unaddressed CI "
+  "failures that have been sitting more than 7 days. These are the highest-"
+  "priority candidates for owner follow-up.")
+w()
+w(render_stale_table(stale_rows))
+w()
+
+# -- Section 9: Statistics -------------------------------------------------
+w('<a id="sec-9"></a>')
+w("## 9. Statistics")
 w()
 w(BACK)
 w()
