@@ -7,6 +7,12 @@ with any values already written by Phase 4a/4c.
 Separator for Phase 4b additions is " | " (pipe) because action_reason
 sentences contain commas. Existing comma-separated 4a/4c tokens are
 preserved intact; dedupe uses substring membership.
+
+INVARIANT (post-merge): For any row containing "No action — investigate
+further" in action_TBD, owner_transferred MUST NOT equal Reporter when
+Assignee is empty. The merge enforces this by clearing such values
+after writing agent emissions, guarding against stale data and agent
+regressions.
 """
 import json
 import os
@@ -55,6 +61,10 @@ I_ID  = col("Issue ID")
 I_ACT = col("action_TBD")
 I_RSN = col("action_reason")
 I_OWN = col("owner_transferred")
+I_REP = col("Reporter")
+I_ASG = col("Assignee")
+
+INVESTIGATE_VERB = "No action — investigate further"
 
 def merge_cell(cell, additions):
     """Append each addition to cell (pipe-separated) unless already present."""
@@ -100,6 +110,29 @@ for row in ws.iter_rows(min_row=2):
 # Any result not matched to an Excel row?
 excel_ids = {row[I_ID].value for row in ws.iter_rows(min_row=2)}
 missing   = sorted(set(results) - excel_ids)
+
+# ---- INVARIANT: Reporter is NEVER a valid owner_transferred ----------------
+# Rule (per AGENT_INSTRUCTIONS.md DERIVATION RULE — owner_transferred):
+#   For any row whose action_TBD contains "No action — investigate further",
+#   if owner_transferred == Reporter AND Assignee is empty/None, clear
+#   owner_transferred. (If Assignee == Reporter, the value is sourced from
+#   Assignee and is legitimate — leave it alone.)
+# This guards against stale agent emissions from before the rule was
+# formalized, and against any future agent regressions.
+cleared = []
+for row in ws.iter_rows(min_row=2):
+    act = (row[I_ACT].value or "")
+    if INVESTIGATE_VERB not in act:
+        continue
+    own = (row[I_OWN].value or "").strip()
+    rep = (row[I_REP].value or "").strip()
+    asg = (row[I_ASG].value or "").strip()
+    if own and own == rep and asg in ("", "None"):
+        row[I_OWN].value = None
+        cleared.append(row[I_ID].value)
+if cleared:
+    print(f"invariant: cleared owner_transferred on {len(cleared)} 'investigate further' rows where owner==Reporter and Assignee=None")
+    print(f"  IDs: {cleared[:20]}{'...' if len(cleared) > 20 else ''}")
 
 wb.save(EXCEL)
 print(f"merged {updated} issues into Issues sheet")
