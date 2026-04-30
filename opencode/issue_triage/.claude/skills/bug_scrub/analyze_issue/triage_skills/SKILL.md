@@ -28,7 +28,12 @@ Each triaged issue MUST be emitted as one object in a JSON array. Required keys 
   "priority":      "P0|P1|P2|P3",
   "dependency":    "<string>", // From Dependency Taxonomy below. Use "" for blank.
   "root_cause":    "<string>", // 2-4 sentences, cite file:line.
-  "fix_approach":  "<string>"  // Actionable next steps.
+  "fix_approach":  "<string>", // Actionable next steps.
+  "mini_reproducer": {         // OPTIONAL — present when STEP 3.5 ran.
+    "path":       "<string>", // e.g. "agent_space/phase3_triage/repro_3530.py"
+    "reproduced": <bool>,     // true if the script reproduced the same error
+    "notes":      "<string>"  // 1-2 sentences: what was tried, why NOT_REPRODUCED, etc.
+  }
 }
 ```
 
@@ -87,8 +92,9 @@ P0 = crash/segfault/>5% perf regression/custom-model blocker · P1 = UT >20 fail
 1. **Fetch**: `gh issue view <id> --repo intel/torch-xpu-ops --json title,body,labels,comments,state`
    - Fallback: `webfetch(url="https://github.com/intel/torch-xpu-ops/issues/<id>", format="markdown")`
 2. **Locate** test/code/error — read relevant files, grep for the failing symbol.
-3. **Cite** file:line evidence (torch-xpu-ops source and/or pytorch source).
-4. **Classify** using the four taxonomies above and write the JSON entry.
+3. **Reproduce** (when applicable): write a minimal Python reproducer and verify it triggers the same error. See `SKILL_Mini_Reproducer.md` for the template, iteration budget, and acceptance criteria. Skip for pure tracker / doc / infra issues.
+4. **Cite** file:line evidence (torch-xpu-ops source and/or pytorch source).
+5. **Classify** using the four taxonomies above and write the JSON entry.
 
 ### Pinned Reference Paths
 
@@ -135,6 +141,24 @@ See `SKILL_Batch_Orchestration.md` for the wave-based parallel pattern (5 issues
 │ • Locate test files in PyTorch (test_linalg.py, test_ops.py)    │
 │ • Locate test files in torch-xpu-ops (test/xpu/)                │
 │ • Analyze test expectations and assertions                      │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ STEP 3.5: Mini Reproducer  (see SKILL_Mini_Reproducer.md)       │
+├─────────────────────────────────────────────────────────────────┤
+│ 3.5.1 Write a minimal Python reproducer (single file, ≤30 LOC,  │
+│       hard-coded inputs, deterministic seed, runs against the   │
+│       conda env). Save to                                       │
+│       agent_space/phase3_triage/repro_<issue>.py                │
+│ 3.5.2 Run it and verify it reproduces the SAME error            │
+│       (exception type + message substring match).               │
+│       If not, iterate up to N=3 times (adjust dtype/shape/      │
+│       device/seed). Capture stdout+stderr to                    │
+│       agent_space/phase3_triage/repro_<issue>.log               │
+│ 3.5.3 Emit "mini_reproducer" {path, reproduced, notes} into     │
+│       the triage JSON. Skip the entire step for tracker / doc / │
+│       infra-only issues (Category == Others without a kernel    │
+│       failure) and omit the field.                              │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -601,6 +625,7 @@ Add SKILL_Priority_Analysis.md for automatic priority classification:
 | Category Analysis | SKILL_Category_Analysis.md | Automatic issue categorization |
 | Deep Analysis | SKILL_Deep_Analysis_Patterns.md | Multi-dimension analysis logic |
 | Domain Patterns | SKILL_Domain_Patterns.md | Quick reference & tools |
+| Mini Reproducer | SKILL_Mini_Reproducer.md | STEP 3.5: write & verify minimal Python reproducer |
 | Issue Extraction | SKILL.md (in parent) | Basic issue collection |
 
 ## Scripts (in this folder)
@@ -618,8 +643,8 @@ python3 opencode/issue_triage/.claude/skills/bug_scrub/analyze_issue/triage_skil
 
 ## Skill Metadata
 
-- **Version**: 1.1.0
+- **Version**: 1.2.0
 - **Created**: 2026-04-20
-- **Updated**: 2026-04-20 (added explore agent integration)
+- **Updated**: 2026-04-29 (added STEP 3.5 Mini Reproducer)
 - **Compatibility**: PyTorch 2.12+, torch-xpu-ops 2.10+
 - **Requires**: GitHub access, Conda pytorch_opencode_env, explore agent
