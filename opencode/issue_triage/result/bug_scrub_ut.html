@@ -1,0 +1,2752 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>torch-xpu-ops bug scrub — UT scope</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root {
+  --bg: #f8f9fa; --fg: #212529; --muted: #6c757d;
+  --border: #dee2e6; --accent: #0066cc; --done-bg: #e9ecef; --done-fg: #adb5bd;
+  --filter-bg: #ffffff; --hl: #fff3cd;
+}
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px; line-height: 1.5; color: var(--fg); background: var(--bg);
+  margin: 0; padding: 0; }
+h1, h2, h3, h4 { line-height: 1.2; margin-top: 1.5em; }
+h1 { font-size: 1.8em; } h2 { font-size: 1.4em; border-bottom: 2px solid var(--border); padding-bottom: .3em; }
+h3 { font-size: 1.15em; } h4 { font-size: 1em; color: var(--muted); }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { background: #f1f3f5; padding: 1px 4px; border-radius: 3px; font-size: .9em; }
+.meta { color: var(--muted); font-size: .9em; margin: .3em 0; }
+.content { max-width: 100%; padding: 1em 1.5em 4em; }
+
+/* Sticky filter bar */
+.filter-bar {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--filter-bg); border-bottom: 1px solid var(--border);
+  padding: .6em 1em; display: flex; flex-wrap: wrap; gap: .8em; align-items: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+.filter-bar > label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+.filter-bar select, .filter-bar input[type=text] {
+  font-size: 13px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 3px;
+  background: white; min-width: 140px;
+}
+.filter-bar input[type=text] { min-width: 240px; }
+.filter-bar button {
+  font-size: 12px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 3px;
+  background: white; cursor: pointer;
+}
+.filter-bar button:hover { background: #f1f3f5; }
+.filter-bar .stats { margin-left: auto; color: var(--muted); font-size: 12px; }
+
+/* Tables */
+table.ar-table { border-collapse: collapse; width: 100%; margin: .5em 0 1em; font-size: 12px; }
+table.ar-table th, table.ar-table td { border: 1px solid var(--border); padding: 4px 6px; vertical-align: top; text-align: left; }
+table.ar-table thead th { background: #e7eaf0; position: sticky; top: 56px; z-index: 50; }
+table.ar-table td.done-col, table.ar-table th.done-col { width: 40px; text-align: center; }
+table.ar-table tr:nth-child(even) td { background: #fafbfc; }
+table.ar-table tr.done td { background: var(--done-bg) !important; color: var(--done-fg); }
+table.ar-table tr.done td a { color: var(--done-fg); }
+table.ar-table tr.done td:not(.done-col) { text-decoration: line-through; }
+table.ar-table tr.hidden { display: none; }
+table.ar-table tr.hl td { background: var(--hl) !important; }
+table.ar-table td ul { margin: 0; padding-left: 1.1em; }
+table.ar-table td li { margin: 0 0 2px; }
+table.ar-table td:has(ul) { min-width: 320px; }
+
+/* Whole sections (and TOC entries) collapsed when a filter empties them. */
+.section-hidden { display: none !important; }
+
+/* Lists */
+ul { margin: .3em 0; padding-left: 1.5em; }
+
+/* Multi-select dropdown */
+.ms-dd { position: relative; display: inline-block; }
+.ms-dd-btn {
+  font-size: 13px; padding: 3px 24px 3px 6px; border: 1px solid var(--border);
+  border-radius: 3px; background: white; cursor: pointer; min-width: 160px;
+  text-align: left; position: relative; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 260px;
+}
+.ms-dd-btn::after {
+  content: "\25BE"; position: absolute; right: 6px; top: 50%;
+  transform: translateY(-50%); color: var(--muted); font-size: 10px;
+}
+.ms-dd-panel {
+  display: none; position: absolute; top: calc(100% + 2px); left: 0;
+  background: white; border: 1px solid var(--border); border-radius: 3px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.12); z-index: 200;
+  max-height: 320px; overflow-y: auto; min-width: 220px; padding: 4px 0;
+}
+.ms-dd.open .ms-dd-panel { display: block; }
+.ms-dd-search {
+  width: calc(100% - 12px); margin: 4px 6px; padding: 3px 5px;
+  border: 1px solid var(--border); border-radius: 3px; font-size: 12px;
+}
+.ms-dd-item {
+  display: flex; flex-direction: row; align-items: center; gap: 4px;
+  padding: 3px 10px; cursor: pointer; font-size: 12px; user-select: none;
+  color: var(--fg);
+}
+.ms-dd-item:hover { background: #f1f3f5; }
+.ms-dd-item input[type=checkbox] {
+  margin: 0; flex: 0 0 auto; width: 14px; height: 14px; accent-color: var(--accent);
+}
+.ms-dd-item .label {
+  flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 220px;
+}
+.ms-dd-item .count {
+  flex: 0 0 auto; color: var(--muted); font-size: 11px;
+  background: #f1f3f5; padding: 0 6px; border-radius: 8px; min-width: 22px;
+  text-align: center; margin-right: auto;
+}
+.ms-dd-item.none-opt .label { font-style: italic; color: var(--muted); }
+.ms-dd-actions {
+  display: flex; gap: 4px; padding: 4px 6px; border-top: 1px solid var(--border);
+  margin-top: 2px; position: sticky; bottom: 0; background: white;
+}
+.ms-dd-actions button {
+  flex: 1; font-size: 11px; padding: 2px 4px; border: 1px solid var(--border);
+  border-radius: 3px; background: white; cursor: pointer;
+}
+.ms-dd-actions button:hover { background: #f1f3f5; }
+</style>
+</head>
+<body>
+<div class="content">
+<h1>XPU Ops Bug Scrub Report — UT scope</h1>
+
+<ul>
+  <li><strong>Repository</strong>: <code>intel/torch-xpu-ops</code></li>
+  <li><strong>Generated</strong>: 2026-04-30 (cutoff for Section 7: 2026-04-23)</li>
+  <li><strong>Total issues in workbook</strong>: 53</li>
+  <li><strong>Classified (non-empty <code>action_Type</code>)</strong>: 53</li>
+  <li><strong>Empty <code>action_TBD</code> (no verdict)</strong>: 0</li>
+</ul>
+
+<h2>1. Summary</h2>
+
+<p>This report groups the 53 tracked torch-xpu-ops issues into action buckets derived from the <code>action_Type</code> classification column of the triage workbook. Each issue appears in at most one Action-Required or QA section, chosen by its highest-priority category. Cross-cutting slices (duplicated issues, external dependency blockers, newly filed issues) are listed separately for visibility.</p>
+
+<p><strong>Headline counts (primary category):</strong></p>
+
+<table class="ar-table" data-section="1">
+<thead>
+<tr>
+<th>Bucket</th>
+<th>Categories</th>
+<th>Issues</th>
+</tr></thead>
+<tbody>
+<tr data-search="developer action required need pr, track pr, needs_owner 40">
+<td>Developer action required</td>
+<td>NEED PR, TRACK PR, NEEDS_OWNER</td>
+<td>40</td>
+</tr>
+<tr data-search="qa action required close or skip, await_reply, monitor, check_cases 12">
+<td>QA action required</td>
+<td>CLOSE or SKIP, AWAIT_REPLY, MONITOR, CHECK_CASES</td>
+<td>12</td>
+</tr>
+<tr data-search="duplicated — 3">
+<td>Duplicated</td>
+<td>—</td>
+<td>3</td>
+</tr>
+<tr data-search="external dependency (non-upstream-pytorch, non-sycl-kernel) — 12">
+<td>External dependency (non-upstream-pytorch, non-SYCL-kernel)</td>
+<td>—</td>
+<td>12</td>
+</tr>
+<tr data-search="upstream-pytorch — 19">
+<td>Upstream-pytorch</td>
+<td>—</td>
+<td>19</td>
+</tr>
+<tr data-search="cpu fallback — 3">
+<td>CPU fallback</td>
+<td>—</td>
+<td>3</td>
+</tr>
+<tr data-search="filed within last 7 days — 0">
+<td>Filed within last 7 days</td>
+<td>—</td>
+<td>0</td>
+</tr>
+<tr data-search="requests pending &gt; 1 week — 15">
+<td>Requests pending &gt; 1 week</td>
+<td>—</td>
+<td>15</td>
+</tr>
+</tbody>
+</table>
+
+<h2 id="sec-2">2. Index</h2>
+
+<ul>
+  <li><a href="#sec-3">3. Action required (Developer)</a></li>
+  <li><a href="#sec-3-0-unclassified">UNCLASSIFIED</a></li>
+  <li><a href="#sec-3-1-need-pr">NEED PR</a></li>
+  <li><a href="#sec-3-2-track-pr">TRACK PR</a></li>
+  <li><a href="#sec-3-3-needs-owner">NEEDS_OWNER</a></li>
+  <li><a href="#sec-4">4. QA</a></li>
+  <li><a href="#sec-4-1-close-or-skip">CLOSE or SKIP</a></li>
+  <li><a href="#sec-4-2-await-reply">AWAIT_REPLY</a></li>
+  <li><a href="#sec-4-3-monitor">MONITOR</a></li>
+  <li><a href="#sec-4-4-check-cases">CHECK_CASES</a></li>
+  <li><a href="#sec-5">5. Duplicated issues</a></li>
+  <li><a href="#sec-6">6. Dependency (external blockers)</a></li>
+  <li><a href="#sec-6-1-third-parties">Third Parties</a></li>
+  <li><a href="#sec-6-2-upstream-pytorch">upstream-pytorch</a></li>
+  <li><a href="#sec-6-3-cpu-fallback">CPU fallback</a></li>
+  <li><a href="#sec-7">7. New submitted issues (&lt;7 days)</a></li>
+  <li><a href="#sec-8">8. Requests pending &gt; 1 week</a></li>
+  <li><a href="#sec-9">9. Statistics</a></li>
+</ul>
+
+<h2 id="sec-3">3. Action required (Developer)</h2>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<p>Issues in this section require developer work before they can progress. Each subsection is split by <code>Category</code> (existing taxonomy column); rows inside each category table are sorted by <code>Priority</code> (P0 → P3).</p>
+
+<p>Issues whose <code>Dependency</code> is a third-party blocker (<code>oneDNN</code> / <code>oneMKL</code> / <code>oneAPI</code> / <code>triton</code> / <code>driver</code> / <code>xccl</code>) are hidden here and listed only under §6 Dependency, except when their <code>action_Type</code> is <code>TRACK_PR</code> or <code>RETRIAGE_PRS</code> (a live PR to track).</p>
+
+<ul>
+  <li><strong>UNCLASSIFIED</strong>  ·  0 issues</li>
+</ul>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<p><strong>UNCLASSIFIED — Phase 4b produced no verdict; needs manual triage</strong></p>
+
+<p class="meta">_No issues._</p>
+
+
+<ul>
+  <li><strong>NEED PR</strong>  ·  11 issues</li>
+</ul>
+
+<p><strong>NEED PR — a PR must be produced or continued (no PR yet, or owner actively debugging root cause, or new code needed)</strong></p>
+
+<h4 id="sec-3-1-1-flash-attention">3.1.1 Flash Attention  ·  2 issues</h4>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<table class="ar-table" data-section="3.1.1">
+<thead>
+<tr>
+<th class="done-col">Done</th>
+<th>Issue</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="Flash Attention" data-dependency="SYCL kernel: AttentionKernels.cpp" data-priority="P1" data-assignee="chunhuanMeng" data-owner_transferred="chunhuanMeng, daisyden" data-milestone="UT Backlog" data-search="[#2285](https://github.com/intel/torch-xpu-ops/issues/2285) support efficient attention chunhuanmeng chunhuanmeng, daisyden   check_case_avaliablity  no action — investigate further  " data-issue="2285">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2285" id="done-2285"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2285">#2285</a></td>
+<td>Support efficient attention</td>
+<td>chunhuanMeng</td>
+<td>chunhuanMeng, daisyden</td>
+<td><ul><li>check_case_avaliablity</li><li>No action — investigate further</li></ul></td>
+<td>Implement and register aten::_efficient_attention_forward / _backward for XPU in torch-xpu-ops (tra…<br><a href="details/2285.md">→ details</a></td>
+<td>P1</td>
+<td>Issue is OPEN with zero VERIFIED PR candidates: aten::_efficient_attention_forward has no XPU registration in torch-xpu-ops yet, no fix PR …</td>
+<td>daisyden</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Flash Attention" data-dependency="SYCL kernel: mha_fwd.cpp" data-priority="P1" data-assignee="LuFinch" data-owner_transferred="LuFinch" data-milestone="UT Backlog" data-search="[#3140](https://github.com/intel/torch-xpu-ops/issues/3140) [upstream_ut] runtimeerror: flashattentionforwardxpu does not only support dropout &gt; 0.0 yet lufinch lufinch   no action — investigate further  " data-issue="3140">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="3140" id="done-3140"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3140">#3140</a></td>
+<td>[upstream_ut] RuntimeError:<br>FlashAttentionForwardXPU does not only support<br>dropout &gt; 0.0 yet</td>
+<td>LuFinch</td>
+<td>LuFinch</td>
+<td><ul><li>No action — investigate further</li></ul></td>
+<td>Either (a) implement dropout support in mha_fwd.cpp / mha_bwd.cpp sycltla kernels, or (b) fix the S…<br><a href="details/3140.md">→ details</a></td>
+<td>P1</td>
+<td>No fix PR exists for the dropout&gt;0 dispatch gap in FlashAttentionForwardXPU; assignee LuFinch needs to either implement dropout in sycltla …</td>
+<td>daisyden</td>
+<td>module: ut, skipped, ut_upstream</td>
+</tr>
+</tbody>
+</table>
+
+
+<h4 id="sec-3-1-2-inductor">3.1.2 Inductor  ·  3 issues</h4>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<table class="ar-table" data-section="3.1.2">
+<thead>
+<tr>
+<th class="done-col">Done</th>
+<th>Issue</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="guangyey" data-owner_transferred="guangyey" data-milestone="UT Backlog" data-search="[#1969](https://github.com/intel/torch-xpu-ops/issues/1969) torch._dynamo.exc.internaltorchdynamoerror: typeerror: cannot create weak reference to &#x27;torch.event&#x27; object guangyey guangyey   no action — investigate further  " data-issue="1969">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="1969" id="done-1969"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/1969">#1969</a></td>
+<td>torch._dynamo.exc.InternalTorchDynamoError:<br>TypeError: cannot create weak reference to<br>'torch.Event' object</td>
+<td>guangyey</td>
+<td>guangyey</td>
+<td><ul><li>No action — investigate further</li></ul></td>
+<td>Upstream-pytorch fix: add weakref support to the generic torch.Event class (define __weakref__ slot…<br><a href="details/1969.md">→ details</a></td>
+<td>P2</td>
+<td>All candidate upstream PRs (pytorch/pytorch#164522, #163168, #151213) addressing torch.Event weakref support are CLOSED unmerged with no me…</td>
+<td>shangerxin</td>
+<td>module: ut</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="CuiYifeng" data-owner_transferred="CuiYifeng" data-milestone="UT Backlog" data-search="[#2715](https://github.com/intel/torch-xpu-ops/issues/2715) [upstream_ut] torch._dynamo.exc.unsupported: attempted to inline function marked as skipped cuiyifeng cuiyifeng   no action — investigate further  " data-issue="2715">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2715" id="done-2715"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2715">#2715</a></td>
+<td>[upstream_ut] torch._dynamo.exc.Unsupported:<br>Attempted to inline function marked as skipped</td>
+<td>CuiYifeng</td>
+<td>CuiYifeng</td>
+<td><ul><li>No action — investigate further</li></ul></td>
+<td>In upstream PyTorch torch/_dynamo/trace_rules.py, allow tracing of torch.xpu.device.__init__ (mirro…<br><a href="details/2715.md">→ details</a></td>
+<td>P2</td>
+<td>Issue is OPEN, no VERIFIED PR addresses the dynamo MOD_SKIPLIST exemption for torch.xpu.device.__init__; assignee CuiYifeng needs to invest…</td>
+<td>daisyden</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#2958](https://github.com/intel/torch-xpu-ops/issues/2958) assertionerror of test_dtensor_basic_compile daisyden daisyden   submit upstream pr from daisyden/missing_test to remove skipifxpu on test_dtensor_basic_export and close this issue  file separate upstream issue for test-ordering / dtensorspec flatten regression from pytorch/pytorch#178115  " data-issue="2958">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2958" id="done-2958"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2958">#2958</a></td>
+<td>AssertionError of test_dtensor_basic_compile</td>
+<td>daisyden</td>
+<td>daisyden</td>
+<td><ul><li>Submit upstream PR from daisyden/missing_test to remove skipIfXpu on test_dtensor_basic_export and close this issue</li><li>File separate upstream issue for test-ordering / DTensorSpec flatten regression from pytorch/pytorch#178115</li></ul></td>
+<td>Re-run on current main to confirm<br><a href="details/2958.md">→ details</a></td>
+<td>P3</td>
+<td>Owner has already verified the fix on main and prepared a branch; only remaining step is to land the skip-removal PR. | The ordering-depen…</td>
+<td>daisyden</td>
+<td>module: inductor, ut_upstream</td>
+</tr>
+</tbody>
+</table>
+
+
+<h4 id="sec-3-1-3-others">3.1.3 Others  ·  1 issues</h4>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<table class="ar-table" data-section="3.1.3">
+<thead>
+<tr>
+<th class="done-col">Done</th>
+<th>Issue</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="Others" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#2783](https://github.com/intel/torch-xpu-ops/issues/2783) [bug skip]: key &quot;xpu&quot; is missing from dict &quot;driver&quot; in test_svd daisyden daisyden   open upstream pr to pytorch/pytorch from branch daisyden/missing_test (adds &#x27;xpu&#x27; entry to svd drivers dict in test/test_linalg.py)  no action — investigate further  " data-issue="2783">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2783" id="done-2783"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2783">#2783</a></td>
+<td>[Bug Skip]: Key "xpu" is missing from dict<br>"driver" in test_svd</td>
+<td>daisyden</td>
+<td>daisyden</td>
+<td><ul><li>Open upstream PR to pytorch/pytorch from branch daisyden/missing_test (adds 'xpu' entry to SVD drivers dict in test/test_linalg.py)</li><li>No action — investigate further</li></ul></td>
+<td>Upstream patch in pytorch/test/test_linalg.py: add an 'xpu' entry to the SVD driver dict (or extend…<br><a href="details/2783.md">→ details</a></td>
+<td>P3</td>
+<td>Assignee daisyden has a verified local fix on a personal branch but no upstream PR has been filed yet; landing that PR (or equivalent) is t…</td>
+<td>CuiYifeng</td>
+<td>module: ut, skipped</td>
+</tr>
+</tbody>
+</table>
+
+
+<h4 id="sec-3-1-4-sparse">3.1.4 Sparse  ·  1 issues</h4>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<table class="ar-table" data-section="3.1.4">
+<thead>
+<tr>
+<th class="done-col">Done</th>
+<th>Issue</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="Sparse" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="jenniew" data-owner_transferred="jenniew" data-milestone="UT Backlog" data-search="[#2214](https://github.com/intel/torch-xpu-ops/issues/2214) test/test_sparse.py::testsparseanyxpu::test_gradch eck_mm expected error message not match jenniew jenniew   no action — investigate further  address comment ar from chuanqi129 (&gt;1 week): @wincent8 remove hardcoded skips in test files (use dynamic skip-by-issue)  address comment ar from daisyden (&gt;1 week): confirm/dedupe with #2283 (jenniew should triage)  " data-issue="2214">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2214" id="done-2214"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2214">#2214</a></td>
+<td>test/test_sparse.py::TestSparseAnyXPU::test_gradch<br>eck_mm expected error message not match</td>
+<td>jenniew</td>
+<td>jenniew</td>
+<td><ul><li>No action — investigate further</li><li>Address comment AR from chuanqi129 (&gt;1 week): @wincent8 remove hardcoded skips in test files (use dynamic skip-by-issue)</li><li>Address comment AR from daisyden (&gt;1 week): confirm/dedupe with #2283 (jenniew should triage)</li></ul></td>
+<td>Update the assertRaisesRegex pattern in upstream test_sparse.py to also accept the 'empty_sparse_co…<br><a href="details/2214.md">→ details</a></td>
+<td>P3</td>
+<td>Issue is OPEN with zero VERIFIED fixes/supersedes PR candidates — the fix lives in upstream pytorch/pytorch test_sparse.py assertRaisesRege…</td>
+<td>wincent8</td>
+<td>skipped, ut_upstream</td>
+</tr>
+</tbody>
+</table>
+
+
+<h4 id="sec-3-1-5-torch-operations">3.1.5 Torch Operations  ·  3 issues</h4>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<table class="ar-table" data-section="3.1.5">
+<thead>
+<tr>
+<th class="done-col">Done</th>
+<th>Issue</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="CuiYifeng" data-owner_transferred="CuiYifeng" data-milestone="PT2.13" data-search="[#3084](https://github.com/intel/torch-xpu-ops/issues/3084) torch.library.register_autocast does not support xpu cuiyifeng cuiyifeng   no action — investigate further  " data-issue="3084">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="3084" id="done-3084"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3084">#3084</a></td>
+<td>torch.library.register_autocast does not support<br>xpu</td>
+<td>CuiYifeng</td>
+<td>CuiYifeng</td>
+<td><ul><li>No action — investigate further</li></ul></td>
+<td>Upstream PR to pytorch/pytorch: in torch/library.py register_autocast, accept all autocast-capable…<br><a href="details/3084.md">→ details</a></td>
+<td>P2</td>
+<td>Issue is OPEN with no linked PRs from any of V0/VA/VB/VC/VD/VE; an upstream pytorch/pytorch fix to torch/library.py register_autocast is re…</td>
+<td>daisyden</td>
+<td>module: ut</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#2436](https://github.com/intel/torch-xpu-ops/issues/2436) [upstream_ut] attributeerror: &#x27;nonetype&#x27; object has no attribute &#x27;clone&#x27; daisyden daisyden   no action — investigate further  address comment ar from daisyden (&gt;1 week): re-check case design per cuiyifeng&#x27;s request  " data-issue="2436">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2436" id="done-2436"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2436">#2436</a></td>
+<td>[upstream_ut] AttributeError: 'NoneType' object<br>has no attribute 'clone'</td>
+<td>daisyden</td>
+<td>daisyden</td>
+<td><ul><li>No action — investigate further</li><li>Address comment AR from daisyden (&gt;1 week): re-check case design per CuiYifeng's request</li></ul></td>
+<td>Keep cases in skip list as 'random/community'<br><a href="details/2436.md">→ details</a></td>
+<td>P3</td>
+<td>Issue is OPEN with zero VERIFIED PR candidates (root cause pytorch/pytorch#97395 is an upstream issue, not a PR); needs further investigati…</td>
+<td>daisyden</td>
+<td>skipped, dependency component: communit…</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#3041](https://github.com/intel/torch-xpu-ops/issues/3041) assertionerror: expected len(flat_diff_results) &gt; 0 in test_fake_crossref_backward_amp_normal_number _mean_xpu_float32 daisyden daisyden   no action — investigate further  " data-issue="3041">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="3041" id="done-3041"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3041">#3041</a></td>
+<td>AssertionError: Expected len(flat_diff_results) &gt;<br>0 in test_fake_crossref_backward_amp_normal_number<br>_mean_xpu_float32</td>
+<td>daisyden</td>
+<td>daisyden</td>
+<td><ul><li>No action — investigate further</li></ul></td>
+<td>Add device_type='xpu' (or replace with allowed_dtypes/skip across non-CPU) to the existing Decorate…<br><a href="details/3041.md">→ details</a></td>
+<td>P3</td>
+<td>Issue is OPEN with no VERIFIED fix PR yet (cited PR 176690 is the trigger, not the fix, and is closed unmerged). Owner daisyden is assigned…</td>
+<td>daisyden</td>
+<td>ut_upstream</td>
+</tr>
+</tbody>
+</table>
+
+
+<h4 id="sec-3-1-6-torchao">3.1.6 TorchAO  ·  1 issues</h4>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<table class="ar-table" data-section="3.1.6">
+<thead>
+<tr>
+<th class="done-col">Done</th>
+<th>Issue</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="TorchAO" data-dependency="SYCL kernel: LinearInt4.cpp" data-priority="P1" data-assignee="Stonepia" data-owner_transferred="Stonepia" data-milestone="UT Backlog" data-search="[#2578](https://github.com/intel/torch-xpu-ops/issues/2578) [torchao][ut] test/quantization/test_quant_api.py assertionerror: sqnr -2.90625 is too low stonepia stonepia   check_case_avaliablity  no action — investigate further  " data-issue="2578">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2578" id="done-2578"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2578">#2578</a></td>
+<td>[TorchAO][UT] test/quantization/test_quant_api.py<br>AssertionError: SQNR -2.90625 is too low</td>
+<td>Stonepia</td>
+<td>Stonepia</td>
+<td><ul><li>check_case_avaliablity</li><li>No action — investigate further</li></ul></td>
+<td>Audit LinearInt4.cpp packing convention (inner_k_tiles=8 TensorCoreTiledLayout) vs torchao's tinyge…<br><a href="details/2578.md">→ details</a></td>
+<td>P1</td>
+<td>Issue is OPEN with no VERIFIED fixing/superseding PR; SQNR -2.9 indicates an XPU LinearInt4 packing-layout bug that the assignee Stonepia h…</td>
+<td>zxd1997066</td>
+<td>module: ao, ut_upstream</td>
+</tr>
+</tbody>
+</table>
+
+
+<ul>
+  <li><strong>TRACK PR</strong>  ·  21 issues</li>
+</ul>
+
+<p><strong>TRACK PR — a PR is identified; track it to merge, or re-evaluate if prior PRs are dead / unverified</strong></p>
+
+<h4 id="sec-3-2-1-flash-attention">3.2.1 Flash Attention  ·  3 issues</h4>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<table class="ar-table" data-section="3.2.1">
+<thead>
+<tr>
+<th class="done-col">Done</th>
+<th>Issue</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="Flash Attention" data-dependency="CPU fallback" data-priority="P2" data-assignee="LuFinch" data-owner_transferred="LuFinch" data-milestone="UT Backlog" data-search="[#2442](https://github.com/intel/torch-xpu-ops/issues/2442) [bug skip]: notimplementederror: could not run &#x27;aten::_flash_attention_forward&#x27; with arguments from the &#x27;cpu&#x27; backend lufinch lufinch   track pr intel/torch-xpu-ops#3404 to merge  address ci failures on pr intel/torch-xpu-ops#3404  " data-issue="2442">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2442" id="done-2442"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2442">#2442</a></td>
+<td>[Bug Skip]: NotImplementedError: Could not run<br>'aten::_flash_attention_forward' with arguments<br>from the 'CPU' backend</td>
+<td>LuFinch</td>
+<td>LuFinch</td>
+<td><ul><li>Track PR intel/torch-xpu-ops#3404 to merge</li><li>Address CI failures on PR intel/torch-xpu-ops#3404</li></ul></td>
+<td>Add the four cases to the skip list (already labelled 'skipped')<br><a href="details/2442.md">→ details</a></td>
+<td>P2</td>
+<td>VERIFIED PR #3404 (github_linked, relationship=fixes) is OPEN and adds the XPU _flash_attention_forward/_backward registration described in…</td>
+<td>CuiYifeng</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Flash Attention" data-dependency="SYCL kernel: mha_fwd.cpp" data-priority="P2" data-assignee="LuFinch" data-owner_transferred="LuFinch" data-milestone="UT Backlog" data-search="[#2698](https://github.com/intel/torch-xpu-ops/issues/2698) title: [upstream_ut] runtimeerror: flashattentionforwardxpu only support headdim 64,96,128,192 lufinch lufinch   track pr pytorch/pytorch#180646 to merge  address ci failures on pr pytorch/pytorch#180646 (&gt;1 week)  " data-issue="2698">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2698" id="done-2698"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2698">#2698</a></td>
+<td>Title: [upstream_ut] RuntimeError:<br>FlashAttentionForwardXPU only support headdim<br>64,96,128,192</td>
+<td>LuFinch</td>
+<td>LuFinch</td>
+<td><ul><li>Track PR pytorch/pytorch#180646 to merge</li><li>Address CI failures on PR pytorch/pytorch#180646 (&gt;1 week)</li></ul></td>
+<td>In mha_fwd.cpp, instead of TORCH_CHECK(false, ...), return a status indicating unsupported head_dim…<br><a href="details/2698.md">→ details</a></td>
+<td>P2</td>
+<td>VERIFIED fixes PR is OPEN and APPROVED; needs to land. | Latest failing required check (linux-noble-xpu-n-py3.10 / test 12/12) completed 2…</td>
+<td>daisyden</td>
+<td>module: inductor, skipped, ut_upstream</td>
+</tr>
+<tr data-category="Flash Attention" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="LuFinch" data-owner_transferred="LuFinch" data-milestone="PT2.13" data-search="[#2853](https://github.com/intel/torch-xpu-ops/issues/2853) [upstream_ut] torch.ops.aten._flash_attention_forward lack of support for xpu. lufinch lufinch   track pr intel/torch-xpu-ops#3404 to merge  " data-issue="2853">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2853" id="done-2853"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2853">#2853</a></td>
+<td>[upstream_ut]<br>torch.ops.aten._flash_attention_forward lack of<br>support for XPU.</td>
+<td>LuFinch</td>
+<td>LuFinch</td>
+<td><ul><li>Track PR intel/torch-xpu-ops#3404 to merge</li></ul></td>
+<td>Either (a) register an XPU kernel for _flash_attention_forward in torch-xpu-ops (transformers/sycl/…<br><a href="details/2853.md">→ details</a></td>
+<td>P2</td>
+<td>PR #3404 (assignee LuFinch) is the verified fix and is currently OPEN with no review decision yet; needs to be driven through review and me…</td>
+<td>BBBela</td>
+<td>skipped</td>
+</tr>
+</tbody>
+</table>
+
+
+<h4 id="sec-3-2-2-inductor">3.2.2 Inductor  ·  4 issues</h4>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<table class="ar-table" data-section="3.2.2">
+<thead>
+<tr>
+<th class="done-col">Done</th>
+<th>Issue</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="Inductor" data-dependency="triton" data-priority="P2" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#2554](https://github.com/intel/torch-xpu-ops/issues/2554) [upstream_ut] assertionerror: assertionerror not raised daisyden daisyden   track pr pytorch/pytorch#181822 to merge  " data-issue="2554">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2554" id="done-2554"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2554">#2554</a></td>
+<td>[upstream_ut] AssertionError: AssertionError not<br>raised</td>
+<td>daisyden</td>
+<td>daisyden</td>
+<td><ul><li>Track PR pytorch/pytorch#181822 to merge</li></ul></td>
+<td>Wait for / pull in the fix from intel-xpu-backend-for-triton#5654 (TTGIR pass), then unskip the thr…<br><a href="details/2554.md">→ details</a></td>
+<td>P2</td>
+<td>PR pytorch/pytorch#181822 is the live OPEN fix re-enabling 2 of the 3 cases (the third case test_selecsls42b_misaligned_address is not list…</td>
+<td>daisyden</td>
+<td>module: inductor, skipped</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="etaf" data-owner_transferred="etaf" data-milestone="UT Backlog" data-search="[#2609](https://github.com/intel/torch-xpu-ops/issues/2609) [upstream_ut] torch._inductor.exc.inductorerror: cppcompileerror: c++ compile error etaf etaf   track pr pytorch/pytorch#171154 to merge  address ci failures on pr pytorch/pytorch#171154 (&gt;1 week)  address comment ar from etaf: merge the approved fix pr pytorch/pytorch#171154 to land aoti_torch_xpu_fn_  shim  " data-issue="2609">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2609" id="done-2609"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2609">#2609</a></td>
+<td>[upstream_ut] torch._inductor.exc.InductorError:<br>CppCompileError: C++ compile error</td>
+<td>etaf</td>
+<td>etaf</td>
+<td><ul><li>Track PR pytorch/pytorch#171154 to merge</li><li>Address CI failures on PR pytorch/pytorch#171154 (&gt;1 week)</li><li>Address comment AR from etaf: merge the approved fix PR pytorch/pytorch#171154 to land aoti_torch_xpu_fn_&lt;op&gt; shim</li></ul></td>
+<td>Land pytorch/pytorch#171154 which generates/declares aoti_torch_xpu_fn_&lt;op&gt; for XPU custom ops in t…<br><a href="details/2609.md">→ details</a></td>
+<td>P2</td>
+<td>VERIFIED fixing PR pytorch/pytorch#171154 is OPEN and APPROVED but not merged. | PR has 5 failing XPU CI checks whose latest completedAt i…</td>
+<td>daisyden</td>
+<td>module: inductor, skipped, ut_upstream</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="CuiYifeng" data-owner_transferred="CuiYifeng" data-milestone="UT Backlog" data-search="[#3187](https://github.com/intel/torch-xpu-ops/issues/3187) pytorch xpu gpu_cpp_wrapper fails with inductorerror notimplementederror cuiyifeng cuiyifeng   pr pytorch/pytorch#178477 closed unmerged; reassess fix path  retriage_prs  " data-issue="3187">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="3187" id="done-3187"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3187">#3187</a></td>
+<td>PyTorch XPU gpu_cpp_wrapper fails with<br>InductorError NotImplementedError</td>
+<td>CuiYifeng</td>
+<td>CuiYifeng</td>
+<td><ul><li>PR pytorch/pytorch#178477 closed unmerged; reassess fix path</li><li>RETRIAGE_PRS</li></ul></td>
+<td>Investigate cpp_wrapper fallback dispatch for XPU in torch/_inductor/codegen/cpp_wrapper_gpu.py and…<br><a href="details/3187.md">→ details</a></td>
+<td>P2</td>
+<td>The only referenced PR (the upstream temporary skip workaround) was closed unmerged, and no replacement PR addresses the underlying XPU cpp…</td>
+<td>liangan1</td>
+<td>ut_upstream</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="chunhuanMeng" data-owner_transferred="chunhuanMeng" data-milestone="UT Backlog" data-search="[#2891](https://github.com/intel/torch-xpu-ops/issues/2891) runtimeerror: expected to find &quot;(262144, 0, 512, 1&quot; but did not find it chunhuanmeng chunhuanmeng   track pr pytorch/pytorch#180418 to merge  " data-issue="2891">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2891" id="done-2891"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2891">#2891</a></td>
+<td>RuntimeError: Expected to find "(262144, 0, 512,<br>1" but did not find it</td>
+<td>chunhuanMeng</td>
+<td>chunhuanMeng</td>
+<td><ul><li>Track PR pytorch/pytorch#180418 to merge</li></ul></td>
+<td>Confirm upstream pytorch PR #180418 (unskip) is landed and pulled into torch-xpu-ops test list<br><a href="details/2891.md">→ details</a></td>
+<td>P3</td>
+<td>PR pytorch/pytorch#180418 (unskip test_effn_attn_bias_padding) is OPEN, APPROVED, and CI green; only Gate 4 (merge) remains. Once merged, t…</td>
+<td>daisyden</td>
+<td>module: inductor, ut_upstream</td>
+</tr>
+</tbody>
+</table>
+
+
+<h4 id="sec-3-2-3-others">3.2.3 Others  ·  3 issues</h4>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<table class="ar-table" data-section="3.2.3">
+<thead>
+<tr>
+<th class="done-col">Done</th>
+<th>Issue</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="Others" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#2024](https://github.com/intel/torch-xpu-ops/issues/2024) assertionerror: torch not compiled with cuda enabled daisyden daisyden   track pr intel/torch-xpu-ops#3510 to merge  " data-issue="2024">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2024" id="done-2024"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2024">#2024</a></td>
+<td>AssertionError: Torch not compiled with CUDA<br>enabled</td>
+<td>daisyden</td>
+<td>daisyden</td>
+<td><ul><li>Track PR intel/torch-xpu-ops#3510 to merge</li></ul></td>
+<td>Submit upstream PRs replacing hardcoded device='cuda' with the parameterized device argument (or @o…<br><a href="details/2024.md">→ details</a></td>
+<td>P2</td>
+<td>PR #3510 (OPEN, APPROVED, CI pending) explicitly enables 5 of the 7 cases listed in this issue and is one merge away from resolving the iss…</td>
+<td>mengfei25</td>
+<td>module: ut, skipped</td>
+</tr>
+<tr data-category="Others" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="yucai-intel" data-owner_transferred="yucai-intel" data-milestone="UT Backlog" data-search="[#2287](https://github.com/intel/torch-xpu-ops/issues/2287) [upstream_ut] test_python_ref issues yucai-intel yucai-intel   track pr pytorch/pytorch#178734 to merge  address ci failures on pr pytorch/pytorch#178734 (&gt;1 week)  address comment ar from tye1: pytorch/pytorch#178734 has a lint issue — yucai-intel to fix  " data-issue="2287">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2287" id="done-2287"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2287">#2287</a></td>
+<td>[upstream_ut] test_python_ref issues</td>
+<td>yucai-intel</td>
+<td>yucai-intel</td>
+<td><ul><li>Track PR pytorch/pytorch#178734 to merge</li><li>Address CI failures on PR pytorch/pytorch#178734 (&gt;1 week)</li><li>Address comment AR from tye1: pytorch/pytorch#178734 has a lint issue — yucai-intel to fix</li></ul></td>
+<td>Skip in test/xpu/skip_list_common.py for test_python_ref__refs_logspace_tensor_overload (and any re…<br><a href="details/2287.md">→ details</a></td>
+<td>P3</td>
+<td>PR 178734 (supersedes #169565) explicitly Fixes #2287 and is APPROVED. | Latest failing required check (lintrunner-noclang-partial / lint …</td>
+<td>daisyden</td>
+<td>module: ut, ut_upstream</td>
+</tr>
+<tr data-category="Others" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="guangyey" data-owner_transferred="guangyey" data-milestone="UT Backlog" data-search="[#2531](https://github.com/intel/torch-xpu-ops/issues/2531) [upstream_ut] assertionerror: torch not compiled with cuda enabled guangyey guangyey   check_case_avaliablity  track pr intel/torch-xpu-ops#3510 to merge  address comment ar from guangyey: confirm xpu support for tunable / cufft_plan_cache / cudasyncguard / miopen / quantize_per_tensor  " data-issue="2531">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2531" id="done-2531"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2531">#2531</a></td>
+<td>[upstream_ut] AssertionError: Torch not compiled<br>with CUDA enabled</td>
+<td>guangyey</td>
+<td>guangyey</td>
+<td><ul><li>check_case_avaliablity</li><li>Track PR intel/torch-xpu-ops#3510 to merge</li><li>Address comment AR from guangyey: confirm XPU support for tunable / cufft_plan_cache / CudaSyncGuard / Miopen / quantize_per_tensor</li></ul></td>
+<td>Port each test in third_party/torch-xpu-ops/test/xpu/ to substitute xpu for cuda (use TEST_XPU/torc…<br><a href="details/2531.md">→ details</a></td>
+<td>P3</td>
+<td>VERIFIED partial-fix PR #3510 (relationship=fixes, OPEN, approved by chuanqi129) lands 2 of 13 cases; remaining cases need feature work tra…</td>
+<td>daisyden</td>
+<td>skipped, port_from_skiplist</td>
+</tr>
+</tbody>
+</table>
+
+
+<h4 id="sec-3-2-4-sparse">3.2.4 Sparse  ·  4 issues</h4>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<table class="ar-table" data-section="3.2.4">
+<thead>
+<tr>
+<th class="done-col">Done</th>
+<th>Issue</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="Sparse" data-dependency="CPU fallback" data-priority="P1" data-assignee="jenniew" data-owner_transferred="jenniew" data-milestone="UT Backlog" data-search="[#2283](https://github.com/intel/torch-xpu-ops/issues/2283) [upstream_ut] sparse._sampled_addmm is not supported jenniew jenniew   track pr intel/torch-xpu-ops#3018 to merge  address ci failures on pr intel/torch-xpu-ops#3018 (&gt;1 week)  " data-issue="2283">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2283" id="done-2283"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2283">#2283</a></td>
+<td>[upstream_ut] sparse._sampled_addmm is not<br>supported</td>
+<td>jenniew</td>
+<td>jenniew</td>
+<td><ul><li>Track PR intel/torch-xpu-ops#3018 to merge</li><li>Address CI failures on PR intel/torch-xpu-ops#3018 (&gt;1 week)</li></ul></td>
+<td>Either register a CPU fallback for aten::sparse_sampled_addmm on SparseCsrXPU (analogous to other s…<br><a href="details/2283.md">→ details</a></td>
+<td>P1</td>
+<td>PR 3018 implements the missing SparseCsrXPU sampled_addmm registration; needs to land. | linux-ut (op_ut) summary failed on 2026-03-26 (&gt;1…</td>
+<td>daisyden</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Sparse" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="jafraustro" data-owner_transferred="jafraustro" data-milestone="UT Backlog" data-search="[#2244](https://github.com/intel/torch-xpu-ops/issues/2244) test/test_sparse_csr.py::testsparsecsrxpu::test_bl ock_addmm meet runtimeerror: empty_sparse_compressed expected sparse compressed (non-block) tensor layout but got sparsebsr jafraustro jafraustro   track pr intel/torch-xpu-ops#3476 to merge  resolve unresolved review comments on pr intel/torch-xpu-ops#3476  " data-issue="2244">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2244" id="done-2244"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2244">#2244</a></td>
+<td>test/test_sparse_csr.py::TestSparseCSRXPU::test_bl<br>ock_addmm meet RuntimeError:<br>empty_sparse_compressed expected sparse compressed<br>(non-block) tensor layout but got SparseBsr</td>
+<td>jafraustro</td>
+<td>jafraustro</td>
+<td><ul><li>Track PR intel/torch-xpu-ops#3476 to merge</li><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#3476</li></ul></td>
+<td>Extend the upstream sparse compressed addmm dispatch (or torch-xpu-ops registration) so XPU SparseB…<br><a href="details/2244.md">→ details</a></td>
+<td>P2</td>
+<td>PR 3476 is the OPEN supersede of PR 2974 (closed unmerged) and addresses the residual bf16/fp16 sparse BSR addmm precision failures of #224…</td>
+<td>wincent8</td>
+<td>module: ut, skipped</td>
+</tr>
+<tr data-category="Sparse" data-dependency="SYCL kernel: SparseCsrTensorMathKernels.cpp" data-priority="P2" data-assignee="jenniew" data-owner_transferred="jenniew" data-milestone="UT Backlog" data-search="[#3177](https://github.com/intel/torch-xpu-ops/issues/3177) accuracy gap of bf16/fp16 test_block_addmm jenniew jenniew   track pr intel/torch-xpu-ops#3273 to merge  resolve unresolved review comments on pr intel/torch-xpu-ops#3273 (&gt;1 week)  " data-issue="3177">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="3177" id="done-3177"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3177">#3177</a></td>
+<td>Accuracy gap of BF16/FP16 test_block_addmm</td>
+<td>jenniew</td>
+<td>jenniew</td>
+<td><ul><li>Track PR intel/torch-xpu-ops#3273 to merge</li><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#3273 (&gt;1 week)</li></ul></td>
+<td>Promote the inner-product accumulator to float32 in the BSR addmm SYCL kernel (mirror CUDA's accumu…<br><a href="details/3177.md">→ details</a></td>
+<td>P2</td>
+<td>PR #3273 is the OPEN fixes candidate for #3177. | Reviewer CuiYifeng asked an unanswered question on 2026-04-07 (22 days old, stale), and …</td>
+<td>CuiYifeng</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Sparse" data-dependency="CPU fallback" data-priority="P3" data-assignee="jenniew" data-owner_transferred="jenniew" data-milestone="UT Backlog" data-search="[#2229](https://github.com/intel/torch-xpu-ops/issues/2229) test/test_sparse_csr.py::testsparsecompressedcpu:: test_invalid_input meet message not match jenniew jenniew   track pr intel/torch-xpu-ops#3073 to merge  address ci failures on pr intel/torch-xpu-ops#3073 (&gt;1 week)  " data-issue="2229">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2229" id="done-2229"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2229">#2229</a></td>
+<td>test/test_sparse_csr.py::TestSparseCompressedCPU::<br>test_invalid_input meet message not match</td>
+<td>jenniew</td>
+<td>jenniew</td>
+<td><ul><li>Track PR intel/torch-xpu-ops#3073 to merge</li><li>Address CI failures on PR intel/torch-xpu-ops#3073 (&gt;1 week)</li></ul></td>
+<td>Implement aten::_validate_compressed_sparse_indices for the XPU backend in torch-xpu-ops so the can…<br><a href="details/2229.md">→ details</a></td>
+<td>P3</td>
+<td>PR 3073 is the OPEN fix authored by assignee jenniew implementing the _validate_compressed_sparse_indices XPU kernel. | preci-lint-check h…</td>
+<td>wincent8</td>
+<td>skipped</td>
+</tr>
+</tbody>
+</table>
+
+
+<h4 id="sec-3-2-5-torch-operations">3.2.5 Torch Operations  ·  6 issues</h4>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<table class="ar-table" data-section="3.2.5">
+<thead>
+<tr>
+<th class="done-col">Done</th>
+<th>Issue</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P1" data-assignee="yucai-intel" data-owner_transferred="yucai-intel" data-milestone="UT Backlog" data-search="[#2015](https://github.com/intel/torch-xpu-ops/issues/2015) inf is returned by nn.transformerencoderlayer yucai-intel yucai-intel   check_case_avaliablity  track pr intel/torch-xpu-ops#2336 to merge  resolve unresolved review comments on pr intel/torch-xpu-ops#2336 (&gt;1 week)  address comment ar from tye1: get pr #2336 merged  " data-issue="2015">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2015" id="done-2015"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2015">#2015</a></td>
+<td>inf is returned by nn.TransformerEncoderLayer</td>
+<td>yucai-intel</td>
+<td>yucai-intel</td>
+<td><ul><li>check_case_avaliablity</li><li>Track PR intel/torch-xpu-ops#2336 to merge</li><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#2336 (&gt;1 week)</li><li>Address comment AR from tye1: get PR #2336 merged</li></ul></td>
+<td>Land/track pytorch/pytorch#168234 to add xpu device coverage in test_nn.py TransformerEncoderLayer…<br><a href="details/2015.md">→ details</a></td>
+<td>P1</td>
+<td>PR #2336 (OPEN) explicitly fixes this issue's TransformerEncoderLayer XPU test failure; needs to land. | CuiYifeng's CHANGES_REQUESTED rev…</td>
+<td>daisyden</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="yucai-intel, BBBela" data-owner_transferred="BBBela" data-milestone="UT Backlog" data-search="[#2412](https://github.com/intel/torch-xpu-ops/issues/2412) some nestedtensor missing xpu support yucai-intel, bbbela bbbela   track pr intel/torch-xpu-ops#2483 to merge  address ci failures on pr intel/torch-xpu-ops#2483 (&gt;1 week)  resolve unresolved review comments on pr intel/torch-xpu-ops#2483 (&gt;1 week)  " data-issue="2412">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2412" id="done-2412"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2412">#2412</a></td>
+<td>Some NestedTensor missing XPU support</td>
+<td>yucai-intel, BBBela</td>
+<td>BBBela</td>
+<td><ul><li>Track PR intel/torch-xpu-ops#2483 to merge</li><li>Address CI failures on PR intel/torch-xpu-ops#2483 (&gt;1 week)</li><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#2483 (&gt;1 week)</li></ul></td>
+<td>Add XPU support to the four nested-tensor files in pytorch/pytorch upstream by relaxing <code>is_cuda()</code>…<br><a href="details/2412.md">→ details</a></td>
+<td>P2</td>
+<td>PR #2483 is the active OPEN fix; BBBela committed on 2026-04-29 to drive it to merge. | linux-build check has been failing since 2026-03-3…</td>
+<td>daisyden</td>
+<td>module: ut</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="oneDNN" data-priority="P3" data-assignee="chunhuanMeng" data-owner_transferred="chunhuanMeng" data-milestone="UT Backlog" data-search="[#1893](https://github.com/intel/torch-xpu-ops/issues/1893) [upstream_ut] onednn accuracy issues in test_ops_xpu.py chunhuanmeng chunhuanmeng   track pr pytorch/pytorch#179125 to merge  address ci failures on pr pytorch/pytorch#179125 (&gt;1 week)  " data-issue="1893">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="1893" id="done-1893"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/1893">#1893</a></td>
+<td>[upstream_ut] oneDNN accuracy issues in<br>test_ops_xpu.py</td>
+<td>chunhuanMeng</td>
+<td>chunhuanMeng</td>
+<td><ul><li>Track PR pytorch/pytorch#179125 to merge</li><li>Address CI failures on PR pytorch/pytorch#179125 (&gt;1 week)</li></ul></td>
+<td>Bump tolerance for these mv/addmv ops in test_ops xpu skip/tolerance lists (third_party/torch-xpu-o…<br><a href="details/1893.md">→ details</a></td>
+<td>P3</td>
+<td>PR pytorch/pytorch#179125 is the fixes PR addressing the addmv stride/accuracy gap and remains OPEN. | linux-jammy-py3.10-clang18-asan tes…</td>
+<td>daisyden</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="oneDNN" data-priority="P3" data-assignee="libohao1201" data-owner_transferred="libohao1201" data-milestone="UT Backlog" data-search="[#2439](https://github.com/intel/torch-xpu-ops/issues/2439) [onednn] testdecompxpu.test_quick_addmv_xpu_float64 got fail accuracy result libohao1201 libohao1201   pr pytorch/pytorch#174590 closed unmerged; reassess fix path  retriage_prs  " data-issue="2439">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2439" id="done-2439"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2439">#2439</a></td>
+<td>[oneDNN]<br>TestDecompXPU.test_quick_addmv_xpu_float64 got<br>fail accuracy result</td>
+<td>libohao1201</td>
+<td>libohao1201</td>
+<td><ul><li>PR pytorch/pytorch#174590 closed unmerged; reassess fix path</li><li>RETRIAGE_PRS</li></ul></td>
+<td>Pick up upstream PR pytorch/pytorch#174590 once merged (raises decomp tolerance for addmv)<br><a href="details/2439.md">→ details</a></td>
+<td>P3</td>
+<td>The only VERIFIED PR (pytorch/pytorch#174590, '[xpu] Add proper float64 handling for addmv, addmm and baddbmm.') was approved but closed un…</td>
+<td>mengfei25</td>
+<td>dependency component: oneDNN, module: ut</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="chunhuanMeng" data-owner_transferred="chunhuanMeng" data-milestone="UT Backlog" data-search="[#2512](https://github.com/intel/torch-xpu-ops/issues/2512) [upstream_ut] runtimeerror: _histc_xpu does not have a deterministic implementation, but you set &#x27;torch.use_deter chunhuanmeng chunhuanmeng   check_case_avaliablity  track pr intel/torch-xpu-ops#3333 to merge  address ci failures on pr intel/torch-xpu-ops#3333  " data-issue="2512">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2512" id="done-2512"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2512">#2512</a></td>
+<td>[upstream_ut] RuntimeError: _histc_xpu does not<br>have a deterministic implementation, but you set<br>'torch.use_deter</td>
+<td>chunhuanMeng</td>
+<td>chunhuanMeng</td>
+<td><ul><li>check_case_avaliablity</li><li>Track PR intel/torch-xpu-ops#3333 to merge</li><li>Address CI failures on PR intel/torch-xpu-ops#3333</li></ul></td>
+<td>Align XPU alert message with CUDA: change SummaryOps.cpp:45 to globalContext().alertNotDeterministi…<br><a href="details/2512.md">→ details</a></td>
+<td>P3</td>
+<td>VERIFIED PR #3333 (content_match, relationship=fixes) is OPEN and modifies SummaryOps.cpp + the xpu histc test as described in fix_approach…</td>
+<td>libohao1201</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="SYCL kernel: SoftMaxKernels.cpp" data-priority="P3" data-assignee="chunhuanMeng" data-owner_transferred="jkosnox" data-milestone="UT Backlog" data-search="[#3033](https://github.com/intel/torch-xpu-ops/issues/3033) [bug skip]: softmax tolerance chunhuanmeng jkosnox   track pr intel/torch-xpu-ops#3036 to merge  " data-issue="3033">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="3033" id="done-3033"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3033">#3033</a></td>
+<td>[Bug Skip]: Softmax tolerance</td>
+<td>chunhuanMeng</td>
+<td>jkosnox</td>
+<td><ul><li>Track PR intel/torch-xpu-ops#3036 to merge</li></ul></td>
+<td>Investigate SoftMaxKernels.cpp accumulation/promotion path for bool inputs, align with CPU referenc…<br><a href="details/3033.md">→ details</a></td>
+<td>P3</td>
+<td>PR #3036 (Fix problems with softmax tolerance) is OPEN, not yet reviewed/approved (reviewDecision empty); track to merge so the bool softma…</td>
+<td>chunhuanMeng</td>
+<td>skipped, random</td>
+</tr>
+</tbody>
+</table>
+
+
+<h4 id="sec-3-2-6-torchao">3.2.6 TorchAO  ·  1 issues</h4>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<table class="ar-table" data-section="3.2.6">
+<thead>
+<tr>
+<th class="done-col">Done</th>
+<th>Issue</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="TorchAO" data-dependency="SYCL kernel: WeightInt4PackKernel.cpp" data-priority="P2" data-assignee="yucai-intel" data-owner_transferred="yucai-intel" data-milestone="UT Backlog" data-search="[#2532](https://github.com/intel/torch-xpu-ops/issues/2532) title: [upstream_ut] assertionerror: wrong number of dimensions2 for op: torch.ops.aten._convert_weight_to_int4pack.defa yucai-intel yucai-intel   track pr intel/torch-xpu-ops#3090 to merge  resolve unresolved review comments on pr intel/torch-xpu-ops#3090 (&gt;1 week)  address ci failures on pr intel/torch-xpu-ops#3090 (&gt;1 week)  " data-issue="2532">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2532" id="done-2532"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2532">#2532</a></td>
+<td>Title: [upstream_ut] AssertionError: wrong number<br>of dimensions2 for op:<br>torch.ops.aten._convert_weight_to_int4pack.defa</td>
+<td>yucai-intel</td>
+<td>yucai-intel</td>
+<td><ul><li>Track PR intel/torch-xpu-ops#3090 to merge</li><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#3090 (&gt;1 week)</li><li>Address CI failures on PR intel/torch-xpu-ops#3090 (&gt;1 week)</li></ul></td>
+<td>Align the XPU implementation of _convert_weight_to_int4pack with the CUDA contract (input kByte, ma…<br><a href="details/2532.md">→ details</a></td>
+<td>P2</td>
+<td>PR #3090 is the verified fix (explicit issue link, modifies the test file for the 8 listed cases) and is OPEN with two MEMBER approvals. |…</td>
+<td>daisyden</td>
+<td>skipped, port_from_skiplist</td>
+</tr>
+</tbody>
+</table>
+
+
+<ul>
+  <li><strong>NEEDS_OWNER</strong>  ·  0 issues</li>
+</ul>
+
+<p><strong>NEEDS_OWNER — awaiting triage-lead to assign an owner</strong></p>
+
+
+<h2 id="sec-4">4. QA</h2>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<p>Issues in this section are ready for QA action (close, verify, reply, etc.). Rows sorted by <code>Priority</code> (P0 → P3).</p>
+
+<ul>
+  <li><strong>CLOSE or SKIP</strong>  ·  12 issues</li>
+</ul>
+
+<p><strong>CLOSE or SKIP — terminal QA action (close fixed, verify merged fix, skip not-target/wontfix, or label not_target and close)</strong></p>
+
+<table class="ar-table" data-section="4">
+<thead>
+<tr>
+<th class="done-col">Done</th>
+<th>Issue</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="Inductor" data-dependency="oneDNN" data-priority="P1" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#2997](https://github.com/intel/torch-xpu-ops/issues/2997) assertionerror of test_linear_and_cel_max_autotune daisyden daisyden   track pr pytorch/pytorch#181822 to merge  verify fix from merged pr pytorch/pytorch#181822 and close  " data-issue="2997">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2997" id="done-2997"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2997">#2997</a></td>
+<td>AssertionError of test_linear_and_cel_max_autotune</td>
+<td>daisyden</td>
+<td>daisyden</td>
+<td><ul><li>Track PR pytorch/pytorch#181822 to merge</li><li>Verify fix from merged PR pytorch/pytorch#181822 and close</li></ul></td>
+<td>Bisect: disable inplace-padding (config.inplace_padding=False) and disable oneDNN-backed bf16 GEMM…<br><a href="details/2997.md">→ details</a></td>
+<td>P1</td>
+<td>PR 181822 (OPEN, WIP) is daisyden's verification PR removing the @skipIfXpu for #2997; once merged it confirms the community fix and closes…</td>
+<td>daisyden</td>
+<td>module: inductor, ut_upstream</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#2253](https://github.com/intel/torch-xpu-ops/issues/2253) the supported dtypes are not align with cuda daisyden daisyden   label not_target and close  " data-issue="2253">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2253" id="done-2253"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2253">#2253</a></td>
+<td>the supported dtypes are not align with cuda</td>
+<td>daisyden</td>
+<td>daisyden</td>
+<td><ul><li>label not_target and close</li></ul></td>
+<td>Either expand XPU op registrations to cover the same dtype set as CUDA (e.g. addmm/addmv/baddbmm co…<br><a href="details/2253.md">→ details</a></td>
+<td>P2</td>
+<td>Issue is labeled <code>duplicate</code> and the reporter+assignee (daisyden, MEMBER) declared it a duplicate of intel/torch-xpu-ops#2289 — consolidate…</td>
+<td>daisyden</td>
+<td>duplicate, skipped, ut_upstream</td>
+</tr>
+<tr data-category="Flash Attention" data-dependency="SYCL kernel: AttentionKernels.cpp" data-priority="P2" data-assignee="LuFinch" data-owner_transferred="LuFinch" data-milestone="UT Backlog" data-search="[#2270](https://github.com/intel/torch-xpu-ops/issues/2270) backend compatibility error in test/xpu/test_decomp.py lufinch lufinch   verify fix from merged pr intel/torch-xpu-ops#2341 and close  label not_target and close  " data-issue="2270">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2270" id="done-2270"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2270">#2270</a></td>
+<td>Backend Compatibility Error in<br>test/xpu/test_decomp.py</td>
+<td>LuFinch</td>
+<td>LuFinch</td>
+<td><ul><li>Verify fix from merged PR intel/torch-xpu-ops#2341 and close</li><li>label not_target and close</li></ul></td>
+<td>Add the test to skip_list for test_decomp_xpu (decomp cross-ref doesn't make sense for backend-priv…<br><a href="details/2270.md">→ details</a></td>
+<td>P2</td>
+<td>PR #2341 (Integrate FlashAttention fwd/bwd kernels) is MERGED and provides the missing _flash_attention_forward kernel; rerun the test_deco…</td>
+<td>libohao1201</td>
+<td>module: ut, skipped</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="SYCL kernel: LogAddExpKernels.cpp" data-priority="P2" data-assignee="daisyden, CuiYifeng" data-owner_transferred="CuiYifeng, mengfei25" data-milestone="UT Backlog" data-search="[#2376](https://github.com/intel/torch-xpu-ops/issues/2376) [bug skip]: notimplementederror: &quot;logaddexp_xpu&quot; not implemented for &#x27;complex&#x27; daisyden, cuiyifeng cuiyifeng, mengfei25   verify fix from merged pr intel/torch-xpu-ops#2807 and close, check_case_avaliablity  enable complex logaddexp test cases upstream in pytorch/pytorch and unskip in torch-xpu-ops skip lists  " data-issue="2376">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2376" id="done-2376"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2376">#2376</a></td>
+<td>[Bug Skip]: NotImplementedError: "logaddexp_xpu"<br>not implemented for 'Complex'</td>
+<td>daisyden, CuiYifeng</td>
+<td>CuiYifeng, mengfei25</td>
+<td><ul><li>Verify fix from merged PR intel/torch-xpu-ops#2807 and close, check_case_avaliablity</li><li>Enable complex logaddexp test cases upstream in pytorch/pytorch and unskip in torch-xpu-ops skip lists</li></ul></td>
+<td>Extend LogAddExpKernels.cpp dispatch to AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES_AND* (mirroring CUDA…<br><a href="details/2376.md">→ details</a></td>
+<td>P2</td>
+<td>Highest-priority VERIFIED PR intel/torch-xpu-ops#2807 is MERGED implementing complex logaddexp kernel; per derivation rule emit VERIFY_AND_…</td>
+<td>mengfei25</td>
+<td>module: ut, skipped</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="CuiYifeng" data-owner_transferred="wincent8 | CuiYifeng" data-milestone="UT Backlog" data-search="[#2720](https://github.com/intel/torch-xpu-ops/issues/2720) [upstream_ut] runtimeerror: false internal assert failed at &quot;/pytorch/aten/src/aten/native/dispatchs tub.cpp&quot;:275 cuiyifeng wincent8 | cuiyifeng   close the fixed issue  verify fix from merged pr intel/torch-xpu-ops#3248 and close  " data-issue="2720">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2720" id="done-2720"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2720">#2720</a></td>
+<td>[upstream_ut] RuntimeError: false INTERNAL ASSERT<br>FAILED at "/pytorch/aten/src/ATen/native/DispatchS<br>tub.cpp":275</td>
+<td>CuiYifeng</td>
+<td>wincent8 | CuiYifeng</td>
+<td><ul><li>Close the fixed issue</li><li>Verify fix from merged PR intel/torch-xpu-ops#3248 and close</li></ul></td>
+<td>Add an XPU kernel registration for ldexp_stub in torch-xpu-ops: implement at third_party/torch-xpu-…<br><a href="details/2720.md">→ details</a></td>
+<td>P2</td>
+<td>PR #3248 explicitly targeted this issue ("To solve #2720"), registered the missing ldexp_stub XPU dispatch, and merged on 2026-04-03; remai…</td>
+<td>wincent8</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Flash Attention" data-dependency="oneDNN" data-priority="P2" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#3132](https://github.com/intel/torch-xpu-ops/issues/3132) [upstream_ut] transfomers test reports runtimeerror: no available kernel. aborting execution. daisyden daisyden   label not_target and close  track pr intel/torch-xpu-ops#3510 to merge  " data-issue="3132">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="3132" id="done-3132"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3132">#3132</a></td>
+<td>[upstream_ut] transfomers test reports<br>RuntimeError: No available kernel. Aborting<br>execution.</td>
+<td>daisyden</td>
+<td>daisyden</td>
+<td><ul><li>label not_target and close</li><li>Track PR intel/torch-xpu-ops#3510 to merge</li></ul></td>
+<td>Per maintainer LuFinch: skip cuDNN cases permanently (CUDA-only backend)<br><a href="details/3132.md">→ details</a></td>
+<td>P2</td>
+<td>Skip entries for the 70 cases in this issue have been added to PR #3510 (commit a9b5b50c) per assignee daisyden's 2026-04-29 comment; PR is…</td>
+<td>daisyden</td>
+<td>module: ut, skipped, ut_upstream, not_t…</td>
+</tr>
+<tr data-category="Sparse" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="CuiYifeng" data-owner_transferred="CuiYifeng" data-milestone="UT Backlog" data-search="[#2245](https://github.com/intel/torch-xpu-ops/issues/2245) onednn matmul received incorrect shape in test/tes t_sparse_csr.py::testsparsecsrxpu::test_addmm_erro rs_xpu_float32 cuiyifeng cuiyifeng   verify fix from merged pr intel/torch-xpu-ops#3487 and close  " data-issue="2245">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2245" id="done-2245"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2245">#2245</a></td>
+<td>oneDNN matmul received incorrect shape in test/tes<br>t_sparse_csr.py::TestSparseCSRXPU::test_addmm_erro<br>rs_xpu_float32</td>
+<td>CuiYifeng</td>
+<td>CuiYifeng</td>
+<td><ul><li>Verify fix from merged PR intel/torch-xpu-ops#3487 and close</li></ul></td>
+<td>Land upstream PyTorch PR #180985 to add the expanded-input shape validation in the addmm meta/dispa…<br><a href="details/2245.md">→ details</a></td>
+<td>P3</td>
+<td>intel/torch-xpu-ops#3487 explicitly fixes #2245 by adding the missing dimension check on the XPU sparse CSR addmm path; merged 2026-04-29.</td>
+<td>wincent8</td>
+<td>module: ut, skipped</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="oneDNN" data-priority="P3" data-assignee="yucai-intel" data-owner_transferred="daisyden | yucai-intel" data-milestone="UT Backlog" data-search="[#2541](https://github.com/intel/torch-xpu-ops/issues/2541) title: [upstream_ut] runtimeerror: could not construct a memory descriptor using strides yucai-intel daisyden | yucai-intel   close the fixed issue  track pr pytorch/pytorch#176875 to merge  " data-issue="2541">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2541" id="done-2541"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2541">#2541</a></td>
+<td>Title: [upstream_ut] RuntimeError: could not<br>construct a memory descriptor using strides</td>
+<td>yucai-intel</td>
+<td>daisyden | yucai-intel</td>
+<td><ul><li>Close the fixed issue</li><li>Track PR pytorch/pytorch#176875 to merge</li></ul></td>
+<td>Land/cherry-pick upstream pytorch/pytorch#176875 which makes einsum contiguous before bmm/matmul on…<br><a href="details/2541.md">→ details</a></td>
+<td>P3</td>
+<td>Fixed and passed in CI | Verified upstream PR fixes the einsum oneDNN memory-descriptor error and is currently OPEN awaiting review/merge.</td>
+<td>daisyden</td>
+<td>skipped, port_from_skiplist</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="CuiYifeng" data-owner_transferred="CuiYifeng" data-milestone="UT Backlog" data-search="[#2615](https://github.com/intel/torch-xpu-ops/issues/2615) [bug skip]: new failures runtimeerror: unsupported dtype half / runtimeerror: unsupported dtype torch.float16 cuiyifeng cuiyifeng   label not_target and close (for the test_comprehensive_fft_*_xpu_float16 and #2708-tracked subset)  verify fix from merged pr intel/torch-xpu-ops#2637 and close  track pr intel/torch-xpu-ops#2996 to merge  resolve unresolved review comments on pr intel/torch-xpu-ops#2996  " data-issue="2615">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2615" id="done-2615"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2615">#2615</a></td>
+<td>[Bug Skip]: New failures RuntimeError: Unsupported<br>dtype Half / RuntimeError: Unsupported dtype<br>torch.float16</td>
+<td>CuiYifeng</td>
+<td>CuiYifeng</td>
+<td><ul><li>label not_target and close (for the test_comprehensive_fft_*_xpu_float16 and #2708-tracked subset)</li><li>Verify fix from merged PR intel/torch-xpu-ops#2637 and close</li><li>Track PR intel/torch-xpu-ops#2996 to merge</li><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#2996</li></ul></td>
+<td>Land pytorch/pytorch#171231 and skip/redirect the remaining test_fft_half_and_chalf_not_power_of_tw…<br><a href="details/2615.md">→ details</a></td>
+<td>P3</td>
+<td>Most fft_*_xpu_float16 cases already pass per nightly bot once #2637 added Half/Complex32 FFT support; remaining work is verification. | P…</td>
+<td>kaileiyx</td>
+<td>module: ut, skipped</td>
+</tr>
+<tr data-category="Flash Attention" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#3136](https://github.com/intel/torch-xpu-ops/issues/3136) [upstream_ut] assertionerror: false is not true in test_transformers daisyden daisyden   label not_target and close  track pr intel/torch-xpu-ops#3510 to merge  " data-issue="3136">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="3136" id="done-3136"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3136">#3136</a></td>
+<td>[upstream_ut] AssertionError: False is not true in<br>test_transformers</td>
+<td>daisyden</td>
+<td>daisyden</td>
+<td><ul><li>label not_target and close</li><li>Track PR intel/torch-xpu-ops#3510 to merge</li></ul></td>
+<td>Keep the skip entries added by PR #3510 in test/xpu/skip_list_common.py.<br><a href="details/3136.md">→ details</a></td>
+<td>P3</td>
+<td>Skip entries for the 4 cases (commit 475bdf37) have been committed to PR #3510 per assignee daisyden's 2026-04-29 comment; PR is APPROVED, …</td>
+<td>daisyden</td>
+<td>module: ut, skipped, ut_upstream, not_t…</td>
+</tr>
+<tr data-category="Flash Attention" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#3137](https://github.com/intel/torch-xpu-ops/issues/3137) [upstream_ut] runtimeerror: expected scalar type half but found float daisyden daisyden   label not_target and close  " data-issue="3137">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="3137" id="done-3137"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3137">#3137</a></td>
+<td>[upstream_ut] RuntimeError: expected scalar type<br>Half but found Float</td>
+<td>daisyden</td>
+<td>daisyden</td>
+<td><ul><li>label not_target and close</li></ul></td>
+<td>No code fix needed in torch-xpu-ops: keep the skip entries from PR #3510 in test/xpu/skip_list_comm…<br><a href="details/3137.md">→ details</a></td>
+<td>P3</td>
+<td>Authoritative owner LuFinch (MEMBER) declared the fastpath deprecated and these cases not_target; skip entries already landed in PR #3510 c…</td>
+<td>daisyden</td>
+<td>module: ut, skipped, ut_upstream, rando…</td>
+</tr>
+<tr data-category="Sparse" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="libohao1201, jafraustro" data-owner_transferred="libohao1201" data-milestone="UT Backlog" data-search="[#3170](https://github.com/intel/torch-xpu-ops/issues/3170) unskip test_bmm_windows_error_xpu_float64 libohao1201, jafraustro libohao1201   verify fix from merged pr intel/torch-xpu-ops#3225 and close  address comment ar from libohao1201 (&gt;1 week): verify the issue on windows  address comment ar from chuanqi129: how to verify the windows-only fix given ci gap  " data-issue="3170">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="3170" id="done-3170"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3170">#3170</a></td>
+<td>Unskip test_bmm_windows_error_xpu_float64</td>
+<td>libohao1201, jafraustro</td>
+<td>libohao1201</td>
+<td><ul><li>Verify fix from merged PR intel/torch-xpu-ops#3225 and close</li><li>Address comment AR from libohao1201 (&gt;1 week): verify the issue on windows</li><li>Address comment AR from chuanqi129: how to verify the Windows-only fix given CI gap</li></ul></td>
+<td>Remove the test_bmm_windows_error_xpu_float64 entry from the xpu skip list (test/xpu/skip_list*.py…<br><a href="details/3170.md">→ details</a></td>
+<td>P3</td>
+<td>PR #3225 explicitly references and merged the fix for #3170, modifying the cited test file. | daisyden requested libohao1201 verify on Win…</td>
+<td>CuiYifeng</td>
+<td>skipped, ut_upstream</td>
+</tr>
+</tbody>
+</table>
+
+
+<ul>
+  <li><strong>AWAIT_REPLY</strong>  ·  0 issues</li>
+</ul>
+
+<p><strong>AWAIT_REPLY — open questions in thread; owner must respond</strong></p>
+
+<p class="meta">_No issues._</p>
+
+
+<ul>
+  <li><strong>MONITOR</strong>  ·  0 issues</li>
+</ul>
+
+<p><strong>MONITOR — long-running tracker / maintenance / scoping</strong></p>
+
+<p class="meta">_No issues._</p>
+
+
+<ul>
+  <li><strong>CHECK_CASES</strong>  ·  6 issues</li>
+</ul>
+
+<p><strong>CHECK_CASES — XPU test case missing in repo; QA must verify case existence before action</strong></p>
+
+<table class="ar-table" data-section="4">
+<thead>
+<tr>
+<th class="done-col">Done</th>
+<th>Issue</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P1" data-assignee="yucai-intel" data-owner_transferred="yucai-intel" data-milestone="UT Backlog" data-search="[#2015](https://github.com/intel/torch-xpu-ops/issues/2015) inf is returned by nn.transformerencoderlayer yucai-intel yucai-intel   check_case_avaliablity  track pr intel/torch-xpu-ops#2336 to merge  resolve unresolved review comments on pr intel/torch-xpu-ops#2336 (&gt;1 week)  address comment ar from tye1: get pr #2336 merged  " data-issue="2015">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2015" id="done-2015"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2015">#2015</a></td>
+<td>inf is returned by nn.TransformerEncoderLayer</td>
+<td>yucai-intel</td>
+<td>yucai-intel</td>
+<td><ul><li>check_case_avaliablity</li><li>Track PR intel/torch-xpu-ops#2336 to merge</li><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#2336 (&gt;1 week)</li><li>Address comment AR from tye1: get PR #2336 merged</li></ul></td>
+<td>Land/track pytorch/pytorch#168234 to add xpu device coverage in test_nn.py TransformerEncoderLayer…<br><a href="details/2015.md">→ details</a></td>
+<td>P1</td>
+<td>PR #2336 (OPEN) explicitly fixes this issue's TransformerEncoderLayer XPU test failure; needs to land. | CuiYifeng's CHANGES_REQUESTED rev…</td>
+<td>daisyden</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Flash Attention" data-dependency="SYCL kernel: AttentionKernels.cpp" data-priority="P1" data-assignee="chunhuanMeng" data-owner_transferred="chunhuanMeng, daisyden" data-milestone="UT Backlog" data-search="[#2285](https://github.com/intel/torch-xpu-ops/issues/2285) support efficient attention chunhuanmeng chunhuanmeng, daisyden   check_case_avaliablity  no action — investigate further  " data-issue="2285">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2285" id="done-2285"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2285">#2285</a></td>
+<td>Support efficient attention</td>
+<td>chunhuanMeng</td>
+<td>chunhuanMeng, daisyden</td>
+<td><ul><li>check_case_avaliablity</li><li>No action — investigate further</li></ul></td>
+<td>Implement and register aten::_efficient_attention_forward / _backward for XPU in torch-xpu-ops (tra…<br><a href="details/2285.md">→ details</a></td>
+<td>P1</td>
+<td>Issue is OPEN with zero VERIFIED PR candidates: aten::_efficient_attention_forward has no XPU registration in torch-xpu-ops yet, no fix PR …</td>
+<td>daisyden</td>
+<td>skipped</td>
+</tr>
+<tr data-category="TorchAO" data-dependency="SYCL kernel: LinearInt4.cpp" data-priority="P1" data-assignee="Stonepia" data-owner_transferred="Stonepia" data-milestone="UT Backlog" data-search="[#2578](https://github.com/intel/torch-xpu-ops/issues/2578) [torchao][ut] test/quantization/test_quant_api.py assertionerror: sqnr -2.90625 is too low stonepia stonepia   check_case_avaliablity  no action — investigate further  " data-issue="2578">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2578" id="done-2578"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2578">#2578</a></td>
+<td>[TorchAO][UT] test/quantization/test_quant_api.py<br>AssertionError: SQNR -2.90625 is too low</td>
+<td>Stonepia</td>
+<td>Stonepia</td>
+<td><ul><li>check_case_avaliablity</li><li>No action — investigate further</li></ul></td>
+<td>Audit LinearInt4.cpp packing convention (inner_k_tiles=8 TensorCoreTiledLayout) vs torchao's tinyge…<br><a href="details/2578.md">→ details</a></td>
+<td>P1</td>
+<td>Issue is OPEN with no VERIFIED fixing/superseding PR; SQNR -2.9 indicates an XPU LinearInt4 packing-layout bug that the assignee Stonepia h…</td>
+<td>zxd1997066</td>
+<td>module: ao, ut_upstream</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="SYCL kernel: LogAddExpKernels.cpp" data-priority="P2" data-assignee="daisyden, CuiYifeng" data-owner_transferred="CuiYifeng, mengfei25" data-milestone="UT Backlog" data-search="[#2376](https://github.com/intel/torch-xpu-ops/issues/2376) [bug skip]: notimplementederror: &quot;logaddexp_xpu&quot; not implemented for &#x27;complex&#x27; daisyden, cuiyifeng cuiyifeng, mengfei25   verify fix from merged pr intel/torch-xpu-ops#2807 and close, check_case_avaliablity  enable complex logaddexp test cases upstream in pytorch/pytorch and unskip in torch-xpu-ops skip lists  " data-issue="2376">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2376" id="done-2376"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2376">#2376</a></td>
+<td>[Bug Skip]: NotImplementedError: "logaddexp_xpu"<br>not implemented for 'Complex'</td>
+<td>daisyden, CuiYifeng</td>
+<td>CuiYifeng, mengfei25</td>
+<td><ul><li>Verify fix from merged PR intel/torch-xpu-ops#2807 and close, check_case_avaliablity</li><li>Enable complex logaddexp test cases upstream in pytorch/pytorch and unskip in torch-xpu-ops skip lists</li></ul></td>
+<td>Extend LogAddExpKernels.cpp dispatch to AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES_AND* (mirroring CUDA…<br><a href="details/2376.md">→ details</a></td>
+<td>P2</td>
+<td>Highest-priority VERIFIED PR intel/torch-xpu-ops#2807 is MERGED implementing complex logaddexp kernel; per derivation rule emit VERIFY_AND_…</td>
+<td>mengfei25</td>
+<td>module: ut, skipped</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="chunhuanMeng" data-owner_transferred="chunhuanMeng" data-milestone="UT Backlog" data-search="[#2512](https://github.com/intel/torch-xpu-ops/issues/2512) [upstream_ut] runtimeerror: _histc_xpu does not have a deterministic implementation, but you set &#x27;torch.use_deter chunhuanmeng chunhuanmeng   check_case_avaliablity  track pr intel/torch-xpu-ops#3333 to merge  address ci failures on pr intel/torch-xpu-ops#3333  " data-issue="2512">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2512" id="done-2512"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2512">#2512</a></td>
+<td>[upstream_ut] RuntimeError: _histc_xpu does not<br>have a deterministic implementation, but you set<br>'torch.use_deter</td>
+<td>chunhuanMeng</td>
+<td>chunhuanMeng</td>
+<td><ul><li>check_case_avaliablity</li><li>Track PR intel/torch-xpu-ops#3333 to merge</li><li>Address CI failures on PR intel/torch-xpu-ops#3333</li></ul></td>
+<td>Align XPU alert message with CUDA: change SummaryOps.cpp:45 to globalContext().alertNotDeterministi…<br><a href="details/2512.md">→ details</a></td>
+<td>P3</td>
+<td>VERIFIED PR #3333 (content_match, relationship=fixes) is OPEN and modifies SummaryOps.cpp + the xpu histc test as described in fix_approach…</td>
+<td>libohao1201</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Others" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="guangyey" data-owner_transferred="guangyey" data-milestone="UT Backlog" data-search="[#2531](https://github.com/intel/torch-xpu-ops/issues/2531) [upstream_ut] assertionerror: torch not compiled with cuda enabled guangyey guangyey   check_case_avaliablity  track pr intel/torch-xpu-ops#3510 to merge  address comment ar from guangyey: confirm xpu support for tunable / cufft_plan_cache / cudasyncguard / miopen / quantize_per_tensor  " data-issue="2531">
+<td class="done-col"><input type="checkbox" class="ar-done" data-issue="2531" id="done-2531"></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2531">#2531</a></td>
+<td>[upstream_ut] AssertionError: Torch not compiled<br>with CUDA enabled</td>
+<td>guangyey</td>
+<td>guangyey</td>
+<td><ul><li>check_case_avaliablity</li><li>Track PR intel/torch-xpu-ops#3510 to merge</li><li>Address comment AR from guangyey: confirm XPU support for tunable / cufft_plan_cache / CudaSyncGuard / Miopen / quantize_per_tensor</li></ul></td>
+<td>Port each test in third_party/torch-xpu-ops/test/xpu/ to substitute xpu for cuda (use TEST_XPU/torc…<br><a href="details/2531.md">→ details</a></td>
+<td>P3</td>
+<td>VERIFIED partial-fix PR #3510 (relationship=fixes, OPEN, approved by chuanqi129) lands 2 of 13 cases; remaining cases need feature work tra…</td>
+<td>daisyden</td>
+<td>skipped, port_from_skiplist</td>
+</tr>
+</tbody>
+</table>
+
+
+<h2 id="sec-5">5. Duplicated issues</h2>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<p>Rows where <code>duplicated_issue</code> is set or <code>action_TBD</code> contains "duplicate of".  —  3 issues.</p>
+
+<table class="ar-table" data-section="5">
+<thead>
+<tr>
+<th>Issue</th>
+<th>Duplicates</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="Flash Attention" data-dependency="SYCL kernel: AttentionKernels.cpp" data-priority="P1" data-assignee="chunhuanMeng" data-owner_transferred="chunhuanMeng, daisyden" data-milestone="UT Backlog" data-search="[#2285](https://github.com/intel/torch-xpu-ops/issues/2285) [#2853](https://github.com/intel/torch-xpu-ops/issues/2853) support efficient attention chunhuanmeng chunhuanmeng, daisyden" data-issue="2285">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2285">#2285</a></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2853">#2853</a></td>
+<td>Support efficient attention</td>
+<td>chunhuanMeng</td>
+<td>chunhuanMeng, daisyden</td>
+<td><ul><li>check_case_avaliablity</li><li>No action — investigate further</li></ul></td>
+<td>Implement and register aten::_efficient_attention_forward / _backward for XPU in torch-xpu-ops (tra…<br><a href="details/2285.md">→ details</a></td>
+<td>P1</td>
+<td>Issue is OPEN with zero VERIFIED PR candidates: aten::_efficient_attention_forward has no XPU registration in torch-xpu-ops yet, no fix PR …</td>
+<td>daisyden</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="CuiYifeng" data-owner_transferred="CuiYifeng" data-milestone="UT Backlog" data-search="[#2715](https://github.com/intel/torch-xpu-ops/issues/2715) [#3286](https://github.com/intel/torch-xpu-ops/issues/3286) [upstream_ut] torch._dynamo.exc.unsupported: attempted to inline function marked as skipped cuiyifeng cuiyifeng" data-issue="2715">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2715">#2715</a></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3286">#3286</a></td>
+<td>[upstream_ut] torch._dynamo.exc.Unsupported:<br>Attempted to inline function marked as skipped</td>
+<td>CuiYifeng</td>
+<td>CuiYifeng</td>
+<td><ul><li>No action — investigate further</li></ul></td>
+<td>In upstream PyTorch torch/_dynamo/trace_rules.py, allow tracing of torch.xpu.device.__init__ (mirro…<br><a href="details/2715.md">→ details</a></td>
+<td>P2</td>
+<td>Issue is OPEN, no VERIFIED PR addresses the dynamo MOD_SKIPLIST exemption for torch.xpu.device.__init__; assignee CuiYifeng needs to invest…</td>
+<td>daisyden</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Flash Attention" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="LuFinch" data-owner_transferred="LuFinch" data-milestone="PT2.13" data-search="[#2853](https://github.com/intel/torch-xpu-ops/issues/2853) [#2285](https://github.com/intel/torch-xpu-ops/issues/2285) [upstream_ut] torch.ops.aten._flash_attention_forward lack of support for xpu. lufinch lufinch" data-issue="2853">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2853">#2853</a></td>
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2285">#2285</a></td>
+<td>[upstream_ut]<br>torch.ops.aten._flash_attention_forward lack of<br>support for XPU.</td>
+<td>LuFinch</td>
+<td>LuFinch</td>
+<td><ul><li>Track PR intel/torch-xpu-ops#3404 to merge</li></ul></td>
+<td>Either (a) register an XPU kernel for _flash_attention_forward in torch-xpu-ops (transformers/sycl/…<br><a href="details/2853.md">→ details</a></td>
+<td>P2</td>
+<td>PR #3404 (assignee LuFinch) is the verified fix and is currently OPEN with no review decision yet; needs to be driven through review and me…</td>
+<td>BBBela</td>
+<td>skipped</td>
+</tr>
+</tbody>
+</table>
+
+
+<h2 id="sec-6">6. Dependency (external blockers)</h2>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<p>Issues with a non-blank <code>Dependency</code> value, excluding <code>upstream-pytorch</code>, <code>CPU fallback</code>, and <code>SYCL kernel:*</code> (in-repo kernel pointers). Terminal-QA rows (CLOSE / VERIFY_AND_CLOSE / SKIP / NOT_TARGET_CLOSE) are also excluded.  —  12 issues.</p>
+
+<ul>
+  <li><strong>Third Parties</strong></li>
+</ul>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<table class="ar-table" data-section="6">
+<thead>
+<tr>
+<th>Issue</th>
+<th>Dependency</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="Inductor" data-dependency="oneAPI" data-priority="P1" data-assignee="mengfei25" data-owner_transferred="mengfei25" data-milestone="UT Backlog" data-search="[#2295](https://github.com/intel/torch-xpu-ops/issues/2295) oneapi [upstream_ut][xpu][test]nn/test_embedding.py::test embeddingnndevicetypexpu::test_embedding_bag_devic e_xpu_int32_int32_float64 meet assertionerror: tensor-likes are not close! mengfei25 mengfei25" data-issue="2295">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2295">#2295</a></td>
+<td>oneAPI</td>
+<td>[upstream_ut][xpu][test]nn/test_embedding.py::Test<br>EmbeddingNNDeviceTypeXPU::test_embedding_bag_devic<br>e_xpu_int32_int32_float64 meet AssertionError:<br>Tensor-likes are not close!</td>
+<td>mengfei25</td>
+<td>mengfei25</td>
+<td><ul><li>No action — investigate further</li></ul></td>
+<td>Identify the IGC/oneAPI version delta between CI image and nightly build<br><a href="details/2295.md">→ details</a></td>
+<td>P1</td>
+<td>Open issue with zero VERIFIED fix PRs; cited PRs (#165886, #169168) only carry temporary WAs and are closed unmerged. Root cause is suspect…</td>
+<td>wincent8</td>
+<td>module: inductor, skipped, ut_upstream</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="oneDNN" data-priority="P1" data-assignee="mengfei25" data-owner_transferred="mengfei25" data-milestone="PT2.12" data-search="[#2769](https://github.com/intel/torch-xpu-ops/issues/2769) onednn [onednn] new failed test cases with 3.11 compared with 3.10 mengfei25 mengfei25" data-issue="2769">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2769">#2769</a></td>
+<td>oneDNN</td>
+<td>[oneDNN] New failed test cases with 3.11 compared<br>with 3.10</td>
+<td>mengfei25</td>
+<td>mengfei25</td>
+<td><ul><li>Address comment AR from chuanqi129 (&gt;1 week): verify whether oneDNN 3.11.1 fixes the conv regression</li><li>No action — investigate further</li></ul></td>
+<td>File a oneDNN upstream issue with a minimal conv repro<br><a href="details/2769.md">→ details</a></td>
+<td>P1</td>
+<td>chuanqi129 asked mengfei25 on 2026-03-25 to verify the fix in oneDNN 3.11.1; no response in 35 days. | No torch-xpu-ops PR exists; root ca…</td>
+<td>mengfei25</td>
+<td>hw: PVC, dependency component: oneDNN, …</td>
+</tr>
+<tr data-category="Inductor" data-dependency="driver" data-priority="P2" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#2613](https://github.com/intel/torch-xpu-ops/issues/2613) driver [upstream_ut] assertionerror: tensor-likes are not equal! in test_compile_subprocess.py daisyden daisyden" data-issue="2613">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2613">#2613</a></td>
+<td>driver</td>
+<td>[upstream_ut] AssertionError: Tensor-likes are not<br>equal! in test_compile_subprocess.py</td>
+<td>daisyden</td>
+<td>daisyden</td>
+<td><ul><li>Address comment AR from daisyden (&gt;1 week): re-verify argmax/argmin tie-break tests with the new driver per GSD-11415</li><li>No action — investigate further</li></ul></td>
+<td>Wait for the driver/IGC fix tracked in GSD-11415<br><a href="details/2613.md">→ details</a></td>
+<td>P2</td>
+<td>Assignee daisyden self-noted 'Need verify' 13 days ago to re-test the driver fix tracked in GSD-11415; that re-verification has not been re…</td>
+<td>daisyden</td>
+<td>dependency component: driver, module: i…</td>
+</tr>
+<tr data-category="Flash Attention" data-dependency="oneAPI" data-priority="P2" data-assignee="LuFinch" data-owner_transferred="LuFinch" data-milestone="UT Backlog" data-search="[#3142](https://github.com/intel/torch-xpu-ops/issues/3142) oneapi [upstream_ut] runtimeerror: the sycl_ext_oneapi_work_group_scratch_memory feature is not yet available for use with sycl graph extension. lufinch lufinch" data-issue="3142">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3142">#3142</a></td>
+<td>oneAPI</td>
+<td>[upstream_ut] RuntimeError: The<br>sycl_ext_oneapi_work_group_scratch_memory feature<br>is not yet available for use with SYCL Graph<br>extension.</td>
+<td>LuFinch</td>
+<td>LuFinch</td>
+<td><ul><li>No action — investigate further</li></ul></td>
+<td>External oneAPI compiler dependency — wait for oneAPI 2026.0 / CMPLRLLVM-72057 to lift the work_gro…<br><a href="details/3142.md">→ details</a></td>
+<td>P2</td>
+<td>Issue is blocked on external oneAPI 26.0 / CMPLRLLVM-72057; no in-tree fix PR exists. Affected cases stay skipped until the compiler depend…</td>
+<td>daisyden</td>
+<td>dependency component: oneAPI, module: u…</td>
+</tr>
+<tr data-category="Inductor" data-dependency="triton" data-priority="P2" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#2554](https://github.com/intel/torch-xpu-ops/issues/2554) triton [upstream_ut] assertionerror: assertionerror not raised daisyden daisyden" data-issue="2554">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2554">#2554</a></td>
+<td>triton</td>
+<td>[upstream_ut] AssertionError: AssertionError not<br>raised</td>
+<td>daisyden</td>
+<td>daisyden</td>
+<td><ul><li>Track PR pytorch/pytorch#181822 to merge</li></ul></td>
+<td>Wait for / pull in the fix from intel-xpu-backend-for-triton#5654 (TTGIR pass), then unskip the thr…<br><a href="details/2554.md">→ details</a></td>
+<td>P2</td>
+<td>PR pytorch/pytorch#181822 is the live OPEN fix re-enabling 2 of the 3 cases (the third case test_selecsls42b_misaligned_address is not list…</td>
+<td>daisyden</td>
+<td>module: inductor, skipped</td>
+</tr>
+<tr data-category="Inductor" data-dependency="triton" data-priority="P2" data-assignee="Stonepia" data-owner_transferred="Stonepia" data-milestone="UT Backlog" data-search="[#2888](https://github.com/intel/torch-xpu-ops/issues/2888) triton torch._inductor.exc.inductorerror: assertionerror: conversions between float8_e5m2 and float8_e4m3fn is not supported! stonepia stonepia" data-issue="2888">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2888">#2888</a></td>
+<td>triton</td>
+<td>torch._inductor.exc.InductorError: AssertionError:<br>Conversions between float8_e5m2 and float8_e4m3fn<br>is not supported!</td>
+<td>Stonepia</td>
+<td>Stonepia</td>
+<td><ul><li>No action — investigate further</li></ul></td>
+<td>Either (a) upstream patch in <code>torch/_inductor/codegen/triton.py</code> to relax the guard for XPU and emi…<br><a href="details/2888.md">→ details</a></td>
+<td>P2</td>
+<td>No fix PR yet. Assignee Stonepia owns a fix targeted before June; needs upstream relaxation of the fp8_e5m2 &lt;-&gt; fp8_e4m3fn assert in torch/…</td>
+<td>daisyden</td>
+<td>module: inductor, ut_upstream</td>
+</tr>
+<tr data-category="Inductor" data-dependency="triton" data-priority="P2" data-assignee="CuiYifeng" data-owner_transferred="CuiYifeng" data-milestone="PT2.13" data-search="[#3006](https://github.com/intel/torch-xpu-ops/issues/3006) triton assertionerror: &#x27;.to(tl.float16)&#x27; unexpectedly found in &#x27;# aot id cuiyifeng cuiyifeng" data-issue="3006">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3006">#3006</a></td>
+<td>triton</td>
+<td>AssertionError: '.to(tl.float16)' unexpectedly<br>found in '# AOT ID</td>
+<td>CuiYifeng</td>
+<td>CuiYifeng</td>
+<td><ul><li>No action — investigate further</li></ul></td>
+<td>Upstream Inductor fix in torch/_inductor/codegen/triton.py (max_with_index/argmax lowering) to ensu…<br><a href="details/3006.md">→ details</a></td>
+<td>P2</td>
+<td>No VERIFIED fix PR exists. Root cause is in torch/_inductor/codegen/triton.py (max_with_index/argmax index-dtype promotion) — assignee CuiY…</td>
+<td>daisyden</td>
+<td>module: inductor, ut_upstream</td>
+</tr>
+<tr data-category="Sparse" data-dependency="triton" data-priority="P2" data-assignee="jafraustro" data-owner_transferred="jafraustro" data-milestone="UT Backlog" data-search="[#3165](https://github.com/intel/torch-xpu-ops/issues/3165) triton test_sparse_csr_xpu.py::testsparsecompressedtriton kernelsxpu::test_triton_bsr_softmax meet runtimeerror: ze_result_error_invalid_kernel_name jafraustro jafraustro" data-issue="3165">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3165">#3165</a></td>
+<td>triton</td>
+<td>test_sparse_csr_xpu.py::TestSparseCompressedTriton<br>KernelsXPU::test_triton_bsr_softmax meet<br>RuntimeError: ZE_RESULT_ERROR_INVALID_KERNEL_NAME</td>
+<td>jafraustro</td>
+<td>jafraustro</td>
+<td><ul><li>No action — investigate further</li></ul></td>
+<td>File a Triton-XPU backend bug with the failing BSR softmax kernel and the ZE_RESULT_ERROR_INVALID_K…<br><a href="details/3165.md">→ details</a></td>
+<td>P2</td>
+<td>Zero VERIFIED PR candidates with relationship fixes/supersedes; assignee jafraustro just localized the failing tiling-loop path on 2026-04-…</td>
+<td>CuiYifeng</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Inductor" data-dependency="oneAPI" data-priority="P3" data-assignee="guangyey" data-owner_transferred="guangyey" data-milestone="PT2.14" data-search="[#2800](https://github.com/intel/torch-xpu-ops/issues/2800) oneapi attributeerror: &#x27;torch._c._xpudeviceproperties&#x27; object has no attribute &#x27;major&#x27; guangyey guangyey" data-issue="2800">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2800">#2800</a></td>
+<td>oneAPI</td>
+<td>AttributeError: 'torch._C._XpuDeviceProperties'<br>object has no attribute 'major'</td>
+<td>guangyey</td>
+<td>guangyey</td>
+<td><ul><li>No action — investigate further</li></ul></td>
+<td>Wait for oneAPI 2026.1 (CMPLRLLVM-72166) to expose arch major/minor via SYCL device info, then add…<br><a href="details/2800.md">→ details</a></td>
+<td>P3</td>
+<td>Issue is OPEN with no fix PR; resolution is gated on oneAPI 2026.1 / CMPLRLLVM-72166 exposing arch major/minor through SYCL device info. Sh…</td>
+<td>daisyden</td>
+<td>dependency component: oneAPI, module: i…</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="oneDNN" data-priority="P3" data-assignee="chunhuanMeng" data-owner_transferred="chunhuanMeng" data-milestone="UT Backlog" data-search="[#1893](https://github.com/intel/torch-xpu-ops/issues/1893) onednn [upstream_ut] onednn accuracy issues in test_ops_xpu.py chunhuanmeng chunhuanmeng" data-issue="1893">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/1893">#1893</a></td>
+<td>oneDNN</td>
+<td>[upstream_ut] oneDNN accuracy issues in<br>test_ops_xpu.py</td>
+<td>chunhuanMeng</td>
+<td>chunhuanMeng</td>
+<td><ul><li>Track PR pytorch/pytorch#179125 to merge</li><li>Address CI failures on PR pytorch/pytorch#179125 (&gt;1 week)</li></ul></td>
+<td>Bump tolerance for these mv/addmv ops in test_ops xpu skip/tolerance lists (third_party/torch-xpu-o…<br><a href="details/1893.md">→ details</a></td>
+<td>P3</td>
+<td>PR pytorch/pytorch#179125 is the fixes PR addressing the addmv stride/accuracy gap and remains OPEN. | linux-jammy-py3.10-clang18-asan tes…</td>
+<td>daisyden</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="oneDNN" data-priority="P3" data-assignee="libohao1201" data-owner_transferred="libohao1201" data-milestone="UT Backlog" data-search="[#2439](https://github.com/intel/torch-xpu-ops/issues/2439) onednn [onednn] testdecompxpu.test_quick_addmv_xpu_float64 got fail accuracy result libohao1201 libohao1201" data-issue="2439">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2439">#2439</a></td>
+<td>oneDNN</td>
+<td>[oneDNN]<br>TestDecompXPU.test_quick_addmv_xpu_float64 got<br>fail accuracy result</td>
+<td>libohao1201</td>
+<td>libohao1201</td>
+<td><ul><li>PR pytorch/pytorch#174590 closed unmerged; reassess fix path</li><li>RETRIAGE_PRS</li></ul></td>
+<td>Pick up upstream PR pytorch/pytorch#174590 once merged (raises decomp tolerance for addmv)<br><a href="details/2439.md">→ details</a></td>
+<td>P3</td>
+<td>The only VERIFIED PR (pytorch/pytorch#174590, '[xpu] Add proper float64 handling for addmv, addmm and baddbmm.') was approved but closed un…</td>
+<td>mengfei25</td>
+<td>dependency component: oneDNN, module: ut</td>
+</tr>
+<tr data-category="Inductor" data-dependency="triton" data-priority="P3" data-assignee="etaf" data-owner_transferred="etaf" data-milestone="UT Backlog" data-search="[#2329](https://github.com/intel/torch-xpu-ops/issues/2329) triton [upstream_ut] feature missing: get_device_tflops and get_drams_gbps etaf etaf" data-issue="2329">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2329">#2329</a></td>
+<td>triton</td>
+<td>[upstream_ut] feature missing: get_device_tflops<br>and get_drams_gbps</td>
+<td>etaf</td>
+<td>etaf</td>
+<td><ul><li>RETRIAGE_PRS</li></ul></td>
+<td>Implement XPU branches in torch/_inductor/utils.py:get_device_tflops/get_dram_gbps using values fro…<br><a href="details/2329.md">→ details</a></td>
+<td>P3</td>
+<td>Highest-priority VERIFIED fixes PR (pytorch/pytorch#171291 by assignee @etaf) is CLOSED unmerged on 2026-04-15 and no replacement was found…</td>
+<td>daisyden</td>
+<td>duplicate, dependency component: Triton…</td>
+</tr>
+</tbody>
+</table>
+
+
+<ul>
+  <li><strong>upstream-pytorch</strong></li>
+</ul>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<p>Issues whose fix lives in <code>pytorch/pytorch</code> (Dynamo/Inductor, AOTAutograd, <code>_prims_common</code>, benchmark harness, test-list sync, etc.). Terminal-QA rows excluded.  —  19 issues.</p>
+
+<table class="ar-table" data-section="6">
+<thead>
+<tr>
+<th>Issue</th>
+<th>Dependency</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P1" data-assignee="yucai-intel" data-owner_transferred="yucai-intel" data-milestone="UT Backlog" data-search="[#2015](https://github.com/intel/torch-xpu-ops/issues/2015) upstream-pytorch inf is returned by nn.transformerencoderlayer yucai-intel yucai-intel" data-issue="2015">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2015">#2015</a></td>
+<td>upstream-pytorch</td>
+<td>inf is returned by nn.TransformerEncoderLayer</td>
+<td>yucai-intel</td>
+<td>yucai-intel</td>
+<td><ul><li>check_case_avaliablity</li><li>Track PR intel/torch-xpu-ops#2336 to merge</li><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#2336 (&gt;1 week)</li><li>Address comment AR from tye1: get PR #2336 merged</li></ul></td>
+<td>Land/track pytorch/pytorch#168234 to add xpu device coverage in test_nn.py TransformerEncoderLayer…<br><a href="details/2015.md">→ details</a></td>
+<td>P1</td>
+<td>PR #2336 (OPEN) explicitly fixes this issue's TransformerEncoderLayer XPU test failure; needs to land. | CuiYifeng's CHANGES_REQUESTED rev…</td>
+<td>daisyden</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="guangyey" data-owner_transferred="guangyey" data-milestone="UT Backlog" data-search="[#1969](https://github.com/intel/torch-xpu-ops/issues/1969) upstream-pytorch torch._dynamo.exc.internaltorchdynamoerror: typeerror: cannot create weak reference to &#x27;torch.event&#x27; object guangyey guangyey" data-issue="1969">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/1969">#1969</a></td>
+<td>upstream-pytorch</td>
+<td>torch._dynamo.exc.InternalTorchDynamoError:<br>TypeError: cannot create weak reference to<br>'torch.Event' object</td>
+<td>guangyey</td>
+<td>guangyey</td>
+<td><ul><li>No action — investigate further</li></ul></td>
+<td>Upstream-pytorch fix: add weakref support to the generic torch.Event class (define __weakref__ slot…<br><a href="details/1969.md">→ details</a></td>
+<td>P2</td>
+<td>All candidate upstream PRs (pytorch/pytorch#164522, #163168, #151213) addressing torch.Event weakref support are CLOSED unmerged with no me…</td>
+<td>shangerxin</td>
+<td>module: ut</td>
+</tr>
+<tr data-category="Others" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#2024](https://github.com/intel/torch-xpu-ops/issues/2024) upstream-pytorch assertionerror: torch not compiled with cuda enabled daisyden daisyden" data-issue="2024">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2024">#2024</a></td>
+<td>upstream-pytorch</td>
+<td>AssertionError: Torch not compiled with CUDA<br>enabled</td>
+<td>daisyden</td>
+<td>daisyden</td>
+<td><ul><li>Track PR intel/torch-xpu-ops#3510 to merge</li></ul></td>
+<td>Submit upstream PRs replacing hardcoded device='cuda' with the parameterized device argument (or @o…<br><a href="details/2024.md">→ details</a></td>
+<td>P2</td>
+<td>PR #3510 (OPEN, APPROVED, CI pending) explicitly enables 5 of the 7 cases listed in this issue and is one merge away from resolving the iss…</td>
+<td>mengfei25</td>
+<td>module: ut, skipped</td>
+</tr>
+<tr data-category="Sparse" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="jafraustro" data-owner_transferred="jafraustro" data-milestone="UT Backlog" data-search="[#2244](https://github.com/intel/torch-xpu-ops/issues/2244) upstream-pytorch test/test_sparse_csr.py::testsparsecsrxpu::test_bl ock_addmm meet runtimeerror: empty_sparse_compressed expected sparse compressed (non-block) tensor layout but got sparsebsr jafraustro jafraustro" data-issue="2244">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2244">#2244</a></td>
+<td>upstream-pytorch</td>
+<td>test/test_sparse_csr.py::TestSparseCSRXPU::test_bl<br>ock_addmm meet RuntimeError:<br>empty_sparse_compressed expected sparse compressed<br>(non-block) tensor layout but got SparseBsr</td>
+<td>jafraustro</td>
+<td>jafraustro</td>
+<td><ul><li>Track PR intel/torch-xpu-ops#3476 to merge</li><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#3476</li></ul></td>
+<td>Extend the upstream sparse compressed addmm dispatch (or torch-xpu-ops registration) so XPU SparseB…<br><a href="details/2244.md">→ details</a></td>
+<td>P2</td>
+<td>PR 3476 is the OPEN supersede of PR 2974 (closed unmerged) and addresses the residual bf16/fp16 sparse BSR addmm precision failures of #224…</td>
+<td>wincent8</td>
+<td>module: ut, skipped</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="yucai-intel, BBBela" data-owner_transferred="BBBela" data-milestone="UT Backlog" data-search="[#2412](https://github.com/intel/torch-xpu-ops/issues/2412) upstream-pytorch some nestedtensor missing xpu support yucai-intel, bbbela bbbela" data-issue="2412">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2412">#2412</a></td>
+<td>upstream-pytorch</td>
+<td>Some NestedTensor missing XPU support</td>
+<td>yucai-intel, BBBela</td>
+<td>BBBela</td>
+<td><ul><li>Track PR intel/torch-xpu-ops#2483 to merge</li><li>Address CI failures on PR intel/torch-xpu-ops#2483 (&gt;1 week)</li><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#2483 (&gt;1 week)</li></ul></td>
+<td>Add XPU support to the four nested-tensor files in pytorch/pytorch upstream by relaxing <code>is_cuda()</code>…<br><a href="details/2412.md">→ details</a></td>
+<td>P2</td>
+<td>PR #2483 is the active OPEN fix; BBBela committed on 2026-04-29 to drive it to merge. | linux-build check has been failing since 2026-03-3…</td>
+<td>daisyden</td>
+<td>module: ut</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="etaf" data-owner_transferred="etaf" data-milestone="UT Backlog" data-search="[#2609](https://github.com/intel/torch-xpu-ops/issues/2609) upstream-pytorch [upstream_ut] torch._inductor.exc.inductorerror: cppcompileerror: c++ compile error etaf etaf" data-issue="2609">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2609">#2609</a></td>
+<td>upstream-pytorch</td>
+<td>[upstream_ut] torch._inductor.exc.InductorError:<br>CppCompileError: C++ compile error</td>
+<td>etaf</td>
+<td>etaf</td>
+<td><ul><li>Track PR pytorch/pytorch#171154 to merge</li><li>Address CI failures on PR pytorch/pytorch#171154 (&gt;1 week)</li><li>Address comment AR from etaf: merge the approved fix PR pytorch/pytorch#171154 to land aoti_torch_xpu_fn_&lt;op&gt; shim</li></ul></td>
+<td>Land pytorch/pytorch#171154 which generates/declares aoti_torch_xpu_fn_&lt;op&gt; for XPU custom ops in t…<br><a href="details/2609.md">→ details</a></td>
+<td>P2</td>
+<td>VERIFIED fixing PR pytorch/pytorch#171154 is OPEN and APPROVED but not merged. | PR has 5 failing XPU CI checks whose latest completedAt i…</td>
+<td>daisyden</td>
+<td>module: inductor, skipped, ut_upstream</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="CuiYifeng" data-owner_transferred="CuiYifeng" data-milestone="UT Backlog" data-search="[#2715](https://github.com/intel/torch-xpu-ops/issues/2715) upstream-pytorch [upstream_ut] torch._dynamo.exc.unsupported: attempted to inline function marked as skipped cuiyifeng cuiyifeng" data-issue="2715">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2715">#2715</a></td>
+<td>upstream-pytorch</td>
+<td>[upstream_ut] torch._dynamo.exc.Unsupported:<br>Attempted to inline function marked as skipped</td>
+<td>CuiYifeng</td>
+<td>CuiYifeng</td>
+<td><ul><li>No action — investigate further</li></ul></td>
+<td>In upstream PyTorch torch/_dynamo/trace_rules.py, allow tracing of torch.xpu.device.__init__ (mirro…<br><a href="details/2715.md">→ details</a></td>
+<td>P2</td>
+<td>Issue is OPEN, no VERIFIED PR addresses the dynamo MOD_SKIPLIST exemption for torch.xpu.device.__init__; assignee CuiYifeng needs to invest…</td>
+<td>daisyden</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Flash Attention" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="LuFinch" data-owner_transferred="LuFinch" data-milestone="PT2.13" data-search="[#2853](https://github.com/intel/torch-xpu-ops/issues/2853) upstream-pytorch [upstream_ut] torch.ops.aten._flash_attention_forward lack of support for xpu. lufinch lufinch" data-issue="2853">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2853">#2853</a></td>
+<td>upstream-pytorch</td>
+<td>[upstream_ut]<br>torch.ops.aten._flash_attention_forward lack of<br>support for XPU.</td>
+<td>LuFinch</td>
+<td>LuFinch</td>
+<td><ul><li>Track PR intel/torch-xpu-ops#3404 to merge</li></ul></td>
+<td>Either (a) register an XPU kernel for _flash_attention_forward in torch-xpu-ops (transformers/sycl/…<br><a href="details/2853.md">→ details</a></td>
+<td>P2</td>
+<td>PR #3404 (assignee LuFinch) is the verified fix and is currently OPEN with no review decision yet; needs to be driven through review and me…</td>
+<td>BBBela</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="CuiYifeng" data-owner_transferred="CuiYifeng" data-milestone="PT2.13" data-search="[#3084](https://github.com/intel/torch-xpu-ops/issues/3084) upstream-pytorch torch.library.register_autocast does not support xpu cuiyifeng cuiyifeng" data-issue="3084">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3084">#3084</a></td>
+<td>upstream-pytorch</td>
+<td>torch.library.register_autocast does not support<br>xpu</td>
+<td>CuiYifeng</td>
+<td>CuiYifeng</td>
+<td><ul><li>No action — investigate further</li></ul></td>
+<td>Upstream PR to pytorch/pytorch: in torch/library.py register_autocast, accept all autocast-capable…<br><a href="details/3084.md">→ details</a></td>
+<td>P2</td>
+<td>Issue is OPEN with no linked PRs from any of V0/VA/VB/VC/VD/VE; an upstream pytorch/pytorch fix to torch/library.py register_autocast is re…</td>
+<td>daisyden</td>
+<td>module: ut</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="CuiYifeng" data-owner_transferred="CuiYifeng" data-milestone="UT Backlog" data-search="[#3187](https://github.com/intel/torch-xpu-ops/issues/3187) upstream-pytorch pytorch xpu gpu_cpp_wrapper fails with inductorerror notimplementederror cuiyifeng cuiyifeng" data-issue="3187">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3187">#3187</a></td>
+<td>upstream-pytorch</td>
+<td>PyTorch XPU gpu_cpp_wrapper fails with<br>InductorError NotImplementedError</td>
+<td>CuiYifeng</td>
+<td>CuiYifeng</td>
+<td><ul><li>PR pytorch/pytorch#178477 closed unmerged; reassess fix path</li><li>RETRIAGE_PRS</li></ul></td>
+<td>Investigate cpp_wrapper fallback dispatch for XPU in torch/_inductor/codegen/cpp_wrapper_gpu.py and…<br><a href="details/3187.md">→ details</a></td>
+<td>P2</td>
+<td>The only referenced PR (the upstream temporary skip workaround) was closed unmerged, and no replacement PR addresses the underlying XPU cpp…</td>
+<td>liangan1</td>
+<td>ut_upstream</td>
+</tr>
+<tr data-category="Sparse" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="jenniew" data-owner_transferred="jenniew" data-milestone="UT Backlog" data-search="[#2214](https://github.com/intel/torch-xpu-ops/issues/2214) upstream-pytorch test/test_sparse.py::testsparseanyxpu::test_gradch eck_mm expected error message not match jenniew jenniew" data-issue="2214">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2214">#2214</a></td>
+<td>upstream-pytorch</td>
+<td>test/test_sparse.py::TestSparseAnyXPU::test_gradch<br>eck_mm expected error message not match</td>
+<td>jenniew</td>
+<td>jenniew</td>
+<td><ul><li>No action — investigate further</li><li>Address comment AR from chuanqi129 (&gt;1 week): @wincent8 remove hardcoded skips in test files (use dynamic skip-by-issue)</li><li>Address comment AR from daisyden (&gt;1 week): confirm/dedupe with #2283 (jenniew should triage)</li></ul></td>
+<td>Update the assertRaisesRegex pattern in upstream test_sparse.py to also accept the 'empty_sparse_co…<br><a href="details/2214.md">→ details</a></td>
+<td>P3</td>
+<td>Issue is OPEN with zero VERIFIED fixes/supersedes PR candidates — the fix lives in upstream pytorch/pytorch test_sparse.py assertRaisesRege…</td>
+<td>wincent8</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Others" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="yucai-intel" data-owner_transferred="yucai-intel" data-milestone="UT Backlog" data-search="[#2287](https://github.com/intel/torch-xpu-ops/issues/2287) upstream-pytorch [upstream_ut] test_python_ref issues yucai-intel yucai-intel" data-issue="2287">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2287">#2287</a></td>
+<td>upstream-pytorch</td>
+<td>[upstream_ut] test_python_ref issues</td>
+<td>yucai-intel</td>
+<td>yucai-intel</td>
+<td><ul><li>Track PR pytorch/pytorch#178734 to merge</li><li>Address CI failures on PR pytorch/pytorch#178734 (&gt;1 week)</li><li>Address comment AR from tye1: pytorch/pytorch#178734 has a lint issue — yucai-intel to fix</li></ul></td>
+<td>Skip in test/xpu/skip_list_common.py for test_python_ref__refs_logspace_tensor_overload (and any re…<br><a href="details/2287.md">→ details</a></td>
+<td>P3</td>
+<td>PR 178734 (supersedes #169565) explicitly Fixes #2287 and is APPROVED. | Latest failing required check (lintrunner-noclang-partial / lint …</td>
+<td>daisyden</td>
+<td>module: ut, ut_upstream</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#2436](https://github.com/intel/torch-xpu-ops/issues/2436) upstream-pytorch [upstream_ut] attributeerror: &#x27;nonetype&#x27; object has no attribute &#x27;clone&#x27; daisyden daisyden" data-issue="2436">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2436">#2436</a></td>
+<td>upstream-pytorch</td>
+<td>[upstream_ut] AttributeError: 'NoneType' object<br>has no attribute 'clone'</td>
+<td>daisyden</td>
+<td>daisyden</td>
+<td><ul><li>No action — investigate further</li><li>Address comment AR from daisyden (&gt;1 week): re-check case design per CuiYifeng's request</li></ul></td>
+<td>Keep cases in skip list as 'random/community'<br><a href="details/2436.md">→ details</a></td>
+<td>P3</td>
+<td>Issue is OPEN with zero VERIFIED PR candidates (root cause pytorch/pytorch#97395 is an upstream issue, not a PR); needs further investigati…</td>
+<td>daisyden</td>
+<td>skipped, dependency component: communit…</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="chunhuanMeng" data-owner_transferred="chunhuanMeng" data-milestone="UT Backlog" data-search="[#2512](https://github.com/intel/torch-xpu-ops/issues/2512) upstream-pytorch [upstream_ut] runtimeerror: _histc_xpu does not have a deterministic implementation, but you set &#x27;torch.use_deter chunhuanmeng chunhuanmeng" data-issue="2512">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2512">#2512</a></td>
+<td>upstream-pytorch</td>
+<td>[upstream_ut] RuntimeError: _histc_xpu does not<br>have a deterministic implementation, but you set<br>'torch.use_deter</td>
+<td>chunhuanMeng</td>
+<td>chunhuanMeng</td>
+<td><ul><li>check_case_avaliablity</li><li>Track PR intel/torch-xpu-ops#3333 to merge</li><li>Address CI failures on PR intel/torch-xpu-ops#3333</li></ul></td>
+<td>Align XPU alert message with CUDA: change SummaryOps.cpp:45 to globalContext().alertNotDeterministi…<br><a href="details/2512.md">→ details</a></td>
+<td>P3</td>
+<td>VERIFIED PR #3333 (content_match, relationship=fixes) is OPEN and modifies SummaryOps.cpp + the xpu histc test as described in fix_approach…</td>
+<td>libohao1201</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Others" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="guangyey" data-owner_transferred="guangyey" data-milestone="UT Backlog" data-search="[#2531](https://github.com/intel/torch-xpu-ops/issues/2531) upstream-pytorch [upstream_ut] assertionerror: torch not compiled with cuda enabled guangyey guangyey" data-issue="2531">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2531">#2531</a></td>
+<td>upstream-pytorch</td>
+<td>[upstream_ut] AssertionError: Torch not compiled<br>with CUDA enabled</td>
+<td>guangyey</td>
+<td>guangyey</td>
+<td><ul><li>check_case_avaliablity</li><li>Track PR intel/torch-xpu-ops#3510 to merge</li><li>Address comment AR from guangyey: confirm XPU support for tunable / cufft_plan_cache / CudaSyncGuard / Miopen / quantize_per_tensor</li></ul></td>
+<td>Port each test in third_party/torch-xpu-ops/test/xpu/ to substitute xpu for cuda (use TEST_XPU/torc…<br><a href="details/2531.md">→ details</a></td>
+<td>P3</td>
+<td>VERIFIED partial-fix PR #3510 (relationship=fixes, OPEN, approved by chuanqi129) lands 2 of 13 cases; remaining cases need feature work tra…</td>
+<td>daisyden</td>
+<td>skipped, port_from_skiplist</td>
+</tr>
+<tr data-category="Others" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#2783](https://github.com/intel/torch-xpu-ops/issues/2783) upstream-pytorch [bug skip]: key &quot;xpu&quot; is missing from dict &quot;driver&quot; in test_svd daisyden daisyden" data-issue="2783">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2783">#2783</a></td>
+<td>upstream-pytorch</td>
+<td>[Bug Skip]: Key "xpu" is missing from dict<br>"driver" in test_svd</td>
+<td>daisyden</td>
+<td>daisyden</td>
+<td><ul><li>Open upstream PR to pytorch/pytorch from branch daisyden/missing_test (adds 'xpu' entry to SVD drivers dict in test/test_linalg.py)</li><li>No action — investigate further</li></ul></td>
+<td>Upstream patch in pytorch/test/test_linalg.py: add an 'xpu' entry to the SVD driver dict (or extend…<br><a href="details/2783.md">→ details</a></td>
+<td>P3</td>
+<td>Assignee daisyden has a verified local fix on a personal branch but no upstream PR has been filed yet; landing that PR (or equivalent) is t…</td>
+<td>CuiYifeng</td>
+<td>module: ut, skipped</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="chunhuanMeng" data-owner_transferred="chunhuanMeng" data-milestone="UT Backlog" data-search="[#2891](https://github.com/intel/torch-xpu-ops/issues/2891) upstream-pytorch runtimeerror: expected to find &quot;(262144, 0, 512, 1&quot; but did not find it chunhuanmeng chunhuanmeng" data-issue="2891">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2891">#2891</a></td>
+<td>upstream-pytorch</td>
+<td>RuntimeError: Expected to find "(262144, 0, 512,<br>1" but did not find it</td>
+<td>chunhuanMeng</td>
+<td>chunhuanMeng</td>
+<td><ul><li>Track PR pytorch/pytorch#180418 to merge</li></ul></td>
+<td>Confirm upstream pytorch PR #180418 (unskip) is landed and pulled into torch-xpu-ops test list<br><a href="details/2891.md">→ details</a></td>
+<td>P3</td>
+<td>PR pytorch/pytorch#180418 (unskip test_effn_attn_bias_padding) is OPEN, APPROVED, and CI green; only Gate 4 (merge) remains. Once merged, t…</td>
+<td>daisyden</td>
+<td>module: inductor, ut_upstream</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#2958](https://github.com/intel/torch-xpu-ops/issues/2958) upstream-pytorch assertionerror of test_dtensor_basic_compile daisyden daisyden" data-issue="2958">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2958">#2958</a></td>
+<td>upstream-pytorch</td>
+<td>AssertionError of test_dtensor_basic_compile</td>
+<td>daisyden</td>
+<td>daisyden</td>
+<td><ul><li>Submit upstream PR from daisyden/missing_test to remove skipIfXpu on test_dtensor_basic_export and close this issue</li><li>File separate upstream issue for test-ordering / DTensorSpec flatten regression from pytorch/pytorch#178115</li></ul></td>
+<td>Re-run on current main to confirm<br><a href="details/2958.md">→ details</a></td>
+<td>P3</td>
+<td>Owner has already verified the fix on main and prepared a branch; only remaining step is to land the skip-removal PR. | The ordering-depen…</td>
+<td>daisyden</td>
+<td>module: inductor, ut_upstream</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#3041](https://github.com/intel/torch-xpu-ops/issues/3041) upstream-pytorch assertionerror: expected len(flat_diff_results) &gt; 0 in test_fake_crossref_backward_amp_normal_number _mean_xpu_float32 daisyden daisyden" data-issue="3041">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3041">#3041</a></td>
+<td>upstream-pytorch</td>
+<td>AssertionError: Expected len(flat_diff_results) &gt;<br>0 in test_fake_crossref_backward_amp_normal_number<br>_mean_xpu_float32</td>
+<td>daisyden</td>
+<td>daisyden</td>
+<td><ul><li>No action — investigate further</li></ul></td>
+<td>Add device_type='xpu' (or replace with allowed_dtypes/skip across non-CPU) to the existing Decorate…<br><a href="details/3041.md">→ details</a></td>
+<td>P3</td>
+<td>Issue is OPEN with no VERIFIED fix PR yet (cited PR 176690 is the trigger, not the fix, and is closed unmerged). Owner daisyden is assigned…</td>
+<td>daisyden</td>
+<td>ut_upstream</td>
+</tr>
+</tbody>
+</table>
+
+
+<ul>
+  <li><strong>CPU fallback</strong></li>
+</ul>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<p>Issues where the XPU operator is missing and a CPU fallback is registered in torch-xpu-ops. Terminal-QA rows excluded.  —  3 issues.</p>
+
+<table class="ar-table" data-section="6">
+<thead>
+<tr>
+<th>Issue</th>
+<th>Dependency</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="Sparse" data-dependency="CPU fallback" data-priority="P1" data-assignee="jenniew" data-owner_transferred="jenniew" data-milestone="UT Backlog" data-search="[#2283](https://github.com/intel/torch-xpu-ops/issues/2283) cpu fallback [upstream_ut] sparse._sampled_addmm is not supported jenniew jenniew" data-issue="2283">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2283">#2283</a></td>
+<td>CPU fallback</td>
+<td>[upstream_ut] sparse._sampled_addmm is not<br>supported</td>
+<td>jenniew</td>
+<td>jenniew</td>
+<td><ul><li>Track PR intel/torch-xpu-ops#3018 to merge</li><li>Address CI failures on PR intel/torch-xpu-ops#3018 (&gt;1 week)</li></ul></td>
+<td>Either register a CPU fallback for aten::sparse_sampled_addmm on SparseCsrXPU (analogous to other s…<br><a href="details/2283.md">→ details</a></td>
+<td>P1</td>
+<td>PR 3018 implements the missing SparseCsrXPU sampled_addmm registration; needs to land. | linux-ut (op_ut) summary failed on 2026-03-26 (&gt;1…</td>
+<td>daisyden</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Flash Attention" data-dependency="CPU fallback" data-priority="P2" data-assignee="LuFinch" data-owner_transferred="LuFinch" data-milestone="UT Backlog" data-search="[#2442](https://github.com/intel/torch-xpu-ops/issues/2442) cpu fallback [bug skip]: notimplementederror: could not run &#x27;aten::_flash_attention_forward&#x27; with arguments from the &#x27;cpu&#x27; backend lufinch lufinch" data-issue="2442">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2442">#2442</a></td>
+<td>CPU fallback</td>
+<td>[Bug Skip]: NotImplementedError: Could not run<br>'aten::_flash_attention_forward' with arguments<br>from the 'CPU' backend</td>
+<td>LuFinch</td>
+<td>LuFinch</td>
+<td><ul><li>Track PR intel/torch-xpu-ops#3404 to merge</li><li>Address CI failures on PR intel/torch-xpu-ops#3404</li></ul></td>
+<td>Add the four cases to the skip list (already labelled 'skipped')<br><a href="details/2442.md">→ details</a></td>
+<td>P2</td>
+<td>VERIFIED PR #3404 (github_linked, relationship=fixes) is OPEN and adds the XPU _flash_attention_forward/_backward registration described in…</td>
+<td>CuiYifeng</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Sparse" data-dependency="CPU fallback" data-priority="P3" data-assignee="jenniew" data-owner_transferred="jenniew" data-milestone="UT Backlog" data-search="[#2229](https://github.com/intel/torch-xpu-ops/issues/2229) cpu fallback test/test_sparse_csr.py::testsparsecompressedcpu:: test_invalid_input meet message not match jenniew jenniew" data-issue="2229">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2229">#2229</a></td>
+<td>CPU fallback</td>
+<td>test/test_sparse_csr.py::TestSparseCompressedCPU::<br>test_invalid_input meet message not match</td>
+<td>jenniew</td>
+<td>jenniew</td>
+<td><ul><li>Track PR intel/torch-xpu-ops#3073 to merge</li><li>Address CI failures on PR intel/torch-xpu-ops#3073 (&gt;1 week)</li></ul></td>
+<td>Implement aten::_validate_compressed_sparse_indices for the XPU backend in torch-xpu-ops so the can…<br><a href="details/2229.md">→ details</a></td>
+<td>P3</td>
+<td>PR 3073 is the OPEN fix authored by assignee jenniew implementing the _validate_compressed_sparse_indices XPU kernel. | preci-lint-check h…</td>
+<td>wincent8</td>
+<td>skipped</td>
+</tr>
+</tbody>
+</table>
+
+
+<h2 id="sec-7">7. New submitted issues (&lt;7 days)</h2>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<p>Issues created on or after 2026-04-23, excluding terminal-QA rows.  —  0 issues.</p>
+
+<table class="ar-table" data-section="7">
+<thead>
+<tr>
+<th>Issue</th>
+<th>Created</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Owner Transferred</th>
+<th>action_TBD</th>
+<th>Fix Approach</th>
+<th>Priority</th>
+<th>action_reason</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+</tbody>
+</table>
+
+
+<h2 id="sec-8">8. Requests pending &gt; 1 week</h2>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<p>Issues whose <code>action_TBD</code> contains one or more verbs flagged <code>(&gt;1 week)</code> — an unresolved comment AR, unresolved PR review comments, or unaddressed CI failures that have been sitting more than 7 days. These are the highest-priority candidates for owner follow-up.</p>
+
+<table class="ar-table" data-section="8">
+<thead>
+<tr>
+<th>Issue</th>
+<th>Title</th>
+<th>Owner</th>
+<th>Stale Requests</th>
+<th>Priority</th>
+<th>Reporter</th>
+<th>Labels</th>
+</tr></thead>
+<tbody>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P1" data-assignee="yucai-intel" data-owner_transferred="yucai-intel" data-milestone="UT Backlog" data-search="[#2015](https://github.com/intel/torch-xpu-ops/issues/2015) inf is returned by nn.transformerencoderlayer yucai-intel   resolve unresolved review comments on pr intel/torch-xpu-ops#2336 (&gt;1 week)   p1" data-issue="2015">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2015">#2015</a></td>
+<td>inf is returned by nn.TransformerEncoderLayer</td>
+<td>yucai-intel</td>
+<td><ul><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#2336 (&gt;1 week)</li></ul></td>
+<td>P1</td>
+<td>daisyden</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Sparse" data-dependency="CPU fallback" data-priority="P1" data-assignee="jenniew" data-owner_transferred="jenniew" data-milestone="UT Backlog" data-search="[#2283](https://github.com/intel/torch-xpu-ops/issues/2283) [upstream_ut] sparse._sampled_addmm is not supported jenniew   address ci failures on pr intel/torch-xpu-ops#3018 (&gt;1 week)   p1" data-issue="2283">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2283">#2283</a></td>
+<td>[upstream_ut] sparse._sampled_addmm is not<br>supported</td>
+<td>jenniew</td>
+<td><ul><li>Address CI failures on PR intel/torch-xpu-ops#3018 (&gt;1 week)</li></ul></td>
+<td>P1</td>
+<td>daisyden</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="oneDNN" data-priority="P1" data-assignee="mengfei25" data-owner_transferred="mengfei25" data-milestone="PT2.12" data-search="[#2769](https://github.com/intel/torch-xpu-ops/issues/2769) [onednn] new failed test cases with 3.11 compared with 3.10 mengfei25   address comment ar from chuanqi129 (&gt;1 week): verify whether onednn 3.11.1 fixes the conv regression   p1" data-issue="2769">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2769">#2769</a></td>
+<td>[oneDNN] New failed test cases with 3.11 compared<br>with 3.10</td>
+<td>mengfei25</td>
+<td><ul><li>Address comment AR from chuanqi129 (&gt;1 week): verify whether oneDNN 3.11.1 fixes the conv regression</li></ul></td>
+<td>P1</td>
+<td>mengfei25</td>
+<td>hw: PVC, dependency component: oneDNN, …</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="yucai-intel, BBBela" data-owner_transferred="BBBela" data-milestone="UT Backlog" data-search="[#2412](https://github.com/intel/torch-xpu-ops/issues/2412) some nestedtensor missing xpu support yucai-intel, bbbela   address ci failures on pr intel/torch-xpu-ops#2483 (&gt;1 week)  resolve unresolved review comments on pr intel/torch-xpu-ops#2483 (&gt;1 week)   p2" data-issue="2412">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2412">#2412</a></td>
+<td>Some NestedTensor missing XPU support</td>
+<td>yucai-intel, BBBela</td>
+<td><ul><li>Address CI failures on PR intel/torch-xpu-ops#2483 (&gt;1 week)</li><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#2483 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>daisyden</td>
+<td>module: ut</td>
+</tr>
+<tr data-category="TorchAO" data-dependency="SYCL kernel: WeightInt4PackKernel.cpp" data-priority="P2" data-assignee="yucai-intel" data-owner_transferred="yucai-intel" data-milestone="UT Backlog" data-search="[#2532](https://github.com/intel/torch-xpu-ops/issues/2532) title: [upstream_ut] assertionerror: wrong number of dimensions2 for op: torch.ops.aten._convert_weight_to_int4pack.defa yucai-intel   resolve unresolved review comments on pr intel/torch-xpu-ops#3090 (&gt;1 week)  address ci failures on pr intel/torch-xpu-ops#3090 (&gt;1 week)   p2" data-issue="2532">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2532">#2532</a></td>
+<td>Title: [upstream_ut] AssertionError: wrong number<br>of dimensions2 for op:<br>torch.ops.aten._convert_weight_to_int4pack.defa</td>
+<td>yucai-intel</td>
+<td><ul><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#3090 (&gt;1 week)</li><li>Address CI failures on PR intel/torch-xpu-ops#3090 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>daisyden</td>
+<td>skipped, port_from_skiplist</td>
+</tr>
+<tr data-category="Inductor" data-dependency="upstream-pytorch" data-priority="P2" data-assignee="etaf" data-owner_transferred="etaf" data-milestone="UT Backlog" data-search="[#2609](https://github.com/intel/torch-xpu-ops/issues/2609) [upstream_ut] torch._inductor.exc.inductorerror: cppcompileerror: c++ compile error etaf   address ci failures on pr pytorch/pytorch#171154 (&gt;1 week)   p2" data-issue="2609">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2609">#2609</a></td>
+<td>[upstream_ut] torch._inductor.exc.InductorError:<br>CppCompileError: C++ compile error</td>
+<td>etaf</td>
+<td><ul><li>Address CI failures on PR pytorch/pytorch#171154 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>daisyden</td>
+<td>module: inductor, skipped, ut_upstream</td>
+</tr>
+<tr data-category="Inductor" data-dependency="driver" data-priority="P2" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#2613](https://github.com/intel/torch-xpu-ops/issues/2613) [upstream_ut] assertionerror: tensor-likes are not equal! in test_compile_subprocess.py daisyden   address comment ar from daisyden (&gt;1 week): re-verify argmax/argmin tie-break tests with the new driver per gsd-11415   p2" data-issue="2613">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2613">#2613</a></td>
+<td>[upstream_ut] AssertionError: Tensor-likes are not<br>equal! in test_compile_subprocess.py</td>
+<td>daisyden</td>
+<td><ul><li>Address comment AR from daisyden (&gt;1 week): re-verify argmax/argmin tie-break tests with the new driver per GSD-11415</li></ul></td>
+<td>P2</td>
+<td>daisyden</td>
+<td>dependency component: driver, module: i…</td>
+</tr>
+<tr data-category="Flash Attention" data-dependency="SYCL kernel: mha_fwd.cpp" data-priority="P2" data-assignee="LuFinch" data-owner_transferred="LuFinch" data-milestone="UT Backlog" data-search="[#2698](https://github.com/intel/torch-xpu-ops/issues/2698) title: [upstream_ut] runtimeerror: flashattentionforwardxpu only support headdim 64,96,128,192 lufinch   address ci failures on pr pytorch/pytorch#180646 (&gt;1 week)   p2" data-issue="2698">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2698">#2698</a></td>
+<td>Title: [upstream_ut] RuntimeError:<br>FlashAttentionForwardXPU only support headdim<br>64,96,128,192</td>
+<td>LuFinch</td>
+<td><ul><li>Address CI failures on PR pytorch/pytorch#180646 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>daisyden</td>
+<td>module: inductor, skipped, ut_upstream</td>
+</tr>
+<tr data-category="Sparse" data-dependency="SYCL kernel: SparseCsrTensorMathKernels.cpp" data-priority="P2" data-assignee="jenniew" data-owner_transferred="jenniew" data-milestone="UT Backlog" data-search="[#3177](https://github.com/intel/torch-xpu-ops/issues/3177) accuracy gap of bf16/fp16 test_block_addmm jenniew   resolve unresolved review comments on pr intel/torch-xpu-ops#3273 (&gt;1 week)   p2" data-issue="3177">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3177">#3177</a></td>
+<td>Accuracy gap of BF16/FP16 test_block_addmm</td>
+<td>jenniew</td>
+<td><ul><li>Resolve unresolved review comments on PR intel/torch-xpu-ops#3273 (&gt;1 week)</li></ul></td>
+<td>P2</td>
+<td>CuiYifeng</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="oneDNN" data-priority="P3" data-assignee="chunhuanMeng" data-owner_transferred="chunhuanMeng" data-milestone="UT Backlog" data-search="[#1893](https://github.com/intel/torch-xpu-ops/issues/1893) [upstream_ut] onednn accuracy issues in test_ops_xpu.py chunhuanmeng   address ci failures on pr pytorch/pytorch#179125 (&gt;1 week)   p3" data-issue="1893">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/1893">#1893</a></td>
+<td>[upstream_ut] oneDNN accuracy issues in<br>test_ops_xpu.py</td>
+<td>chunhuanMeng</td>
+<td><ul><li>Address CI failures on PR pytorch/pytorch#179125 (&gt;1 week)</li></ul></td>
+<td>P3</td>
+<td>daisyden</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Sparse" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="jenniew" data-owner_transferred="jenniew" data-milestone="UT Backlog" data-search="[#2214](https://github.com/intel/torch-xpu-ops/issues/2214) test/test_sparse.py::testsparseanyxpu::test_gradch eck_mm expected error message not match jenniew   address comment ar from chuanqi129 (&gt;1 week): @wincent8 remove hardcoded skips in test files (use dynamic skip-by-issue)  address comment ar from daisyden (&gt;1 week): confirm/dedupe with #2283 (jenniew should triage)   p3" data-issue="2214">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2214">#2214</a></td>
+<td>test/test_sparse.py::TestSparseAnyXPU::test_gradch<br>eck_mm expected error message not match</td>
+<td>jenniew</td>
+<td><ul><li>Address comment AR from chuanqi129 (&gt;1 week): @wincent8 remove hardcoded skips in test files (use dynamic skip-by-issue)</li><li>Address comment AR from daisyden (&gt;1 week): confirm/dedupe with #2283 (jenniew should triage)</li></ul></td>
+<td>P3</td>
+<td>wincent8</td>
+<td>skipped, ut_upstream</td>
+</tr>
+<tr data-category="Sparse" data-dependency="CPU fallback" data-priority="P3" data-assignee="jenniew" data-owner_transferred="jenniew" data-milestone="UT Backlog" data-search="[#2229](https://github.com/intel/torch-xpu-ops/issues/2229) test/test_sparse_csr.py::testsparsecompressedcpu:: test_invalid_input meet message not match jenniew   address ci failures on pr intel/torch-xpu-ops#3073 (&gt;1 week)   p3" data-issue="2229">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2229">#2229</a></td>
+<td>test/test_sparse_csr.py::TestSparseCompressedCPU::<br>test_invalid_input meet message not match</td>
+<td>jenniew</td>
+<td><ul><li>Address CI failures on PR intel/torch-xpu-ops#3073 (&gt;1 week)</li></ul></td>
+<td>P3</td>
+<td>wincent8</td>
+<td>skipped</td>
+</tr>
+<tr data-category="Others" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="yucai-intel" data-owner_transferred="yucai-intel" data-milestone="UT Backlog" data-search="[#2287](https://github.com/intel/torch-xpu-ops/issues/2287) [upstream_ut] test_python_ref issues yucai-intel   address ci failures on pr pytorch/pytorch#178734 (&gt;1 week)   p3" data-issue="2287">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2287">#2287</a></td>
+<td>[upstream_ut] test_python_ref issues</td>
+<td>yucai-intel</td>
+<td><ul><li>Address CI failures on PR pytorch/pytorch#178734 (&gt;1 week)</li></ul></td>
+<td>P3</td>
+<td>daisyden</td>
+<td>module: ut, ut_upstream</td>
+</tr>
+<tr data-category="Torch Operations" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="daisyden" data-owner_transferred="daisyden" data-milestone="UT Backlog" data-search="[#2436](https://github.com/intel/torch-xpu-ops/issues/2436) [upstream_ut] attributeerror: &#x27;nonetype&#x27; object has no attribute &#x27;clone&#x27; daisyden   address comment ar from daisyden (&gt;1 week): re-check case design per cuiyifeng&#x27;s request   p3" data-issue="2436">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/2436">#2436</a></td>
+<td>[upstream_ut] AttributeError: 'NoneType' object<br>has no attribute 'clone'</td>
+<td>daisyden</td>
+<td><ul><li>Address comment AR from daisyden (&gt;1 week): re-check case design per CuiYifeng's request</li></ul></td>
+<td>P3</td>
+<td>daisyden</td>
+<td>skipped, dependency component: communit…</td>
+</tr>
+<tr data-category="Sparse" data-dependency="upstream-pytorch" data-priority="P3" data-assignee="libohao1201, jafraustro" data-owner_transferred="libohao1201" data-milestone="UT Backlog" data-search="[#3170](https://github.com/intel/torch-xpu-ops/issues/3170) unskip test_bmm_windows_error_xpu_float64 libohao1201, jafraustro   address comment ar from libohao1201 (&gt;1 week): verify the issue on windows   p3" data-issue="3170">
+<td><a href="https://github.com/intel/torch-xpu-ops/issues/3170">#3170</a></td>
+<td>Unskip test_bmm_windows_error_xpu_float64</td>
+<td>libohao1201, jafraustro</td>
+<td><ul><li>Address comment AR from libohao1201 (&gt;1 week): verify the issue on windows</li></ul></td>
+<td>P3</td>
+<td>CuiYifeng</td>
+<td>skipped, ut_upstream</td>
+</tr>
+</tbody>
+</table>
+
+
+<h2 id="sec-9">9. Statistics</h2>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<ul>
+  <li>Total rows: <strong>53</strong></li>
+  <li>Classified (non-empty <code>action_Type</code>): <strong>53</strong></li>
+  <li>Empty <code>action_TBD</code> (no verdict yet): <strong>0</strong></li>
+  <li>Issues flagged for test-case existence check (<code>CHECK_CASES</code>): <strong>6</strong></li>
+</ul>
+
+<ul>
+  <li><strong>Primary action_Type distribution (exclusive — one bucket per issue)</strong></li>
+</ul>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<p>Merged buckets (as rendered in §3 and §4):</p>
+
+<table class="ar-table" data-section="9">
+<thead>
+<tr>
+<th>Bucket</th>
+<th>Issues</th>
+</tr></thead>
+<tbody>
+<tr data-search="need pr 19">
+<td>NEED PR</td>
+<td>19</td>
+</tr>
+<tr data-search="track pr 21">
+<td>TRACK PR</td>
+<td>21</td>
+</tr>
+<tr data-search="close or skip 12">
+<td>CLOSE or SKIP</td>
+<td>12</td>
+</tr>
+</tbody>
+</table>
+
+<p>Raw atoms (pre-merge, for reference):</p>
+
+<table class="ar-table" data-section="9">
+<thead>
+<tr>
+<th>Category</th>
+<th>Issues</th>
+</tr></thead>
+<tbody>
+<tr data-search="close 2">
+<td>CLOSE</td>
+<td>2</td>
+</tr>
+<tr data-search="not_target_close 6">
+<td>NOT_TARGET_CLOSE</td>
+<td>6</td>
+</tr>
+<tr data-search="verify_and_close 4">
+<td>VERIFY_AND_CLOSE</td>
+<td>4</td>
+</tr>
+<tr data-search="track_pr 19">
+<td>TRACK_PR</td>
+<td>19</td>
+</tr>
+<tr data-search="implement 1">
+<td>IMPLEMENT</td>
+<td>1</td>
+</tr>
+<tr data-search="retriage_prs 2">
+<td>RETRIAGE_PRS</td>
+<td>2</td>
+</tr>
+<tr data-search="wait_external 1">
+<td>WAIT_EXTERNAL</td>
+<td>1</td>
+</tr>
+<tr data-search="need_action 18">
+<td>NEED_ACTION</td>
+<td>18</td>
+</tr>
+</tbody>
+</table>
+
+<ul>
+  <li><strong>action_Type distribution (multi-label — each category counted once per issue)</strong></li>
+</ul>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<table class="ar-table" data-section="9">
+<thead>
+<tr>
+<th>Category</th>
+<th>Issues</th>
+</tr></thead>
+<tbody>
+<tr data-search="close 2">
+<td>CLOSE</td>
+<td>2</td>
+</tr>
+<tr data-search="not_target_close 6">
+<td>NOT_TARGET_CLOSE</td>
+<td>6</td>
+</tr>
+<tr data-search="verify_and_close 7">
+<td>VERIFY_AND_CLOSE</td>
+<td>7</td>
+</tr>
+<tr data-search="track_pr 24">
+<td>TRACK_PR</td>
+<td>24</td>
+</tr>
+<tr data-search="implement 1">
+<td>IMPLEMENT</td>
+<td>1</td>
+</tr>
+<tr data-search="retriage_prs 16">
+<td>RETRIAGE_PRS</td>
+<td>16</td>
+</tr>
+<tr data-search="wait_external 1">
+<td>WAIT_EXTERNAL</td>
+<td>1</td>
+</tr>
+<tr data-search="file_issue 1">
+<td>FILE_ISSUE</td>
+<td>1</td>
+</tr>
+<tr data-search="need_action 21">
+<td>NEED_ACTION</td>
+<td>21</td>
+</tr>
+<tr data-search="await_reply 9">
+<td>AWAIT_REPLY</td>
+<td>9</td>
+</tr>
+<tr data-search="check_cases 6">
+<td>CHECK_CASES</td>
+<td>6</td>
+</tr>
+</tbody>
+</table>
+
+<ul>
+  <li><strong>Priority distribution</strong></li>
+</ul>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<table class="ar-table" data-section="9">
+<thead>
+<tr>
+<th>Priority</th>
+<th>Issues</th>
+</tr></thead>
+<tbody>
+<tr data-search="p1 8">
+<td>P1</td>
+<td>8</td>
+</tr>
+<tr data-search="p2 24">
+<td>P2</td>
+<td>24</td>
+</tr>
+<tr data-search="p3 21">
+<td>P3</td>
+<td>21</td>
+</tr>
+</tbody>
+</table>
+
+<ul>
+  <li><strong>Status distribution</strong></li>
+</ul>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<table class="ar-table" data-section="9">
+<thead>
+<tr>
+<th>Status</th>
+<th>Issues</th>
+</tr></thead>
+<tbody>
+<tr data-search="open 53">
+<td>open</td>
+<td>53</td>
+</tr>
+</tbody>
+</table>
+
+<ul>
+  <li><strong>Category column distribution (top 20)</strong></li>
+</ul>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<table class="ar-table" data-section="9">
+<thead>
+<tr>
+<th>Category</th>
+<th>Issues</th>
+</tr></thead>
+<tbody>
+<tr data-search="torch operations 15">
+<td>Torch Operations</td>
+<td>15</td>
+</tr>
+<tr data-search="inductor 14">
+<td>Inductor</td>
+<td>14</td>
+</tr>
+<tr data-search="flash attention 10">
+<td>Flash Attention</td>
+<td>10</td>
+</tr>
+<tr data-search="sparse 8">
+<td>Sparse</td>
+<td>8</td>
+</tr>
+<tr data-search="others 4">
+<td>Others</td>
+<td>4</td>
+</tr>
+<tr data-search="torchao 2">
+<td>TorchAO</td>
+<td>2</td>
+</tr>
+</tbody>
+</table>
+
+<ul>
+  <li><strong>CHECK_CASES issue IDs</strong></li>
+</ul>
+
+<p class="meta">_<a href="#sec-2">↑ Back to Index</a>_</p>
+
+<p>6 issues flagged for <code>check_case_avaliablity</code> (missing XPU test case in repo):</p>
+
+<p>&gt; #2015, #2285, #2376, #2512, #2531, #2578</p>
+
+</div>
+<script>
+// ---- Done checkbox persistence ----
+const STORAGE_KEY_PREFIX = 'bug_scrub_done_';
+function loadDoneState() {
+  document.querySelectorAll('input.ar-done').forEach(cb => {
+    const id = cb.dataset.issue;
+    if (!id) return;
+    const v = localStorage.getItem(STORAGE_KEY_PREFIX + id);
+    if (v === '1') {
+      cb.checked = true;
+      cb.closest('tr').classList.add('done');
+    }
+  });
+}
+function onDoneToggle(e) {
+  const cb = e.target;
+  const id = cb.dataset.issue;
+  if (!id) return;
+  const tr = cb.closest('tr');
+  if (cb.checked) {
+    localStorage.setItem(STORAGE_KEY_PREFIX + id, '1');
+    tr.classList.add('done');
+  } else {
+    localStorage.removeItem(STORAGE_KEY_PREFIX + id);
+    tr.classList.remove('done');
+  }
+}
+
+// ---- Filter bar ----
+// UI dimensions (what the user sees). owner_transferred is intentionally
+// NOT in this list — selecting an Assignee implicitly matches rows whose
+// owner_transferred token equals the selected assignee, so a separate
+// dropdown would be redundant.
+const FILTER_DIMS = ['assignee', 'priority', 'category', 'milestone', 'dependency'];
+const FILTER_LABELS = {
+  assignee: 'Assignee', priority: 'Priority', category: 'Category',
+  milestone: 'Milestone', dependency: 'Dependency'
+};
+
+// Dimensions whose raw cell value may carry multiple owners separated
+// by ',', ';', or '|' (e.g. "chunhuanMeng | daisyden"). Each owner
+// becomes its own filter token.
+const MULTI_VALUE_DIMS = new Set(['assignee', 'owner_transferred']);
+const MULTI_SPLIT_RE = /[,;|]/;
+const NONE_TOKEN = '(none)';
+const SYCL_KERNEL_GROUP = 'SYCL kernel';
+
+// Map a raw cell value to the list of canonical filter tokens it
+// contributes. Empty cells contribute the synthetic NONE_TOKEN so users
+// can include / exclude unowned, unmilestoned, etc. rows explicitly.
+function tokensFor(dim, raw) {
+  const r = (raw || '').trim();
+  if (!r) return [NONE_TOKEN];
+  if (dim === 'dependency') {
+    return [/^SYCL kernel:/i.test(r) ? SYCL_KERNEL_GROUP : r];
+  }
+  if (MULTI_VALUE_DIMS.has(dim)) {
+    const out = r.split(MULTI_SPLIT_RE).map(s => s.trim()).filter(Boolean);
+    return out.length ? Array.from(new Set(out)) : [NONE_TOKEN];
+  }
+  return [r];
+}
+
+function collectValues(dim) {
+  // {token -> count}. Iterate every row in every ar-table so we capture
+  // the synthetic NONE_TOKEN for rows where this dimension is empty.
+  const counts = new Map();
+  // For the Assignee dropdown, also surface owner_transferred tokens so a
+  // user can pick a person who has only ever appeared via transfer.
+  const sourceDims = (dim === 'assignee') ? ['assignee', 'owner_transferred'] : [dim];
+  document.querySelectorAll('table.ar-table tbody tr[data-issue]').forEach(tr => {
+    const tokenSet = new Set();
+    for (const sd of sourceDims) {
+      for (const tok of tokensFor(sd, tr.dataset[sd])) tokenSet.add(tok);
+    }
+    // For merged-source dims, if any concrete token is present drop NONE.
+    if (sourceDims.length > 1 && tokenSet.size > 1) tokenSet.delete(NONE_TOKEN);
+    for (const tok of tokenSet) counts.set(tok, (counts.get(tok) || 0) + 1);
+  });
+  // Sort: real tokens alphabetically (numeric-aware), (none) last.
+  return Array.from(counts.entries()).sort((a, b) => {
+    if (a[0] === NONE_TOKEN) return 1;
+    if (b[0] === NONE_TOKEN) return -1;
+    return a[0].localeCompare(b[0], undefined, {numeric: true});
+  });
+}
+
+// Selected-token state, per dimension. Populated default-all-checked in
+// buildMultiSelect after the option list is built.
+const SELECTED = Object.fromEntries(FILTER_DIMS.map(d => [d, new Set()]));
+
+function buildMultiSelect(dim, items) {
+  const dd = document.createElement('div');
+  dd.className = 'ms-dd';
+  dd.dataset.dim = dim;
+  dd.dataset.totalOptions = String(items.length);
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'ms-dd-btn';
+  btn.textContent = '(all)';
+  dd.appendChild(btn);
+
+  const panel = document.createElement('div');
+  panel.className = 'ms-dd-panel';
+
+  const search = document.createElement('input');
+  search.type = 'text';
+  search.className = 'ms-dd-search';
+  search.placeholder = 'filter...';
+  panel.appendChild(search);
+
+  const list = document.createElement('div');
+  list.className = 'ms-dd-list';
+  panel.appendChild(list);
+
+  for (const [tok, count] of items) {
+    const label = document.createElement('label');
+    label.className = 'ms-dd-item' + (tok === NONE_TOKEN ? ' none-opt' : '');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = tok;
+    cb.checked = true;                   // default: all selected
+    SELECTED[dim].add(tok);
+    cb.addEventListener('change', () => {
+      if (cb.checked) SELECTED[dim].add(tok);
+      else SELECTED[dim].delete(tok);
+      updateButtonLabel(dd, dim);
+      applyFilters();
+    });
+    const txt = document.createElement('span');
+    txt.className = 'label';
+    txt.textContent = tok;
+    txt.title = tok;
+    const cnt = document.createElement('span');
+    cnt.className = 'count';
+    cnt.textContent = count;
+    label.appendChild(cb);
+    label.appendChild(txt);
+    label.appendChild(cnt);
+    list.appendChild(label);
+  }
+
+  search.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    list.querySelectorAll('.ms-dd-item').forEach(it => {
+      const t = it.querySelector('.label').textContent.toLowerCase();
+      it.style.display = (!q || t.includes(q)) ? '' : 'none';
+    });
+  });
+
+  const actions = document.createElement('div');
+  actions.className = 'ms-dd-actions';
+  const allBtn = document.createElement('button');
+  allBtn.type = 'button';
+  allBtn.textContent = 'All';
+  allBtn.addEventListener('click', () => {
+    for (const [tok] of items) SELECTED[dim].add(tok);
+    list.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = true);
+    updateButtonLabel(dd, dim);
+    applyFilters();
+  });
+  const noneBtn = document.createElement('button');
+  noneBtn.type = 'button';
+  noneBtn.textContent = 'None';
+  noneBtn.addEventListener('click', () => {
+    SELECTED[dim].clear();
+    list.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+    updateButtonLabel(dd, dim);
+    applyFilters();
+  });
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.textContent = 'Close';
+  close.addEventListener('click', () => dd.classList.remove('open'));
+  actions.appendChild(allBtn);
+  actions.appendChild(noneBtn);
+  actions.appendChild(close);
+  panel.appendChild(actions);
+
+  dd.appendChild(panel);
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const wasOpen = dd.classList.contains('open');
+    document.querySelectorAll('.ms-dd.open').forEach(d => d.classList.remove('open'));
+    if (!wasOpen) dd.classList.add('open');
+  });
+  panel.addEventListener('click', (e) => e.stopPropagation());
+
+  updateButtonLabel(dd, dim);
+  return dd;
+}
+
+function updateButtonLabel(dd, dim) {
+  const btn = dd.querySelector('.ms-dd-btn');
+  const sel = SELECTED[dim];
+  const total = parseInt(dd.dataset.totalOptions || '0', 10);
+  if (sel.size === 0) {
+    btn.textContent = '(none)';
+    btn.title = 'No values selected — all rows hidden by this filter';
+  } else if (sel.size === total) {
+    btn.textContent = '(all)';
+    btn.title = '';
+  } else if (sel.size === 1) {
+    const v = Array.from(sel)[0];
+    btn.textContent = v;
+    btn.title = v;
+  } else {
+    const vs = Array.from(sel).join(', ');
+    btn.textContent = `${sel.size} of ${total}`;
+    btn.title = vs;
+  }
+}
+
+function buildFilterBar() {
+  const bar = document.createElement('div');
+  bar.className = 'filter-bar';
+
+  for (const dim of FILTER_DIMS) {
+    const wrap = document.createElement('label');
+    wrap.textContent = FILTER_LABELS[dim];
+    const dd = buildMultiSelect(dim, collectValues(dim));
+    dd.id = 'filter-' + dim;
+    wrap.appendChild(dd);
+    bar.appendChild(wrap);
+  }
+
+  // free-text search
+  const searchWrap = document.createElement('label');
+  searchWrap.textContent = 'Search';
+  const search = document.createElement('input');
+  search.type = 'text'; search.id = 'filter-search';
+  search.placeholder = 'title / action_TBD';
+  search.addEventListener('input', applyFilters);
+  searchWrap.appendChild(search);
+  bar.appendChild(searchWrap);
+
+  // hide-done toggle
+  const hideWrap = document.createElement('label');
+  hideWrap.style.flexDirection = 'row';
+  hideWrap.style.alignItems = 'center';
+  hideWrap.style.gap = '4px';
+  const hideCb = document.createElement('input');
+  hideCb.type = 'checkbox'; hideCb.id = 'filter-hide-done';
+  hideCb.addEventListener('change', applyFilters);
+  hideWrap.appendChild(hideCb);
+  hideWrap.appendChild(document.createTextNode('Hide Done'));
+  bar.appendChild(hideWrap);
+
+  // reset button — restore default (all dims fully selected)
+  const reset = document.createElement('button');
+  reset.textContent = 'Reset filters';
+  reset.addEventListener('click', () => {
+    for (const dim of FILTER_DIMS) {
+      const dd = document.getElementById('filter-' + dim);
+      SELECTED[dim].clear();
+      dd.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        cb.checked = true;
+        SELECTED[dim].add(cb.value);
+      });
+      updateButtonLabel(dd, dim);
+    }
+    document.getElementById('filter-search').value = '';
+    document.getElementById('filter-hide-done').checked = false;
+    applyFilters();
+  });
+  bar.appendChild(reset);
+
+  // export-done button
+  const exp = document.createElement('button');
+  exp.textContent = 'Export Done IDs';
+  exp.addEventListener('click', () => {
+    const ids = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k.startsWith(STORAGE_KEY_PREFIX) && localStorage.getItem(k) === '1') {
+        ids.push(k.slice(STORAGE_KEY_PREFIX.length));
+      }
+    }
+    ids.sort((a, b) => Number(a) - Number(b));
+    navigator.clipboard.writeText(ids.join(',')).then(
+      () => alert(`Copied ${ids.length} done issue IDs to clipboard`),
+      () => prompt('Done IDs (copy manually):', ids.join(','))
+    );
+  });
+  bar.appendChild(exp);
+
+  // stats
+  const stats = document.createElement('span');
+  stats.className = 'stats'; stats.id = 'filter-stats';
+  bar.appendChild(stats);
+
+  document.body.insertBefore(bar, document.body.firstChild);
+
+  // dismiss any open dropdown on outside click
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.ms-dd.open').forEach(d => d.classList.remove('open'));
+  });
+}
+
+function rowMatchesDim(tr, dim, selectedSet) {
+  // No checkboxes selected → user has explicitly excluded everything in
+  // this dimension, so no row passes.
+  if (selectedSet.size === 0) return false;
+  // Assignee filter also matches owner_transferred tokens.
+  const sourceDims = (dim === 'assignee') ? ['assignee', 'owner_transferred'] : [dim];
+  const rowTokens = new Set();
+  for (const sd of sourceDims) {
+    for (const t of tokensFor(sd, tr.dataset[sd])) rowTokens.add(t);
+  }
+  // Drop NONE if the row also has a concrete token under any source dim.
+  if (sourceDims.length > 1 && rowTokens.size > 1) rowTokens.delete(NONE_TOKEN);
+  for (const t of rowTokens) {
+    if (selectedSet.has(t)) return true;
+  }
+  return false;
+}
+
+function applyFilters() {
+  const search = document.getElementById('filter-search').value.trim().toLowerCase();
+  const hideDone = document.getElementById('filter-hide-done').checked;
+
+  let total = 0, visible = 0;
+  document.querySelectorAll('table.ar-table tbody tr').forEach(tr => {
+    total++;
+    let show = true;
+    for (const dim of FILTER_DIMS) {
+      if (!rowMatchesDim(tr, dim, SELECTED[dim])) { show = false; break; }
+    }
+    if (show && search) {
+      show = (tr.dataset.search || '').includes(search);
+    }
+    if (show && hideDone && tr.classList.contains('done')) {
+      show = false;
+    }
+    tr.classList.toggle('hidden', !show);
+    if (show) visible++;
+  });
+  document.getElementById('filter-stats').textContent =
+    `${visible} / ${total} rows`;
+
+  hideEmptySections();
+}
+
+// Collapse blocks whose tables ended up with zero visible rows. A "block"
+// is a <table.ar-table> together with the siblings immediately preceding
+// it back to the previous table or section heading (h2/h3/h4) — i.e. the
+// intro paragraph(s), the bullet that names the subsection, and the
+// "back to index" link that go with that table. Then a parent <h2> (and
+// its descendants up to the next <h2>) is hidden when every table under
+// it is hidden. Finally TOC entries pointing to hidden anchors are
+// hidden too.
+function hideEmptySections() {
+  const content = document.querySelector('.content');
+  if (!content) return;
+
+  // Reset previous hides on structure-level elements (rows already toggled above)
+  content.querySelectorAll('.section-hidden').forEach(el => {
+    el.classList.remove('section-hidden');
+  });
+
+  const STOP = el => el && (el.tagName === 'TABLE' ||
+                            el.tagName === 'H2' || el.tagName === 'H3' || el.tagName === 'H4');
+
+  // Pass 1: hide each empty table + its leading intro siblings.
+  const tables = Array.from(content.querySelectorAll('table.ar-table'));
+  for (const table of tables) {
+    const visibleRows = table.querySelectorAll('tbody tr:not(.hidden)').length;
+    if (visibleRows > 0) continue;
+    table.classList.add('section-hidden');
+    // Walk back over intro siblings up to (but not including) the previous
+    // table or heading.
+    let sib = table.previousElementSibling;
+    while (sib && !STOP(sib)) {
+      sib.classList.add('section-hidden');
+      sib = sib.previousElementSibling;
+    }
+    // The triggering heading (h3/h4) immediately before the intro: if
+    // we landed on one and it isn't an h2 (which may parent multiple
+    // tables), hide it too.
+    if (sib && (sib.tagName === 'H3' || sib.tagName === 'H4')) {
+      sib.classList.add('section-hidden');
+    }
+  }
+
+  // Pass 2: hide an <h2> (and everything until the next <h2>) when all
+  // descendants in that span are already hidden.
+  const kids = Array.from(content.children);
+  let i = 0;
+  while (i < kids.length) {
+    if (kids[i].tagName !== 'H2') { i++; continue; }
+    const start = i;
+    let end = i + 1;
+    while (end < kids.length && kids[end].tagName !== 'H2') end++;
+    // span = [start, end)
+    let anyVisible = false;
+    for (let j = start + 1; j < end; j++) {
+      if (!kids[j].classList.contains('section-hidden')) {
+        // tables only matter for "is this section worth showing?"
+        if (kids[j].tagName === 'TABLE') {
+          anyVisible = true; break;
+        }
+      }
+    }
+    // If no table in the span is visible, hide the whole span.
+    if (!anyVisible) {
+      // But: only collapse the span if it contains at least one table to
+      // begin with. Sections like §1 Summary and §2 Index have no
+      // <table.ar-table> and should always remain visible.
+      let hasTable = false;
+      for (let j = start + 1; j < end; j++) {
+        if (kids[j].tagName === 'TABLE' && kids[j].classList.contains('ar-table')) {
+          hasTable = true; break;
+        }
+      }
+      if (hasTable) {
+        for (let j = start; j < end; j++) {
+          kids[j].classList.add('section-hidden');
+        }
+      }
+    }
+    i = end;
+  }
+
+  // Pass 3: hide TOC entries (in §2 Index) whose target anchor is now
+  // inside a hidden section.
+  const tocLinks = content.querySelectorAll('ul li > a[href^="#sec-"]');
+  tocLinks.forEach(a => {
+    const target = document.getElementById(a.getAttribute('href').slice(1));
+    const li = a.parentElement;
+    if (!target) { li.classList.remove('section-hidden'); return; }
+    // A target is "effectively hidden" if the target itself is hidden,
+    // or every <table> following it in its h2-span is hidden.
+    let hide = target.classList.contains('section-hidden');
+    if (!hide) {
+      // walk forward until next same-or-higher heading; if every table
+      // in between is hidden AND there is at least one table, hide.
+      const targetLevel = parseInt(target.tagName[1], 10);
+      let sib = target.nextElementSibling;
+      let sawTable = false, allHidden = true;
+      while (sib) {
+        if (/^H[1-6]$/.test(sib.tagName) && parseInt(sib.tagName[1], 10) <= targetLevel) break;
+        if (sib.tagName === 'TABLE' && sib.classList.contains('ar-table')) {
+          sawTable = true;
+          if (!sib.classList.contains('section-hidden')) { allHidden = false; break; }
+        }
+        sib = sib.nextElementSibling;
+      }
+      hide = sawTable && allHidden;
+    }
+    li.classList.toggle('section-hidden', hide);
+  });
+}
+
+// ---- init ----
+document.addEventListener('DOMContentLoaded', () => {
+  loadDoneState();
+  document.querySelectorAll('input.ar-done').forEach(cb => {
+    cb.addEventListener('change', onDoneToggle);
+  });
+  buildFilterBar();
+  applyFilters();
+});
+</script>
+</body>
+</html>

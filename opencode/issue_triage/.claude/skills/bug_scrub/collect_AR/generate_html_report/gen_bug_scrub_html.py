@@ -14,10 +14,22 @@ interactive single-file HTML report:
 
 Re-runs gen_bug_scrub_md.py first so the HTML always reflects the
 current Excel workbook.
+
+Usage:
+    # default: full report
+    python3 gen_bug_scrub_html.py
+
+    # filtered report (e.g. UT-scoped)
+    python3 gen_bug_scrub_html.py \\
+        --issues-file /tmp/ut_issue_ids.txt \\
+        --md   opencode/issue_triage/result/bug_scrub_ut.md \\
+        --out  opencode/issue_triage/result/bug_scrub_ut.html \\
+        --title-suffix " — UT scope"
 """
 
 from __future__ import annotations
 
+import argparse
 import html
 import re
 import subprocess
@@ -940,19 +952,46 @@ def render_page(body_html: str, title: str) -> str:
 
 
 def main() -> int:
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p.add_argument("--issues-file", type=Path, default=None,
+                   help="Optional file with whitespace/newline-separated "
+                        "issue IDs; passed through to gen_bug_scrub_md.py "
+                        "to produce a filtered report.")
+    p.add_argument("--md", type=Path, default=MD_PATH,
+                   help="Markdown input/output path (default: bug_scrub.md). "
+                        "gen_bug_scrub_md.py is run with --out=<this>.")
+    p.add_argument("--out", type=Path, default=None,
+                   help="HTML output path (default: bug_scrub.html, or "
+                        "derived from --md by swapping .md→.html).")
+    p.add_argument("--title-suffix", default="",
+                   help="Suffix appended to the report title (passed to "
+                        "gen_bug_scrub_md.py and used as <title>).")
+    args = p.parse_args()
+
+    md_path = args.md if args.md.is_absolute() else REPO_ROOT / args.md
+    if args.out is not None:
+        out_path = args.out if args.out.is_absolute() else REPO_ROOT / args.out
+    else:
+        out_path = md_path.with_suffix(".html")
+
     # Phase 5b spec: re-run gen_bug_scrub_md.py first so HTML always
     # reflects the current workbook.
     if not GEN_MD_SCRIPT.exists():
         print(f"ERROR: missing {GEN_MD_SCRIPT}", file=sys.stderr)
         return 2
     print(f"running {GEN_MD_SCRIPT.name} ...")
-    rc = subprocess.run([sys.executable, str(GEN_MD_SCRIPT)]).returncode
+    md_cmd = [sys.executable, str(GEN_MD_SCRIPT), "--out", str(md_path)]
+    if args.issues_file is not None:
+        md_cmd += ["--issues-file", str(args.issues_file)]
+    if args.title_suffix:
+        md_cmd += ["--title-suffix", args.title_suffix]
+    rc = subprocess.run(md_cmd).returncode
     if rc != 0:
         print(f"ERROR: gen_bug_scrub_md.py failed (rc={rc})", file=sys.stderr)
         return rc
 
-    if not MD_PATH.exists():
-        print(f"ERROR: missing {MD_PATH}", file=sys.stderr)
+    if not md_path.exists():
+        print(f"ERROR: missing {md_path}", file=sys.stderr)
         return 3
 
     # Per-issue metadata for filter backfill (Category, Dependency, etc.)
@@ -960,11 +999,12 @@ def main() -> int:
     ISSUE_META = load_issue_metadata(XLSX_PATH)
     print(f"loaded metadata for {len(ISSUE_META)} issues from {XLSX_PATH.name}")
 
-    md_text = MD_PATH.read_text(encoding="utf-8")
+    md_text = md_path.read_text(encoding="utf-8")
     body = md_to_html(md_text)
-    page = render_page(body, "torch-xpu-ops bug scrub")
-    HTML_PATH.write_text(page, encoding="utf-8")
-    print(f"wrote {HTML_PATH} ({HTML_PATH.stat().st_size:,} bytes)")
+    title = "torch-xpu-ops bug scrub" + args.title_suffix
+    page = render_page(body, title)
+    out_path.write_text(page, encoding="utf-8")
+    print(f"wrote {out_path} ({out_path.stat().st_size:,} bytes)")
     return 0
 
 
