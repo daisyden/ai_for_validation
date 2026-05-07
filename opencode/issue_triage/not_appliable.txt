@@ -1,0 +1,50 @@
+.cu
+aten::_cudnn_rnn (test_fake_tensor_xpu test_cudnn_rnn_with/without_fallback)
+aten::_dyn_quant_pack_4bit_weight, aten::narrow_copy.out, aten::_histogramdd_bin_edges (test_linalg_xpu / test_meta_xpu)
+aten::_flash_attention_forward, https://github.com/intel/torch-xpu-ops/issues/2853
+CI nightly test tracker (GitHub Actions)
+CI on-demand test tracker (GitHub Actions)
+Community change
+CPU test
+CUDA specific case
+cudagraphs
+cudnn
+cudnn attention
+cusparselt
+cutlass
+device-agnostic
+dlpack
+gloo/nccl specific
+jit
+Jit
+jiterator, https://github.com/intel/torch-xpu-ops/issues/2918
+NotImplementedError: Could not run 'aten::_flash_attention_forward' with arguments from the 'CPU' backend.
+NotImplementedError: Could not run 'aten::empty_quantized' with arguments from the 'QuantizedXPU' backend
+rpc
+SDPA fused-backward determinism warning + cuDNN-attention failure-mode tests (test_fused_backwards_throws_determinism_warning_fused_kernel1_warn_only_True; test_invalid_fused_inputs_dim_3_kernel2; test_invalid_last_dim_stride_kernel2; test_mask_invalid_last_dim_stride_kernel1)
+SDPA fused/cuDNN-attention paths in test_transformers_xpu.py: TestSDPACudaOnlyXPU.test_cudnn_attention_seqlen1_dropout_heuristic, ~70 test_fused_kernels_nested_broadcasting_kernel0_* parametrizations, test_fused_kernels_seq_len_1_inputs_fused_kernel0, test_scaled_dot_product_attention_fused_kernels_packed_accuracy_type_nested_fused_kernel0, test_fused_backwards_throws_determinism_warning_fused_kernel0_*
+SEMI_STRUCTURED_SUPPORTED_BACKENDS, https://github.com/intel/torch-xpu-ops/issues/2663
+Supported sparse scope of XPU includes structured sparse (CSR) and unstructured sparse (COO).
+tcp
+test/inductor/test_compiled_optimizers.py CompiledOptimizerTests.test_bitwise_adam[w]_*_capturable_foreach_xpu (torch.pow in Adam/AdamW bias correction)
+test/inductor/test_cuda_repro.py CudaReproTests.test_effn_attn_bias_padding_misaligned (SDPA / efficient attention codegen)
+test/inductor/test_cuda_repro.py CudaReproTests.test_not_disabling_ftz_yields_zero
+test_torch_xpu.TestTorch.test_no_cuda_monkeypatch (torch.cuda.Stream/Event error-message check)
+TestTransformersXPU.test_disable_fastpath_xpu and TestSDPACudaOnlyXPU.test_fused_sdp_priority_order_use_compile_{True,False}_xpu (MHA fastpath / SDP backend priority)
+TestTransformersXPU.test_math_backend_high_precision_xpu (SDPA math backend FP16 vs FP64 accuracy)
+To be revisited
+torch._C._broadcast_coalesced / torch._C._scatter (test_broadcast_double_backwards_gpu, test_spectral_norm, test_dataparallel_saved_tensors_hooks)
+torch._C._scatter, torch._C._gather (DataParallel), torch.xpu.tunable (TunableOp), torch.xpu.*Storage, torch.xpu.amp, torch.xpu.FloatTensor
+torch._custom_op (test/test_custom_ops.py::TestCustomOp.test_impl_multiple)
+torch._custom_ops / CustomOp.impl device_types; test_custom_ops.TestCustomOp.test_impl_separate
+torch._transformer_encoder_layer_fwd via nn.TransformerEncoder (TestTransformersXPU.test_transformerencoder_fastpath_*_use_autocast_True_*)
+torch.cuda.FloatTensor
+torch.cuda.memory._set_allocator_settings
+torch.nn.functional.scaled_dot_product_attention with FP64; TestSDPAFailureModesXPU.test_invalid_fused_inputs_invalid_dtype_kernel1_xpu
+torch.nn.functional.scaled_dot_product_attention with NestedTensor (TestSDPACudaOnlyXPU.test_fused_kernels_nested_broadcasting_* / test_scaled_dot_product_attention_fused_kernels_packed)
+torch.ops.aten._scaled_dot_product_flash_attention on NestedTensorXPU; TestSDPAFailureModesXPU tests (test_nested_fails_on_padding_head_dim, test_flash_fail_fp32, test_fused_kernels_nested_broadcasting_requires_grad_failure, test_flash_attention_fail_with_non_square_causal_attention)
+torch.xpu.memory._record_memory_history / torch._C._xpu_recordMemoryHistory; test_cuda_repro.py CudaReproTests.test_memory_history_inductor
+torch.xpu.{Bool,Byte,Char,Short,Int,Long,Half,BFloat16,Float,Double,ComplexFloat,ComplexDouble}Storage; TypedStorage.xpu (test_storage_setitem, test_tensor_storage_type, test_typed_storage_*)
+torch_ipex::ipex_woq_linear (AutoRound int4 Qwen2 inference)
+won't fix, https://github.com/intel/torch-xpu-ops/issues/2565
+XPU does not support gloo backend
