@@ -7,7 +7,6 @@ CI on-demand test tracker (GitHub Actions)
 Community change
 CPU test
 CUDA specific case
-cudagraphs
 cudnn
 cudnn attention
 cusparselt
@@ -15,8 +14,8 @@ cutlass
 device-agnostic
 dlpack
 gloo/nccl specific
-jit
 Jit
+jit
 jiterator, https://github.com/intel/torch-xpu-ops/issues/2918
 NotImplementedError: Could not run 'aten::_flash_attention_forward' with arguments from the 'CPU' backend.
 NotImplementedError: Could not run 'aten::empty_quantized' with arguments from the 'QuantizedXPU' backend
@@ -39,12 +38,10 @@ torch._custom_op (test/test_custom_ops.py::TestCustomOp.test_impl_multiple)
 torch._custom_ops / CustomOp.impl device_types; test_custom_ops.TestCustomOp.test_impl_separate
 torch._transformer_encoder_layer_fwd via nn.TransformerEncoder (TestTransformersXPU.test_transformerencoder_fastpath_*_use_autocast_True_*)
 torch.cuda.FloatTensor
-torch.cuda.memory._set_allocator_settings
 torch.nn.functional.scaled_dot_product_attention with FP64; TestSDPAFailureModesXPU.test_invalid_fused_inputs_invalid_dtype_kernel1_xpu
 torch.nn.functional.scaled_dot_product_attention with NestedTensor (TestSDPACudaOnlyXPU.test_fused_kernels_nested_broadcasting_* / test_scaled_dot_product_attention_fused_kernels_packed)
 torch.ops.aten._scaled_dot_product_flash_attention on NestedTensorXPU; TestSDPAFailureModesXPU tests (test_nested_fails_on_padding_head_dim, test_flash_fail_fp32, test_fused_kernels_nested_broadcasting_requires_grad_failure, test_flash_attention_fail_with_non_square_causal_attention)
 torch.xpu.memory._record_memory_history / torch._C._xpu_recordMemoryHistory; test_cuda_repro.py CudaReproTests.test_memory_history_inductor
 torch.xpu.{Bool,Byte,Char,Short,Int,Long,Half,BFloat16,Float,Double,ComplexFloat,ComplexDouble}Storage; TypedStorage.xpu (test_storage_setitem, test_tensor_storage_type, test_typed_storage_*)
 torch_ipex::ipex_woq_linear (AutoRound int4 Qwen2 inference)
-won't fix, https://github.com/intel/torch-xpu-ops/issues/2565
 XPU does not support gloo backend

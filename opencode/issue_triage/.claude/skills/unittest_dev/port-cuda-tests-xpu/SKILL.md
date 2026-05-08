@@ -206,24 +206,40 @@ grep -rn "accelerator\." test/ | head -20
 
 Use nightly PyTorch wheel with XPU support:
 ```bash
-source ~/miniforge3/etc/profile.d/conda.sh && conda activate pytorch_opencode_env
+source ~/miniforge3/bin/activate pytorch_opencode_env
 cd /tmp
 python -m pytest /home/daisydeng/daisy_pytorch/test/path/to/test_file.py -v -k "TestClassName"
 ```
 
 Run specific XPU tests:
 ```bash
+source ~/miniforge3/bin/activate pytorch_opencode_env
 cd /tmp
 python -m pytest /home/daisydeng/daisy_pytorch/test/path/to/test_file.py::TestClassName::test_name -v
 ```
 
 Verify API compatibility:
 ```bash
-cd /tmp && source ~/miniforge3/etc/profile.d/conda.sh && conda activate pytorch_opencode_env
+cd /tmp && source ~/miniforge3/bin/activate pytorch_opencode_env
 python -c "from torch import accelerator; print(accelerator.current_accelerator())"
 ```
 
-All tests should pass on XPU backend.
+For local validation, prefer running from `/tmp` with the exact target XPU classes in the changed file. Example:
+
+```bash
+source ~/miniforge3/bin/activate pytorch_opencode_env
+cd /tmp
+python -m pytest /home/daisyden/upstream/upstream_ut/test/complex_tensor/test_complex_tensor.py -v -k "TestComplexBwdGradientsXPU or TestComplexTensorXPU"
+```
+
+All targeted XPU tests should pass on the local validation environment before claiming completion.
+
+If verification fails:
+
+1. Check whether the failure is from the test enablement change or a pre-existing/backend issue.
+2. If it is fixable in the test change, fix it and rerun.
+3. If it still fails and needs issue filing, load `unittest_dev/submit_ut_issues` and prepare the issue details.
+4. Ask the user for confirmation before submitting any issue. Never auto-submit.
 
 ### Step 6: Create Git Commit
 
@@ -330,6 +346,10 @@ All methods verified in PyTorch nightly (`pytorch_opencode_env`):
 
 - **Test verification**: Run tests from `/tmp` to avoid local pytorch shadowing conda env
 
+- **Local validation env**: Use `source ~/miniforge3/bin/activate pytorch_opencode_env`
+
+- **Issue submission**: If local XPU verification still fails after test-side fixes, use `unittest_dev/submit_ut_issues` to prepare submission, but always ask the user before creating the issue
+
 - **PR confirmation**: Always confirm PR details with user before submission
 
 - **API verification**: Always verify APIs against actual PyTorch documentation
@@ -351,7 +371,7 @@ When evaluating a test file for XPU porting:
 
 ### Verify accelerator API
 ```bash
-cd /tmp && source ~/miniforge3/etc/profile.d/conda.sh && conda activate pytorch_opencode_env
+cd /tmp && source ~/miniforge3/bin/activate pytorch_opencode_env
 python -c "from torch import accelerator; print(accelerator.current_accelerator())"
 ```
 
@@ -378,6 +398,16 @@ def test_gpu_function(self):
     t = torch.randn(3, 3, device=device)
     # test logic
 ```
+
+### Local Verification Gate
+
+Before declaring the port complete:
+
+1. Activate `pytorch_opencode_env` with `source ~/miniforge3/bin/activate pytorch_opencode_env`.
+2. Run the changed test file from `/tmp` against the repo path.
+3. Prefer a focused `-k` expression covering the newly enabled XPU classes first.
+4. If failures remain after reasonable test-side fixes, switch to `unittest_dev/submit_ut_issues` for issue preparation.
+5. Present the failure summary to the user and ask before submitting any issue.
 
 ## Examples
 

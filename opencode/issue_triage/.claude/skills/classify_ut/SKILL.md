@@ -17,6 +17,28 @@ without pattern matching.
   `/home/daisyden/opencode/ai_for_validation/opencode/issue_triage/result/torch_xpu_ops_issues.xlsx`
 - Deep case-existence workflow:
   `/home/daisyden/opencode/ai_for_validation/opencode/issue_triage/.claude/skills/bug_scrub/analyze_ci_result/check_xpu_case_existence/SKILL.md`
+- Blank `status_xpu` workflow:
+  `/home/daisyden/opencode/ai_for_validation/opencode/issue_triage/.claude/skills/classify_ut/blank/SKILL.md`
+- Failed `status_xpu` workflow:
+  `/home/daisyden/opencode/ai_for_validation/opencode/issue_triage/.claude/skills/classify_ut/failed/SKILL.md`
+- Skipped/xfail `status_xpu` workflow:
+  `/home/daisyden/opencode/ai_for_validation/opencode/issue_triage/.claude/skills/classify_ut/skipped/SKILL.md`
+
+## Status-specific classification skills
+
+These subskills are authoritative for case-specific `Reason`, `DetailReason`, and
+`Exaplaination` decisions. Always read the matching subskill before classifying rows with that
+`status_xpu` value.
+
+| `status_xpu` | Skill | Purpose |
+|--------------|-------|---------|
+| blank / empty | `classify_ut/blank/SKILL.md` | Deep case-existence analysis for rows with no XPU result |
+| `failed` | `classify_ut/failed/SKILL.md` | Failure-message, local-run, and known-issue analysis |
+| `skipped` / `xfail` | `classify_ut/skipped/SKILL.md` | Skip-message, linked-issue, source, and local-run analysis |
+
+Do not collapse these workflows into a single pattern-matching script. Bulk scripts may prepare
+workbook columns, collect candidate rows, or apply already-reviewed decisions, but the actual
+classification must follow the status-specific skill.
 
 ## check_xpu_case_existence reference
 
@@ -50,12 +72,18 @@ without pattern matching.
   is NOT a `*_xpu.py` wrapper file. Instead:
   1. Read `third_party/torch-xpu-ops/test/xpu/run_distributed.py` in full to confirm
      which skip dictionaries are imported in the current checkout.
-  2. Read `third_party/torch-xpu-ops/test/xpu/skip_list_dist.py` in full.
-  3. If `third_party/torch-xpu-ops/test/xpu/skip_list_dict_local.py` exists, read it in full.
-     Treat it as enabling the listed distributed file(s), and use the skipped-case list in
-     that file when deciding whether an individual test case runs or is intentionally skipped.
-     If it does not exist in the checkout, explicitly state that it was checked and absent.
-  4. Check whether the upstream test file path appears in the active distributed skip dicts.
+  2. For release/2.12 distributed classification, first read the remote local distributed
+     skip list from `intel/torch-xpu-ops` branch `daisyden/distributed_2.12`:
+     `test/xpu/skip_list_dist_local.py`. The intended file is sometimes referred to as
+     `skip_list_local_dist.py`, but the verified branch filename is `skip_list_dist_local.py`.
+  3. Read `third_party/torch-xpu-ops/test/xpu/skip_list_dist.py` in full, or the matching
+     `intel/torch-xpu-ops` `daisyden/distributed_2.12:test/xpu/skip_list_dist.py` when
+     classifying against release/2.12.
+  4. If `third_party/torch-xpu-ops/test/xpu/skip_list_dict_local.py` exists, read it in full.
+      Treat it as enabling the listed distributed file(s), and use the skipped-case list in
+      that file when deciding whether an individual test case runs or is intentionally skipped.
+      If it does not exist in the checkout, explicitly state that it was checked and absent.
+   5. Check whether the upstream test file path appears in the active distributed skip dicts.
      - Present, value `None` → all tests in that file run on XPU.
      - Present, value is a tuple/list → tests in the tuple/list are skipped; all others run.
      - Absent from all active distributed skip dicts → the file is not run on XPU by
@@ -63,11 +91,11 @@ without pattern matching.
        as `Distributed file missing from skip_list_dist.py` or
        `Distributed file missing from skip_list_dict_local.py`, not the generic phrase
        `No XPU wrapper`.
-  5. Also check `third_party/torch-xpu-ops/test/xpu/distributed/` for XPU-native
-     standalone files (e.g. `test_c10d_xccl.py`) that have no upstream pytorch/test equivalent.
-  6. For distributed tests, also check `https://github.com/daisyden/pytorch/tree/release/2.12`
-     for the upstream file and test method before concluding a test was removed, renamed, or
-     never present.
+   6. Also check `third_party/torch-xpu-ops/test/xpu/distributed/` for XPU-native
+      standalone files (e.g. `test_c10d_xccl.py`) that have no upstream pytorch/test equivalent.
+   7. For distributed tests, also check `https://github.com/daisyden/pytorch/tree/release/2.12`
+      for the upstream file and test method before concluding a test was removed, renamed, or
+      never present.
 - Not all XPU tests use `XPUPatchForImport`. Distributed tests run the upstream file
   directly via `run_distributed.py`; many non-distributed XPU files are standalone copies or
   direct XPU implementations without `XPUPatchForImport`. For those files, inspect the actual
@@ -88,6 +116,15 @@ without pattern matching.
   variant exist after parametrization (for example `test_Conv1d_pad2_cuda` and
   `test_Conv1d_pad2_xpu`), it is **not** a community-change case; analyze the XPU status,
   skips, failure, or enablement gap instead.
+- If `status_xpu = failed`, use `classify_ut/failed/SKILL.md`. Failed rows must inspect
+  `message_xpu`, run locally when the message is missing or not useful, search
+  `intel/torch-xpu-ops` issues, include a known issue link when found, and use `[Issue TBD]`
+  in `DetailReason` when no known issue exists after analysis.
+- If `status_xpu = skipped` or `xfail`, use `classify_ut/skipped/SKILL.md`. Skipped rows are
+  not automatically environment limitations. Inspect issue links and issue state, read local skip
+  decorators/helpers, and run locally when `message_xpu` is missing or nondiagnostic. In particular,
+  `not-support-multithread` is a `Feature gap`, closed PyTorch disabled-test issues are
+  `To be enabled`, and open disabled-test issues are classified by issue content.
 
 ## Workflow
 
@@ -101,21 +138,32 @@ without pattern matching.
    - `classname_cuda` ending with `CUDA` -> replace with `XPU`
    - `name_cuda` ending with `_cuda` -> replace with `_xpu`
    - `testfile_xpu` defaults to `testfile_cuda` when blank
-6. If `Reason` is blank, do not guess and do not use pattern matching, even when
-   `status_xpu` is filled.
-   Run the deep-analysis steps from the referenced `check_xpu_case_existence` skill, then fill:
-   - `Reason = Not applicable`, `DetailReason = Community Changes`, and `Exaplaination = why
-     the CUDA case was removed/renamed and which source versions prove it`
-   - or `Reason = Not Appliable`, `DetailReason = CUDA-specific API: <exact API name>` or another
-     precise missing feature/API name
-   - or `Reason = To be enabled`, with a specific `DetailReason` describing the enablement gap
-     (for example: `Distributed file missing from skip_list_dist.py`, `Class not imported by
-     XPU test file`, `XPUPatchForImport(True) disables instantiation`, `OpInfo dtypesIfXPU
-     excludes <dtype>`, `XPU graph coverage missing`, `Explicit XPU skip decorator`).
-7. `Reason TBD` tracks whether the **original** Reason was blank at the time the workbook was processed.
+6. If `Reason` is blank, do not guess and do not use pattern matching. Choose and read the
+   status-specific deep-analysis skill first:
+   - blank `status_xpu` -> `classify_ut/blank/SKILL.md`
+   - `status_xpu = failed` -> `classify_ut/failed/SKILL.md`
+   - `status_xpu = skipped` or `xfail` -> `classify_ut/skipped/SKILL.md`
+   Run the selected skill's workflow, plus the referenced `check_xpu_case_existence` workflow
+   when the selected skill calls for case-existence analysis.
+7. Fill `Reason`, `DetailReason`, and `Exaplaination` according to the selected subskill. The
+   complete set of outcomes used by the subskills includes:
+   - `Reason = To be enabled`, with a specific `DetailReason` describing the enablement gap,
+     stale skip, closed disabled issue, local pass, or existing-but-unreported XPU case.
+   - `Reason = Feature gap`, with a specific missing XPU feature/support gap, issue link when
+     available, or `[Issue TBD]` when no known issue exists.
+   - `Reason = Failures (xpu broken)` or `Reason = Failures (XPU broken)`, with a known issue link
+     when found, or `[Issue TBD]` plus the concrete failure when no known issue exists.
+   - `Reason = Test Enviroment limitation`, only for true hardware/process/test-run requirements
+     such as insufficient GPU count or explicitly disabled slow-test gates. Do not use this merely
+     because `status_xpu` is skipped.
+   - `Reason = Not Appliable`, `DetailReason = CUDA-specific API: <exact API name>` or another
+     precise CUDA-only/backend-specific API or feature name.
+   - `Reason = Not applicable`, `DetailReason = Community Changes`, and `Exaplaination` explaining
+     why the CUDA case was removed/renamed and which source versions prove it.
+8. `Reason TBD` tracks whether the **original** Reason was blank at the time the workbook was processed.
    Do NOT change `Reason TBD` to False after filling in a classification — leave it as initialized in step 4.
    `Reason TBD = True` means "this row originally had no Reason and required deep analysis", regardless of whether analysis is now complete.
-8. Consolidate `Not applicable` / `Not Appliable` features from both workbooks into
+9. Consolidate `Not applicable` / `Not Appliable` features from both workbooks into
    `/home/daisyden/opencode/ai_for_validation/opencode/issue_triage/not_appliable.txt`.
 
 ## Files

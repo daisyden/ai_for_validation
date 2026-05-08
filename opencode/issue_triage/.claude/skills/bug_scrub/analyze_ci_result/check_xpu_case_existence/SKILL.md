@@ -49,8 +49,10 @@ For every case, inspect the local sources before final classification:
 
 1. Local upstream base test in `pytorch/test/`.
 2. Local XPU test files under `third_party/torch-xpu-ops/test/xpu/**`.
-3. For distributed tests only, active distributed skip dictionaries, standalone distributed XPU
-   files, and the daisyden release branch `https://github.com/daisyden/pytorch/tree/release/2.12`.
+3. For distributed tests only, active distributed skip dictionaries, the remote release/2.12
+   local distributed skip list from `intel/torch-xpu-ops` branch `daisyden/distributed_2.12`,
+   standalone distributed XPU files, and the daisyden release branch
+   `https://github.com/daisyden/pytorch/tree/release/2.12`.
 
 Do not use `release/2.12` for non-distributed test classification. Non-distributed cases should
 be classified from the local `pytorch/test/` and `third_party/torch-xpu-ops/test/xpu/**` sources.
@@ -85,6 +87,10 @@ and calls `launch_test` on each path directly. No `*_xpu.py` wrapper file is cre
 `run_distributed.py` first; do not assume which dictionary is active.
 
 Known dictionary files to check:
+- `intel/torch-xpu-ops` branch `daisyden/distributed_2.12`, file
+  `test/xpu/skip_list_dist_local.py` for release/2.12 distributed classification. The file may
+  be described as `skip_list_local_dist.py`, but the verified branch filename is
+  `skip_list_dist_local.py`.
 - `third_party/torch-xpu-ops/test/xpu/skip_list_dist.py`
 - `third_party/torch-xpu-ops/test/xpu/skip_list_dict_local.py` if present in the checkout
 
@@ -147,7 +153,8 @@ These files do NOT use `XPUPatchForImport` — they are standalone XPU-native te
 **Decision for distributed tests:**
 
 1. Read `run_distributed.py` to identify active distributed dictionary imports.
-2. Check `skip_list_dist.py` and `skip_list_dict_local.py` if present for the upstream file path.
+2. Check the remote release/2.12 local distributed skip list first, then `skip_list_dist.py` and
+   `skip_list_dict_local.py` if present for the upstream file path.
 3. If present with `None`, the file runs; then verify the exact test exists in the local source
    or in daisyden/pytorch release/2.12.
 4. If present with tuple/list, compare the exact generated XPU test name against skipped cases.
