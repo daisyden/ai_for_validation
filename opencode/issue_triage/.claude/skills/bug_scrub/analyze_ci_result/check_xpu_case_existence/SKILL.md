@@ -1,7 +1,7 @@
 # Check XPU Test Case Existence Skill
 
 ## Purpose
-Deep analysis of PyTorch XPU test case existence by tracing through code execution, comparing pytorch/test vs torch-xpu-ops/test/xpu, and examining parametrization infrastructure. Uses exploration and deep analysis based on code and execution results, not simple pattern matching.
+Deep analysis of PyTorch XPU test case existence by tracing through code execution, comparing pytorch/test vs torch-xpu-ops/test/xpu, checking the daisyden/pytorch release/2.12 branch for distributed tests only, and examining parametrization infrastructure. Uses exploration and deep analysis based on code and execution results, not scripts, filename patterns, or regex-only matching.
 
 ## Preconditions
 
@@ -15,7 +15,7 @@ Deep analysis of PyTorch XPU test case existence by tracing through code executi
    - Main pytorch repo: `/home/daisydeng/pytorch`
    - XPU tests location: `/home/daisydeng/pytorch/third_party/torch-xpu-ops/test/xpu/`
    - Base tests location: `/home/daisydeng/pytorch/test/`
-   - Distributed test location: https://github.com/pytorch/pytorch/tree/release/2.12
+    - Distributed release-branch reference: https://github.com/daisyden/pytorch/tree/release/2.12
 
 3. torch-xpu-ops is stored as third_party submodule at `third_party/torch-xpu-ops`
 
@@ -31,7 +31,7 @@ Deep analysis of PyTorch XPU test case existence by tracing through code executi
 
 ## Workflow
 
-### Step 1: Locate Test Files
+### Step 1: Locate Test Files By Deep Inspection
 
 **Important**: XPU tests can live in MULTIPLE locations. Check ALL before declaring a test missing:
 
@@ -45,6 +45,20 @@ Deep analysis of PyTorch XPU test case existence by tracing through code executi
 | `pytorch/third_party/torch-xpu-ops/test/xpu/functorch/` | functorch XPU tests | |
 | `pytorch/third_party/torch-xpu-ops/test/xpu/quantization/` | Quantization XPU tests | |
 
+For every case, inspect the local sources before final classification:
+
+1. Local upstream base test in `pytorch/test/`.
+2. Local XPU test files under `third_party/torch-xpu-ops/test/xpu/**`.
+3. For distributed tests only, active distributed skip dictionaries, standalone distributed XPU
+   files, and the daisyden release branch `https://github.com/daisyden/pytorch/tree/release/2.12`.
+
+Do not use `release/2.12` for non-distributed test classification. Non-distributed cases should
+be classified from the local `pytorch/test/` and `third_party/torch-xpu-ops/test/xpu/**` sources.
+
+Do not stop after a filename or grep hit. Read the class/function body, decorators,
+parametrization, wrapper/direct XPU file, and skip-list entry that determines whether the exact
+XPU case is generated, skipped, or absent.
+
 #### 1.1 Check torch-xpu-ops main location
 ```bash
 ls -la /home/daisydeng/pytorch/third_party/torch-xpu-ops/test/xpu/
@@ -57,26 +71,92 @@ ls -la /home/daisydeng/pytorch/test/<base_test>.py
 ```
 Verify base test class exists in pytorch/test
 
-#### 1.3 **Check torch-xpu-ops distributed subfolder (CRITICAL)**
+#### 1.3 **Check torch-xpu-ops distributed subfolder and run_distributed.py (CRITICAL)**
 
-Some tests exist ONLY in torch-xpu-ops distributed folder and have NO pytorch/test equivalent.
+XPU distributed tests run via active skip dictionaries and standalone XPU-native files. You MUST
+check all mechanisms that exist in the checkout:
+
+---
+
+**Mechanism A — `run_distributed.py` + distributed skip dictionaries (upstream files run directly)**
+
+`third_party/torch-xpu-ops/test/xpu/run_distributed.py` imports the active distributed skip dict(s)
+and calls `launch_test` on each path directly. No `*_xpu.py` wrapper file is created. Read
+`run_distributed.py` first; do not assume which dictionary is active.
+
+Known dictionary files to check:
+- `third_party/torch-xpu-ops/test/xpu/skip_list_dist.py`
+- `third_party/torch-xpu-ops/test/xpu/skip_list_dict_local.py` if present in the checkout
 
 ```bash
-ls -la /home/daisydeng/pytorch/third_party/torch-xpu-ops/test/xpu/distributed/
+# Step 1: Which dictionary does run_distributed.py import?
+grep -n "skip_list_dist\|skip_list_dict_local\|skip_dict" \
+  /home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu/run_distributed.py
+
+# Step 2: Is the upstream test file registered in every active distributed dictionary?
+grep -n "<test_filename>" \
+  /home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu/skip_list_dist.py
+
+# Step 3: If present, inspect local dictionary overrides too
+test -f /home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu/skip_list_dict_local.py && \
+  grep -n "<test_filename>" \
+    /home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu/skip_list_dict_local.py
+```
+
+`skip_dict` / local skip-dict structure:
+```python
+skip_dict = {
+    "../../../../test/distributed/<path>/test_foo.py": None,         # all tests run
+    "../../../../test/distributed/<path>/test_bar.py": (             # specific tests skipped
+        "test_skipped_method_xpu",
+    ),
+}
+```
+
+- Key present, value `None` → all tests in the file run on XPU
+- Key present, value is a tuple/list → tests in the tuple/list are skipped; all others run
+- Key absent from all active dictionaries → the file is NOT run on XPU through `run_distributed.py`
+
+```bash
+# Step 4: Read active dictionaries in full to see registered files and skipped cases
+cat /home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu/skip_list_dist.py
+test -f /home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu/skip_list_dict_local.py && \
+  cat /home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu/skip_list_dict_local.py
+```
+
+---
+
+**Mechanism B — standalone XPU-native files in `distributed/` subfolder**
+
+Some tests exist ONLY in torch-xpu-ops and have NO pytorch/test equivalent.
+
+```bash
+ls -la /home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu/distributed/
 ```
 
 **Known XPU-only distributed tests (no pytorch/test equivalent):**
 - `test_c10d_xccl.py` - XCCL collective tests (XPU-specific, mirrors `test_c10d_nccl.py`)
 - `test_c10d_ops_xccl.py` - XCCL ops tests (XPU-specific, mirrors `test_c10d_ops_nccl.py`)
 
-**Decision**: When `origin_file` is like `test/distributed/test_c10d_xccl.py`:
-1. First check `pytorch/test/distributed/test_c10d_xccl.py` → Usually does NOT exist
-2. Then check `pytorch/third_party/torch-xpu-ops/test/xpu/distributed/test_c10d_xccl.py` → Exists!
-3. These files DO NOT use `XPUPatchForImport` - they are standalone XPU-native tests
-4. They use `MultiProcTestCase`, `requires_xccl()`, `TEST_MULTIGPU` checks
+These files also appear as entries in `skip_list_dist.py` under the `"distributed/test_c10d_xccl.py"` key (relative path, not `../../../../test/...`).
 
-If test class/method IS found in the torch-xpu-ops distributed file → `xpu_case_existence = True`
-If test class/method NOT found anywhere → `xpu_case_existence = False`
+These files do NOT use `XPUPatchForImport` — they are standalone XPU-native tests.
+
+---
+
+**Decision for distributed tests:**
+
+1. Read `run_distributed.py` to identify active distributed dictionary imports.
+2. Check `skip_list_dist.py` and `skip_list_dict_local.py` if present for the upstream file path.
+3. If present with `None`, the file runs; then verify the exact test exists in the local source
+   or in daisyden/pytorch release/2.12.
+4. If present with tuple/list, compare the exact generated XPU test name against skipped cases.
+5. Check `distributed/` subfolder for XPU-native standalone files.
+6. If absent from all active dictionaries and no standalone XPU-native file exists:
+   `xpu_case_existence = False`, DetailReason should be specific, e.g.
+   `Distributed file missing from skip_list_dist.py` or
+   `Distributed file missing from skip_list_dict_local.py`. Do not use generic `No XPU wrapper`.
+   Explanation should state which dictionary files were read and what sibling files are enabled.
 
 #### 1.4 Check other torch-xpu-ops subfolders
 
@@ -85,35 +165,35 @@ For tests that might be in extended/nn/functorch/quantization subfolders:
 find /home/daisydeng/pytorch/third_party/torch-xpu-ops/test/xpu/ -name "<test_pattern>*.py"
 ```
 
-#### 1.5 **Check upstream pytorch release branch (CRITICAL)**
+#### 1.5 **Check daisyden release branch for distributed tests only (CRITICAL)**
 
-Local pytorch checkout may be on a different branch than what the issue was reported against.
-Test cases could be **renamed, removed, or relocated** between pytorch versions due to:
+For distributed tests only, local pytorch checkout may be on a different branch than what the issue
+was reported against. Test cases could be **renamed, removed, or relocated** between pytorch versions due to:
 - Test refactoring (e.g., class merging, method renaming)
 - Parametrization changes (e.g., changing `@parametrize` args)
 - Test being moved to a new file
 - Test being deleted as obsolete
 
 **Reference release branches:**
-- Release 2.12: https://github.com/pytorch/pytorch/tree/release/2.12
-- Release 2.11: https://github.com/pytorch/pytorch/tree/release/2.11
-- Main: https://github.com/pytorch/pytorch/tree/main
+- Release 2.12: https://github.com/daisyden/pytorch/tree/release/2.12
+- Release 2.11: https://github.com/daisyden/pytorch/tree/release/2.11
+- Main: https://github.com/daisyden/pytorch/tree/main
 
 **Check against pytorch release branch via GitHub:**
 ```bash
 # Option A: Use gh CLI to check file contents at specific branch
-gh api repos/pytorch/pytorch/contents/test/<base_test>.py?ref=release/2.12 \
+gh api repos/daisyden/pytorch/contents/test/<base_test>.py?ref=release/2.12 \
   --jq '.content' | base64 -d | grep -n "<test_class_or_method>"
 
 # Option B: Use raw GitHub URL via curl
-curl -s https://raw.githubusercontent.com/pytorch/pytorch/release/2.12/test/<base_test>.py | \
+curl -s https://raw.githubusercontent.com/daisyden/pytorch/release/2.12/test/<base_test>.py | \
   grep -n "<test_class_or_method>"
 
 # Option C: Use git to check a specific ref if submodule/remote is configured
 cd ~/pytorch && git show release/2.12:test/<base_test>.py 2>/dev/null | grep -n "<pattern>"
 ```
 
-**Decision logic with release branch check:**
+**Decision logic with release branch check (distributed tests only):**
 ```
 1. Test NOT in local pytorch/test:
    → Check release/2.12 branch on GitHub
@@ -129,11 +209,13 @@ cd ~/pytorch && git show release/2.12:test/<base_test>.py 2>/dev/null | grep -n 
 ```
 
 **When to invoke release branch check:**
-- Test class/method "removed/renamed" reason
-- Issue reported on older pytorch version but test now missing locally
-- Discrepancy between upstream main and release branches
+- Distributed test class/method "removed/renamed" reason
+- Distributed issue reported on older pytorch version but test now missing locally
+- Distributed discrepancy between local source and release branch
 
-#### 1.6 Read XPU wrapper file structure
+Do not invoke release/2.12 checks for non-distributed tests.
+
+#### 1.6 Read XPU wrapper/direct file structure
 File: `third_party/torch-xpu-ops/test/xpu/<test>_xpu.py`
 
 Typical structure:
@@ -145,6 +227,14 @@ instantiate_device_type_tests(
     <BaseTestClass>, globals(), only_for="xpu", allow_xpu=True
 )
 ```
+
+This is only one pattern. Many XPU files are direct/standalone copies or hand-written XPU tests
+that do not use `XPUPatchForImport`. For those files, inspect the XPU file itself:
+- Does it define the target class/function directly?
+- Does it assign/replace methods on an imported class before instantiation?
+- Does it call `instantiate_device_type_tests`, `instantiate_parametrized_tests`, or both?
+- Does the generated XPU test name exist after parametrization?
+- Does the file use `only_for="xpu"`, `allow_xpu=True`, or a broader device list including XPU?
 
 ### Step 2: Understand XPUPatchForImport Behavior
 
@@ -187,10 +277,13 @@ instantiate_device_type_tests(
 
 #### 2.4 Decision Matrix
 ```
-IF XPUWrapper uses XPUPatchForImport(False):
-    THEN @skipXPU/@onlyCUDA are OVERRIDDEN → Test CAN run on XPU
-ELSE IF XPUWrapper uses XPUPatchForImport(True):
-    THEN instantiate disabled → Test will NOT be generated
+IF XPU file uses XPUPatchForImport(False):
+    THEN @skipXPU/@onlyCUDA are OVERRIDDEN during import → imported tests may run on XPU
+ELSE IF XPU file uses XPUPatchForImport(True):
+    THEN device/parametrized instantiation from the imported module may be disabled
+ELSE:
+    The XPU file is direct/standalone. Read its definitions and decorators literally;
+    @onlyCUDA is not patched unless the file itself changes it.
 ```
 
 #### 2.5 Critical Line Analysis (line 1143-1144)
@@ -337,11 +430,20 @@ List all collected variants to verify which dtypes are available
 
 ### Step 7: Determine Absence Reason
 
-#### 7.1 Classify absence reason
+#### 7.1 Classify absence reason with specific DetailReason
 
-**Reason 1: Test XPU wrapper NOT defined**
-- torch-xpu-ops does not have the corresponding `_xpu.py` test file
-- Action: This is a porting gap requiring new XPU test file creation
+**Reason 1: Specific XPU test enablement gap**
+- Do not write only `No XPU wrapper` as DetailReason.
+- State the concrete gap, such as:
+  - `XPU test file missing in torch-xpu-ops/test/xpu/<subdir>`
+  - `Class not imported by existing XPU test file`
+  - `Method not defined in standalone XPU test file`
+  - `Distributed file missing from skip_list_dist.py`
+  - `Distributed file missing from skip_list_dict_local.py`
+  - `XPUPatchForImport(True) disables instantiation`
+  - `OpInfo dtypesIfXPU excludes <dtype>`
+  - `Explicit XPU skip decorator`
+  - `XPU graph coverage missing`
 
 **Reason 2: XPU dtypesIfXPU restriction (MOST COMMON)**
 - OpInfo has `dtypesIfXPU` that excludes specific dtypes
@@ -359,6 +461,18 @@ List all collected variants to verify which dtypes are available
 **Reason 5: Test renamed or moved in base pytorch/test**
 - Test no longer exists in expected location
 - Search for renaming in git history or similar test names
+- Only classify `Not applicable / Community Changes` when the CUDA test itself no longer exists
+  or was renamed/removed in the PyTorch source being compared. If the CUDA case and XPU case both
+  exist after parametrization (for example `test_Conv1d_pad2_cuda` and `test_Conv1d_pad2_xpu`),
+  it is not a community-change case.
+
+**Reason 6: CUDA-specific API**
+- If classifying `Not Appliable`, the DetailReason must name the exact API/feature, e.g.
+  `CUDA-specific API: torch.cuda.jiterator`, `CUDA-specific API: cuBLAS`, or
+  `CUDA-specific API: CUDA-only JIT fuser`.
+- Do not classify CUDA graph/cudagraph rows as `Not Appliable` solely due to CUDA naming;
+  XPU graph support exists via `_XPUGraph` and `torch.accelerator.Graph`, so missing/failing
+  coverage should generally be `To be enabled / XPU graph coverage missing` after code inspection.
 
 #### 7.2 Cross-reference with CUDA support
 Compare `dtypesIfCUDA` vs `dtypesIfXPU` to understand:
@@ -371,14 +485,20 @@ Compare `dtypesIfCUDA` vs `dtypesIfXPU` to understand:
 torch-xpu-ops MUST be located at `third_party/torch-xpu-ops` - NOT at workspace root as a separate repo
 
 ### Distributed Test Location Constraint
-Tests with `origin_file` path like `test/distributed/test_c10d_xccl.py` are XPU-native and ONLY exist at:
-`third_party/torch-xpu-ops/test/xpu/distributed/test_c10d_xccl.py` — NOT in `pytorch/test/distributed/`
+Tests with `origin_file` path like `test/distributed/test_c10d_xccl.py` may be XPU-native and only exist at:
+`third_party/torch-xpu-ops/test/xpu/distributed/test_c10d_xccl.py` — NOT in `pytorch/test/distributed/`.
+But many distributed tests run upstream `pytorch/test/distributed/**` files through
+`run_distributed.py` and active skip dictionaries. Always inspect the current mechanism.
 
 ### Release Branch Verification Constraint
-When tests not found locally, MUST verify against upstream release branch before declaring removed:
-- Release 2.12 is the reference: https://github.com/pytorch/pytorch/tree/release/2.12
+For distributed tests only, when tests are not found locally, MUST verify against the daisyden
+release branch before declaring removed:
+- Release 2.12 is the reference: https://github.com/daisyden/pytorch/tree/release/2.12
 - Use `gh api` or raw.githubusercontent.com to check file contents at specific ref
 - Distinguish between "removed after release/2.12" vs "never existed" reasons
+
+For non-distributed tests, do not check release/2.12; classify from local `pytorch/test/` and
+local `third_party/torch-xpu-ops/test/xpu/**` source inspection.
 
 ### Conda Environment Constraint
 All Python analysis MUST be performed within `pytorch_opencode_env` conda environment to access correct pytorch modules
@@ -407,7 +527,7 @@ The generated test name dtype is determined by `dtypesIfXPU` (if set) NOT the ba
 | `third_party/torch-xpu-ops/test/xpu/quantization/` | Quantization-specific XPU tests |
 | `third_party/torch-xpu-ops/test/xpu/xpu_test_utils.py` | XPUPatchForImport class and patching logic |
 | `test/<base_test>.py` | Base test with @ops or @dtypes decorators (local main) |
-| **https://github.com/pytorch/pytorch/tree/release/2.12/test/** | **Upstream release branch - use for version-specific verification** |
+| **https://github.com/daisyden/pytorch/tree/release/2.12/test/** | **Release branch - use for distributed verification only** |
 | `torch/testing/_internal/common_methods_invocations.py` | Primary OpInfo definitions with dtypes |
 | `torch/testing/_internal/opinfo/core.py` | OpInfo class definition |
 | `torch/testing/_internal/opinfo/definitions/__init__.py` | Aggregated op_db from submodule definitions |
@@ -471,42 +591,50 @@ Reason: <absence classification>
 
 ```
 START: Identify origin_file type
-├─ origin_file contains "distributed" AND "xccl"/"c10d_xccl"
-│  └─ Check third_party/torch-xpu-ops/test/xpu/distributed/
-│     ├─ EXISTS + test class found → xpu_case_existence=True
-│     │  Reason: "XPU-native distributed test (torch-xpu-ops/distributed)"
-│     └─ NOT FOUND → xpu_case_existence=False
-│        Reason: "XCCL test not ported anywhere"
+├─ origin_file is under test/distributed/ (any distributed test)
+│  └─ STEP A: Read run_distributed.py to identify active dictionary imports
+│     └─ STEP B: Read skip_list_dist.py and skip_list_dict_local.py if present
+│        ├─ File path found in an active dict, value None
+│        │  └─ Check local pytorch/test and daisyden release/2.12 for exact test method
+│        │     ├─ Found → xpu_case_existence=True
+│        │     └─ Not found → classify by removed/renamed evidence, not by skip-list alone
+│        ├─ File path found in active dict, value tuple/list
+│        │  ├─ test_method NOT in skipped list → xpu_case_existence=True
+│        │  └─ test_method IN skipped list → xpu_case_existence=True but intentionally skipped
+│        │     DetailReason: "Skipped in <dict file>: <specific test>"
+│        └─ File path NOT in any active dict
+│           └─ STEP C: Check distributed/ subfolder for XPU-native standalone file
+│              ├─ Standalone XPU file exists AND test class/method found → xpu_case_existence=True
+│              └─ Not found anywhere → xpu_case_existence=False
+│                 DetailReason: "Distributed file missing from <dict file>"
+│                 Explanation: cite all dict files read and sibling files enabled
 │
-└─ Standard test case → Continue
+└─ Standard (non-distributed) test case → Continue below
 
-CHECK: Does XPU wrapper file exist in torch-xpu-ops/test/xpu/?
-├─ NO → Check subfolders (extended/, nn/, functorch/, quantization/)
-│  ├─ NOT FOUND →
-│  │  ├─ IF test is a distributed test (origin_file under test/distributed/):
-│  │  │   Check pytorch release/2.12 branch on GitHub for the base test.
-│  │  │   release/2.12 is the XPU distributed test branch.
-│  │  │   ├─ Base test class+method FOUND in release/2.12 → xpu_case_existence=True
-│  │  │   │  Reason: "Distributed test exists in release/2.12 (XPU distributed branch)"
-│  │  │   └─ Not found in release/2.12 → xpu_case_existence=False
-│  │  │      Reason: "No XPU wrapper and test not in release/2.12"
-│  │  └─ ELSE (non-distributed): xpu_case_existence=False
-│  │     Reason: "No XPU wrapper in torch-xpu-ops"
-│  └─ FOUND → Continue with found wrapper
-└─ YES → Continue
+CHECK: Locate XPU test file/function under all torch-xpu-ops/test/xpu subfolders
+├─ No XPU file/function/class found
+│  └─ Check local pytorch/test before concluding
+│     DetailReason: "XPU test file missing" or "Class not imported by XPU test file"
+└─ XPU file found → Continue
 
-CHECK: XPUPatchForImport parameter
-├─ True → xpu_case_existence=False
-│  Reason: "XPUPatchForImport(True) disables instantiation"
-└─ False or missing → Continue
+CHECK: Determine XPU file mechanism
+├─ Uses XPUPatchForImport(False) → imported decorators may be patched; inspect imports and instantiation
+├─ Uses XPUPatchForImport(True) → imported parametrized/device tests may not be generated
+└─ Does NOT use XPUPatchForImport → direct/standalone file; read definitions literally
 
 CHECK: Base test function/class exists in local pytorch/test?
-├─ NO → Check upstream release branch (release/2.12)
-│  ├─ Found in release/2.12 → xpu_case_existence=False
-│  │  Reason: "Test removed after release/2.12"
-│  └─ Not in release/2.12 either → xpu_case_existence=False
-│     Reason: "Test class removed/renamed in pytorch/test"
+├─ NO → xpu_case_existence=False
+│  Reason: "Test class removed/renamed in local pytorch/test"
 └─ YES → Continue
+
+CHECK: If both CUDA and XPU variants exist after parametrization
+├─ YES → NOT Community Changes; classify by XPU status/skip/failure/enablement gap
+└─ NO → For non-distributed tests, classify from local source only; release/2.12 is distributed-only
+
+CHECK: CUDA graph / cudagraph case
+├─ YES → XPU graph support exists; classify missing/failing coverage as To be enabled
+│        DetailReason: "XPU graph coverage missing" or exact XPU graph failure
+└─ NO → Continue
 
 CHECK: @skipIfXPU decorator on class/method (BLOCKS at runtime, NOT overridden by PATCH)
 ├─ YES → xpu_case_existence=True
@@ -518,12 +646,12 @@ CHECK: @skipIfXPU decorator on class/method (BLOCKS at runtime, NOT overridden b
 
 CHECK: OpInfo dtypesIfXPU excludes given dtype
 ├─ YES → xpu_case_existence=False
-│  Reason: "XPU dtype restriction in OpInfo"
+│  DetailReason: "OpInfo dtypesIfXPU excludes <dtype>"
 └─ NO → Continue
 
 CHECK: Skip decorators for XPU in OpInfo skips list
 ├─ YES → xpu_case_existence=False
-│  Reason: "OpInfo skip decorator applied"
+│  DetailReason: "OpInfo skip decorator applied: <specific decorator>"
 └─ NO → xpu_case_existence=True
    Reason: "Test exists and runs on XPU"
 ```
