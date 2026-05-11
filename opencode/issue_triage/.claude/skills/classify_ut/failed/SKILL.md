@@ -5,7 +5,7 @@ Always apply agent-guidelines rules including the mandatory post-write commit pr
 
 ## Purpose
 
-Classify rows in the `Non-Inductor XPU Skip` workbook whose `Reason` is blank and whose
+Classify rows in any XPU UT status workbook whose `Reason` is blank and whose
 `status_xpu` is `failed`. This skill is a sub-workflow of `classify_ut`; use it after the
 base workbook preparation has initialized `Reason TBD`, filled missing XPU metadata, and
 preserved the original workbook.
@@ -14,7 +14,7 @@ preserved the original workbook.
 
 - Workbook row fields: `testfile_cuda`, `classname_cuda`, `name_cuda`, `testfile_xpu`,
   `classname_xpu`, `name_xpu`, `status_xpu`, `message_xpu`, `Reason`, `DetailReason`,
-  `Exaplaination`.
+  `Explaination`, `Reason TBD`.
 - Local PyTorch checkout: `/home/daisyden/opencode/classify/pytorch`.
 - XPU test checkout: `/home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu`.
 - Conda environment: `pytorch_opencode_env`.
@@ -90,12 +90,13 @@ Run only targeted tests. Never run a whole suite.
    evidence. If the local run passes, classify as `To be enabled`; if it fails, use the local error
    and continue issue search.
 6. Decide the classification:
-   - Known XPU implementation/runtime failure -> `Reason = Failures (xpu broken)`.
-   - Known missing feature/API exposed by the failed run -> `Reason = Feature gap` only when the
-     issue/source describes unsupported functionality rather than a broken implementation.
-   - Local run passes and existing failure appears stale -> `Reason = To be enabled`.
-   - No known issue after search -> `Reason = Failures (xpu broken)` and `DetailReason` starts with
-     `[Issue TBD]`.
+    - Known XPU implementation/runtime failure -> `Reason = Failures (xpu broken)`.
+    - Known missing feature/API exposed by the failed run -> `Reason = Feature gap` only when the
+      issue/source describes unsupported functionality rather than a broken implementation.
+    - Local run passes and existing failure appears stale -> `Reason = Local Passed` (with evidence
+      saved to local verify dir).
+    - No known issue after search -> `Reason = Failures (xpu broken)` and `DetailReason` starts with
+      `[Issue TBD]`.
 7. Write concise evidence:
    - `DetailReason` includes issue link or `[Issue TBD]` plus the error summary.
    - `Exaplaination` names the exact test, states that `status_xpu` was `failed`, summarizes
@@ -134,8 +135,16 @@ These are examples, not a substitute for analysis. Re-check source and issue sta
 - `Reason`: choose one of the workbook's canonical labels, especially `Failures (xpu broken)`,
   `Feature gap`, or `To be enabled`.
 - `DetailReason`: include the issue URL when known. Otherwise start with `[Issue TBD]`.
-- `Exaplaination`: use the workbook's requested spelling. Include exact test identity, error source,
+- `Explaination`: use the workbook's requested spelling. Include exact test identity, error source,
   local-run result if used, and why the chosen Reason follows.
+
+## Local Passed for Failed-Status Rows
+
+When `status_xpu = failed` but the test PASSES locally in `pytorch_opencode_env`:
+- Reason: `Local Passed`
+- DetailReason: `Local verification passed in pytorch_opencode_env; stale failed status`
+- Save evidence to `/tmp/opencode/<workbook>_local_verify/` per parent skill requirements
+- This indicates the CI failure is flaky or already fixed in the current checkout
 
 ## Verification
 

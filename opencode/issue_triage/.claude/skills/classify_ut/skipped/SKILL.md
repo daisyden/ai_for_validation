@@ -1,175 +1,200 @@
-# classify_ut skipped cases
+# classify_ut skipped/xfail cases
 
 This skill follows agent-guidelines AND extends it with skipped-XPU-status UT classification rules.
-Always apply agent-guidelines rules including the mandatory post-write commit protocol.
 
 ## Purpose
 
-Classify rows in the `Non-Inductor XPU Skip` workbook whose `Reason` is blank and whose
-`status_xpu` is `skipped` or `xfail`. Skipped does **not** automatically mean a test environment
-limitation. Every skipped row requires semantic analysis of `message_xpu`, linked issues, local
-source, and, when needed, a targeted local run.
-
-## Required Inputs
-
-- Workbook row fields: `testfile_cuda`, `classname_cuda`, `name_cuda`, `testfile_xpu`,
-  `classname_xpu`, `name_xpu`, `status_xpu`, `message_xpu`, `Reason`, `DetailReason`,
-  `Exaplaination`.
-- Local PyTorch checkout: `/home/daisyden/opencode/classify/pytorch`.
-- XPU test checkout: `/home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu`.
-- Conda environment: `pytorch_opencode_env`.
-- GitHub issue sources: linked issue from `message_xpu`, `intel/torch-xpu-ops` known issues, and
-  PyTorch disabled-test issues when the message links to PyTorch.
+Classify rows whose `Reason` is blank and `status_xpu` is `skipped` or `xfail`.
+Skipped does **not** automatically mean a test environment limitation. Every skipped row requires
+semantic analysis of `message_xpu`, linked issues, local source, and targeted local runs.
 
 ## Required Tools
 
-- `read` - inspect test methods, decorators, skip helpers, XPU wrappers/direct tests, and skip lists.
-- `bash` - activate `pytorch_opencode_env`, run exact tests, query `gh issue view`, and inspect git
-  refs or remote files.
-- `grep` / `rg` - find exact decorators, issue links, skip reasons, and method definitions after
-  identifying the semantic target. Do not classify from grep output alone.
-- `gh` CLI - fetch issue state and body for all linked issues before classification.
-- Workbook tooling such as `openpyxl` may write results, but semantic classification must come from
-  code/issue/local-run evidence.
+| Tool | Purpose | Example |
+|------|---------|---------|
+| `read` | Inspect test methods, decorators, skip helpers | Read `test_torchinductor.py` line 4110 |
+| `bash` | Run tests locally, activate env | `python test_file.py -k pattern -v` |
+| `grep` | Find decorators, skip entries, `TestFailure` dicts | `grep -n 'skipIfXpu' test_file.py` |
+| `gh` CLI | Fetch issue state, search issues | `gh issue view 2334 --repo=intel/torch-xpu-ops --json=state,closedAt` |
+| `gh search` | Find known issues by keyword | `gh search issues "test_div7 xpu" --repo=intel/torch-xpu-ops` |
 
 ## Hard Constraints
 
-- Do not treat `status_xpu = skipped` as an environment issue by default.
+- Do not treat `status_xpu = skipped` as environment issue by default.
 - Do not classify by message pattern alone. The message points to evidence; it is not the conclusion.
-- Always inspect linked issue content and state:
-  - Closed PyTorch disabled-test issue -> usually `To be enabled`, because the disabling issue is no
-    longer active. DetailReason must include the closed issue link and say to re-enable/verify.
-  - Open PyTorch disabled-test issue -> classify by issue content as `Feature gap` or
-    `Failures (XPU broken)`; do not call it an environment limitation merely because the message says
-    the test is disabled on a platform.
-  - Intel issue link -> classify by the issue's content, not by the link alone.
-- `not-support-multithread` is a feature gap, not a test environment limitation.
-- If `message_xpu` is empty, missing, truncated, or nondiagnostic (`Skipped test`, `xfail`, etc.),
-  run the exact test locally when feasible and inspect the source of the skip.
+- Always check linked issue state (OPEN vs CLOSED) before classifying.
+- If `message_xpu` is empty or nondiagnostic, run the test locally.
 - Local runs must use `pytorch_opencode_env`.
-- Inductor/Dynamo tests in `pytorch/test` run from the `pytorch/test` folder; other XPU wrapper/direct
-  tests run from `third_party/torch-xpu-ops/test/xpu` unless source inspection proves otherwise.
-- If a skip is stale and the local run passes or the message/source says support exists, classify as
-  `To be enabled`.
-- Do not change `Reason TBD` after classification. Mark updated `Reason`, `DetailReason`, and
-  `Exaplaination` cells blue.
+- Do not change `Reason TBD` after classification.
+- Mark updated cells blue.
 
-## Local Run Rules
+## Workflow Steps
 
-Run only targeted tests. Never run a full suite.
+### Step 1: Confirm Eligibility
+- `Reason` is blank
+- `status_xpu` is `skipped` or `xfail`
+- CUDA/XPU metadata identifies the exact test case
 
-- Inductor/Dynamo upstream tests:
-  ```bash
-  source ~/miniforge3/bin/activate pytorch_opencode_env && \
-  python dynamo/test_dicts.py DictSubclassMethodsTests.test_binop_or
-  ```
-- XPU wrapper/direct tests:
-  ```bash
-  source ~/miniforge3/bin/activate pytorch_opencode_env && \
-  python test_ops_gradients_xpu.py TestBwdGradientsXPU.test_fn_fail_gradgrad_grid_sampler_2d_xpu_float64
-  ```
-- Distributed upstream tests:
-  ```bash
-  source ~/miniforge3/bin/activate pytorch_opencode_env && \
-  PYTORCH_TEST_WITH_SLOW=1 python distributed/tensor/test_random_ops.py \
-    DistTensorRandomOpTestWithLocalTensor.test_pipeline_parallel_manual_seed
-  ```
-- If running from inside the source tree imports an unbuilt `torch`, run package sanity checks from
-  `/tmp/opencode` first. For actual tests, use the test root so test imports resolve correctly.
+### Step 2: Analyze `message_xpu`
 
-## Workflow
+Parse the skip message to identify the skip mechanism:
 
-1. Confirm the row is eligible:
-   - `Reason` is blank.
-   - `status_xpu` is `skipped` or `xfail`.
-   - CUDA and XPU metadata identify the exact test case.
-2. Read and normalize `message_xpu` for readability, but do not classify from the string alone.
-3. If `message_xpu` contains a URL:
-   - Fetch the issue with `gh issue view`.
-   - Read state, title, body, platform, sample error, and affected test path.
-   - Classify by issue state and content.
-4. If there is no useful URL:
-   - Read the local source around the exact test method and decorators.
-   - Read helper/decorator implementation if the skip reason comes from a helper.
-   - Run the exact test locally if the message does not explain the skip.
-5. Decide the classification:
-   - Closed disabled issue or local pass -> `To be enabled`.
-   - Open issue describing failure/flakiness -> `Failures (XPU broken)`.
-   - Unsupported XPU functionality or missing XPU-specific coverage -> `Feature gap`.
-   - True hardware/process requirement unrelated to XPU implementation, such as requiring more GPUs
-     than the run provided or an explicitly slow-test gate -> `Test Enviroment limitation`.
-   - Stale skip where source/message says support exists -> `To be enabled`.
-6. Write evidence:
-   - `DetailReason` includes the issue link when present, or a source/local-run conclusion when no
-     issue is available.
-   - `Exaplaination` names the exact test, summarizes `message_xpu`, issue state/content, local
-     source, and local-run result if used.
+| Message Pattern | Skip Mechanism | Next Action |
+|----------------|----------------|-------------|
+| `skipIfXpu: <reason>, <issue_url>` | `@skipIfXpu` decorator | Check issue state |
+| `Test is disabled because an issue exists: <url>` | PyTorch disabled-test | Check issue state + run locally |
+| `test is slow; run with PYTORCH_TEST_WITH_SLOW` | Slow test gate | Run with `PYTORCH_TEST_WITH_SLOW=1` |
+| `Requires at least N GPUs` | Hardware requirement | `Test Enviroment limitation` |
+| `not-support-multithread` | XPU feature gap | `Feature gap` + #3098 |
+| `Only runs on cuda` | CUDA-only gate | Analyze what API is CUDA-only |
+| `Skipped!` (generic) | Various mechanisms | Read source to find skip dict/decorator |
+| `Fails with Triton update` | Unconditional `unittest.skip` | `Test Enviroment limitation` (all backends) |
+| `Fails under GCC 13` | Compiler version | `Test Enviroment limitation` |
+| `sm89 errors out` / `SM90OrLater` | CUDA compute capability gate | `To be enabled` (not CUDA-specific) |
+| Empty / `Skipped test` / `xfail` | Unknown | Run locally + read source |
 
-## Classification Examples From This Conversation
+### Step 3: Check Issue State
 
-These examples document proven decisions. Re-check issue state and source before applying elsewhere.
+For ANY issue URL found in the message or source:
 
-- `not-support-multithread`:
-  - Reason: `Feature gap`.
-  - DetailReason: `https://github.com/intel/torch-xpu-ops/issues/3098 - XPU distributed multithread support gap`.
-  - Rationale: this is an XPU distributed multithread support gap, not an environment limitation.
-- `Requires at least 2 GPUs`:
-  - Reason: `Test Enviroment limitation` when the row was skipped because the run did not satisfy a
-    real hardware-count requirement.
-  - DetailReason: the skip reason itself.
-- `test is slow; run with PYTORCH_TEST_WITH_SLOW to enable test`:
-  - Reason: `Test Enviroment limitation` when the only blocker is the slow-test gate.
-  - DetailReason: the skip reason itself.
-- Linked Intel issue `https://github.com/intel/torch-xpu-ops/issues/1682`:
-  - Reason: `Failures (XPU broken)`.
-  - Rationale: issue content describes distributed pipelining accuracy failures.
-- PyTorch disabled issue `https://github.com/pytorch/pytorch/issues/179687` or
-  `https://github.com/pytorch/pytorch/issues/179688`:
-  - Reason: `To be enabled` when the issue is closed.
-  - Rationale: the disabled-test issue is no longer active; re-enable and verify on XPU.
-- PyTorch disabled issue `https://github.com/pytorch/pytorch/issues/138885`:
-  - Reason: `Failures (XPU broken)` while the issue is open and describes failing/flaky CI behavior.
-- PyTorch XPU flaky issue `https://github.com/pytorch/pytorch/issues/110040`:
-  - Reason: `To be enabled` when the issue is closed.
-- `requires cuda and triton` on a cudagraph/structured-trace test:
-  - Reason: `To be enabled` when local source uses CUDA/Triton-only decorators or hardcoded CUDA
-    tensors but XPU graph support exists and needs XPU coverage.
-- Empty `message_xpu` with `status_xpu = xfail`:
-  - Run locally. In this conversation, `test/dynamo/test_dicts.py DictSubclassMethodsTests.test_binop_or`
-    passed in `pytorch_opencode_env`, so Reason was `To be enabled`.
-- Generic `Skipped test`:
-  - Run locally and inspect source. In this conversation,
-    `DistTensorRandomOpTestWithLocalTensor.test_pipeline_parallel_manual_seed` reproduced the skip;
-    source documented that local tensor mode does not simulate cross-pipeline-stage seeding, so
-    Reason was `Feature gap`.
-- `Only runs on cuda` for `test_cublas_deterministic*`:
-  - Reason: `Feature gap`.
-  - DetailReason includes `https://github.com/intel/torch-xpu-ops/issues/2481` when the case matches.
-- `test doesn't work on XPU backend`:
-  - Reason: `Feature gap`.
-  - DetailReason starts with `[Issue TBD]` unless a matching issue is found.
-- `Skipped! Operation does support gradgrad`:
-  - Reason: `To be enabled`.
-  - Rationale: the skip is stale because the message says support exists.
+```bash
+gh issue view <number> --repo=<org/repo> --json=state,title,closedAt
+```
+
+**Decision tree based on issue state:**
+
+```
+Issue CLOSED?
+  YES -> Run test locally
+    PASSES -> "To be enabled" (issue fixed, skip stale)
+    FAILS  -> Search for new issue, classify as failure
+  NO (OPEN) ->
+    Issue describes missing feature? -> "Feature gap"
+    Issue describes broken implementation? -> "Failures (xpu broken)"
+    Issue describes flaky CI? -> Run locally
+      PASSES -> "Local Passed"
+      FAILS  -> "Failures (xpu broken)"
+```
+
+### Step 4: Handle `Skipped!` Without Clear Message
+
+When `message_xpu` is just `Skipped!` with no explanation:
+
+1. **Find the skip source** in the test file:
+   ```bash
+   grep -n 'TestFailure\|inductor_skips\|skipIfXpu\|unittest.skip' test/inductor/<file>.py
+   ```
+
+2. **Read the skip mechanism**:
+   - `test_failures_*` dict with `is_skip=True` -> in-tree XPU skip
+   - `inductor_skips["xpu"]` -> inductor dtype/op skip
+   - `unittest.skip("reason")` -> unconditional skip (all backends)
+   - Dtype restriction in test body (`raise unittest.SkipTest("Skipped!")`) -> check allowed dtypes
+
+3. **Search for known issues**:
+   ```bash
+   gh search issues "<test_name> xpu" --repo=intel/torch-xpu-ops --limit=5
+   ```
+
+4. **Try running without the skip**:
+   - For `inductor_skips`: test the op directly via `torch.compile`
+   - For `TestFailure` dicts: run the base test in the parent test file
+   - For dtype restrictions: check if the dtype actually works on XPU
+
+5. **Classify based on results**:
+   - Base test passes -> `To be enabled` (skip is stale)
+   - Base test fails with known issue -> `Failures (xpu broken)` + issue link
+   - Base test fails without known issue -> `Failures (xpu broken)` + `[Issue TBD]`
+
+### Step 5: Handle Slow Tests
+
+```bash
+source ~/miniforge3/bin/activate pytorch_opencode_env && \
+PYTORCH_TEST_WITH_SLOW=1 python test/inductor/<file>.py -k "<test_name>" -v
+```
+
+- PASSES -> `Local Passed`, detail: `Local verification passed with PYTORCH_TEST_WITH_SLOW=1`
+- FAILS -> Search known issues, classify as failure
+- 0 tests collected -> `Not applicable` (test removed)
+
+### Step 6: Handle PyTorch Disabled-Test Issues
+
+ALL PyTorch disabled-test rows should be run locally regardless of issue state:
+
+```bash
+python test/inductor/<file>.py -k "<test_name>" -v
+```
+
+- PASSES locally -> `Local Passed` (the disabled-test mechanism is flaky CI, not a real failure)
+- FAILS locally -> `Failures (xpu broken)` or `Feature gap` based on error
+
+### Step 7: Handle `skipIfXpu` with Closed Issues
+
+When `skipIfXpu` references a CLOSED issue:
+- The issue is FIXED but the `skipIfXpu` decorator hasn't been removed yet
+- Classify as `To be enabled`
+- DetailReason: `<issue_url> (CLOSED <date>) - skipIfXpu decorator not yet removed; issue is fixed`
+
+### Step 8: Handle SM89/SM90 Capability Gates
+
+Tests skipped due to CUDA compute capability checks (e.g., `@unittest.skipIf(not SM90OrLater, ...)`):
+- These test GENERAL functionality that happens to need SM90 on NVIDIA hardware
+- XPU can run the same functionality without SM90
+- Classify as `To be enabled`
+- DetailReason: `Skipped due to SM90OrLater CUDA capability gate; XPU should support this test`
+
+## Classification Examples (Proven Decisions)
+
+### Closed skipIfXpu Issues
+
+| Test | Issue | State | Classification |
+|------|-------|-------|---------------|
+| `test_copy_non_blocking_is_pinned_*` | #2334 | CLOSED 2026-03-25 | `To be enabled` |
+| `test_div7_*` | intel-xpu-backend-for-triton#6401 | CLOSED 2026-04-22 | `To be enabled` |
+| `test_comprehensive_nn_functional_linear_xpu_float16` | #2956 | CLOSED 2026-04-01 | `To be enabled` |
+
+### Open Issues (Real Gaps)
+
+| Test | Issue | State | Classification |
+|------|-------|-------|---------------|
+| `test_bad_cast` (fp8) | #2888 | OPEN | `Feature gap` |
+| `gpu_cpp_wrapper` complex add tests | #3187 | OPEN | `Failures (xpu broken)` |
+| `not-support-multithread` | #3098 | OPEN | `Feature gap` |
+
+### Stale Skips Without Issues
+
+| Test | Evidence | Classification |
+|------|----------|---------------|
+| `inductor_skips["xpu"]["lu"] = {f32}` | `torch.linalg.lu` passes through `torch.compile` on XPU | `To be enabled` |
+| `inductor_skips["xpu"]["masked.cumprod"] = {f16}` | `torch.masked.cumprod` passes on XPU | `To be enabled` |
+| `test_remove_noop_slice` compile_subprocess skip | Base test passes in `test_torchinductor.py` | `To be enabled` |
+
+### Local Passed Examples
+
+| Test | Evidence | Classification |
+|------|----------|---------------|
+| PyTorch disabled-test #176968 | `python test_compile_worker.py -k test_quiesce_repeatedly` -> OK | `Local Passed` |
+| Slow test with `PYTORCH_TEST_WITH_SLOW=1` | Ran 1 test in 77.9s, OK | `Local Passed` |
+| `test_low_memory_max_pool_dilation_*` | XPU variants pass (use_block_ptr_{False,True}_xpu) | `Local Passed` |
+
+### Environment Limitations
+
+| Test | Evidence | Classification |
+|------|----------|---------------|
+| `Fails with Triton update` | Unconditional `unittest.skip` in source, all backends | `Test Enviroment limitation` |
+| `GCC 13 vector codegen` | CPU test, compiler version dependent | `Test Enviroment limitation` |
+| `Requires at least 2 GPUs` | Hardware requirement | `Test Enviroment limitation` |
 
 ## Output Rules
 
-- `Reason`: use canonical workbook labels: `To be enabled`, `Feature gap`,
-  `Failures (XPU broken)`, `Failures (xpu broken)`, or `Test Enviroment limitation` as appropriate.
-- `DetailReason`: include linked issue URL and semantic conclusion. If no known issue exists and the
-  row represents a failure, start with `[Issue TBD]`.
-- `Exaplaination`: keep the workbook spelling and include exact test identity, message/source/issue
-  evidence, local-run result if used, and the reason for the final classification.
+- `Reason`: use canonical workbook labels exactly as spelled
+- `DetailReason`: include linked issue URL and semantic conclusion
+- `Explaination`: include test identity, tools used, evidence found, reasoning chain
 
 ## Verification
 
-- Re-open the output workbook with `openpyxl`.
-- Confirm no eligible blank `Reason` rows remain for the processed set.
-- Confirm `Reason TBD` values were not flipped after classification.
-- Confirm updated cells are blue.
-- Spot-check at least:
-  - one `not-support-multithread` row,
-  - one closed PyTorch disabled issue row,
-  - one open PyTorch disabled issue row,
-  - one row verified by a local run,
-  - one true environment-limitation row.
+- Re-open output workbook with `openpyxl`
+- Confirm 0 eligible blank `Reason` rows remain
+- Confirm `Reason TBD` values unchanged
+- Confirm updated cells are blue
+- Spot-check at least one row from each classification category
