@@ -13,11 +13,12 @@ and targeted local runs when needed.
 ## Required Inputs
 
 - Workbook row fields: `testfile_cuda`, `classname_cuda`, `name_cuda`, `testfile_xpu`,
-  `classname_xpu`, `name_xpu`, `status_xpu`, `Reason`, `DetailReason`, `Explaination`,
+  `classname_xpu`, `name_xpu`, `status_xpu`, `Reason`, `DetailReason`,
   `Reason TBD`.
 - Local PyTorch checkout: `/home/daisyden/opencode/classify/pytorch`.
 - XPU test checkout: `/home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu`.
-- Conda environment: `pytorch_opencode_env`.
+- Conda environment: `pytorch_opencode_env` with up-to-date nightly torch, triton-xpu, and
+  source code (see parent `classify_ut/SKILL.md` Environment Setup).
 - Deep case-existence workflow:
   `/home/daisyden/opencode/ai_for_validation/opencode/issue_triage/.claude/skills/bug_scrub/analyze_ci_result/check_xpu_case_existence/SKILL.md`.
 
@@ -56,7 +57,7 @@ and targeted local runs when needed.
   the source being compared. If an XPU variant exists after parametrization, do not call it community
   changes.
 - Do not change `Reason TBD` after classification. Mark updated `Reason`, `DetailReason`, and
-  `Exaplaination` cells blue.
+  `DetailReason` cells blue.
 
 ## Workflow
 
@@ -64,15 +65,26 @@ and targeted local runs when needed.
    - `Reason` is blank.
    - `status_xpu` is blank.
    - CUDA metadata identifies the exact test file, class, and method.
-2. Derive missing XPU metadata only as a starting point:
+2. Check for Community Change regression:
+   - If `last_status_xpu = passed` (test previously passed but is now blank/not run):
+     a. Use `git log --oneline -20 -- <testfile_cuda>` to find recent commits.
+     b. Use `git show <commit_hash> -- <testfile_cuda>` to inspect diffs.
+     c. Look for: test renamed/removed, parametrization changed, class restructured,
+        `instantiate_device_type_tests` altered, file moved.
+     d. If guilty commit found: Reason = `Community Change`,
+        DetailReason = `Community commit <hash> (<author>, <date>) - <summary>`.
+     e. If no relevant commit, continue to step 3.
+3. Derive missing XPU metadata only as a starting point:
    - `classname_cuda` ending in `CUDA` -> `XPU`.
    - `name_cuda` ending in `_cuda` -> `_xpu`.
    - `testfile_xpu` defaults to `testfile_cuda` when blank.
    Then verify against actual XPU source; do not trust the derived names blindly.
-3. Determine whether the row is distributed:
+4. Determine whether the row is distributed:
    - If `testfile_cuda` is under `test/distributed/`, follow the distributed workflow below.
    - Otherwise follow the non-distributed workflow below.
-4. Write one of the canonical outcomes:
+5. Write one of the canonical outcomes:
+   - `Reason = Community Change` when `last_status_xpu = passed` and a guilty upstream commit
+     is identified (see step 2).
    - `Reason = To be enabled` for missing XPU registration, existing-but-unreported XPU cases,
      explicit XPU skips needing enablement, or missing XPU coverage for supported functionality.
    - `Reason = Not Appliable` for CUDA-only APIs or backend-specific features that cannot apply to
@@ -151,6 +163,21 @@ Distributed XPU tests usually do not use `*_xpu.py` wrappers. They run upstream 
    `Not applicable / Community Changes` with the exact source evidence.
 10. If source proves the test is CUDA-only, classify `Not Appliable` and name the exact API.
 
+### Rows with No XPU Test Data
+
+When a row has CUDA data but no XPU data (blank `status_xpu`, `name_xpu`, `device_xpu`), do NOT
+use generic reasons like "No XPU test data" or "CUDA-only test". Instead:
+
+1. **Read the test source** to understand what API/feature it tests.
+2. **Check if the test uses device-agnostic patterns** (`GPU_TYPE`, `instantiate_device_type_tests`,
+   parametrized devices). If so, the test SHOULD run on XPU -> `To be enabled`.
+3. **Check if the test uses CUDA-specific APIs** (`torch.cuda.jiterator`, cuBLAS, TensorExpr CUDA
+   fuser, CUDA-only decorators like `@onlyCUDA`). If so -> `Not Appliable` with the exact API named.
+4. **Check if the test file is in the XPU CI test list** (torch-xpu-ops test runner). If not,
+   explain that the file is not included in the XPU CI runner.
+5. `DetailReason` MUST always name the specific API or feature tested and WHY XPU does or does not
+   support it. Never write just "CUDA-only test" or "No XPU test data".
+
 ## Known Blank-Status Classifications From This Workflow
 
 These are examples, not substitutes for analysis. Re-check source before applying.
@@ -158,32 +185,32 @@ These are examples, not substitutes for analysis. Re-check source before applyin
 - Remote distributed file enabled:
   - Reason: `To be enabled`.
   - DetailReason: `Distributed file enabled in remote distributed skip list: <file>`.
-  - Explanation should name the remote skip-list files read and say that the file is registered for
+  - DetailReason should name the remote skip-list files read and say that the file is registered for
     XPU through `run_distributed.py`.
 - Remote distributed file missing:
   - Reason: `To be enabled`.
   - DetailReason: `Distributed file missing from remote distributed skip list: <file>`.
-  - Explanation should name checked dictionaries, release/2.12 file presence, and enabled sibling
+  - DetailReason should name checked dictionaries, release/2.12 file presence, and enabled sibling
     files when useful.
 - CUDA graph / cudagraph coverage:
   - Reason: `To be enabled`.
   - DetailReason: `XPU graph coverage missing` or a similarly specific XPU graph gap.
-  - Explanation should mention that XPU graph APIs exist and identify the missing XPU test coverage.
+  - DetailReason should mention that XPU graph APIs exist and identify the missing XPU test coverage.
 - Jiterator blank-status rows:
   - Reason: `Not Appliable`.
   - DetailReason: `CUDA-specific API: torch.cuda.jiterator`.
-  - Explanation should mention the concrete `torch.cuda.jiterator` APIs used.
+  - DetailReason should mention the concrete `torch.cuda.jiterator` APIs used.
 - cuBLAS deterministic blank-status rows:
   - Reason: `Not Appliable`.
   - DetailReason: `CUDA-specific API: cuBLAS`.
-  - Explanation should mention the cuBLAS determinism behavior and any `@onlyCUDA` evidence.
+  - DetailReason should mention the cuBLAS determinism behavior and any `@onlyCUDA` evidence.
 - TensorExpr CUDA fuser rows:
   - Reason: `Not Appliable`.
   - DetailReason: `CUDA-specific API: TensorExpr CUDA fuser`.
 - Existing XPU wrapper/direct file with generated XPU test but no XPU workbook result:
   - Reason: `To be enabled`.
   - DetailReason: `Test exists but blank: <XPU class or file>`.
-  - Explanation should name the exact XPU source file/class/function and expected XPU test name.
+  - DetailReason should name the exact XPU source file/class/function and expected XPU test name.
 - Direct PyTorch test file with case-level collection evidence:
   - If the exact case is collected or generated from `pytorch/test`, classify using that direct
     source evidence. Do not require a `third_party/torch-xpu-ops/test/xpu` wrapper.
@@ -195,16 +222,17 @@ These are examples, not substitutes for analysis. Re-check source before applyin
 - Local base test missing or method removed for a non-distributed row:
   - Reason: `Not applicable`.
   - DetailReason: `Community Changes`.
-  - Explanation should name the local source evidence and state that non-distributed release/2.12 was
+  - DetailReason should name the local source evidence and state that non-distributed release/2.12 was
     not used.
 
 ## Output Rules
 
-- `Reason`: use canonical workbook labels: `To be enabled`, `Not Appliable`, or `Not applicable`.
-- `DetailReason`: be specific enough to act on. Avoid generic `No XPU wrapper` and generic
-  `CUDA-specific API`.
-- `Explaination`: keep the workbook spelling. Include exact test identity, source files read,
-  skip-list or wrapper evidence, and why the selected Reason follows.
+- `Reason`: use canonical workbook labels: `To be enabled`, `Not Appliable`, `Not applicable`,
+  or `Community Change`.
+- `DetailReason`: be specific enough to act on. Always use full issue/PR URLs
+  (e.g., `https://github.com/pytorch/pytorch/issues/NNNNN`), never bare numbers like `#NNNNN`.
+  Include exact test identity, source files read, skip-list or wrapper evidence, and reasoning.
+  Avoid generic `No XPU wrapper` and generic `CUDA-specific API`.
 
 ## Verification
 

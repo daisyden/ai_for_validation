@@ -14,10 +14,11 @@ preserved the original workbook.
 
 - Workbook row fields: `testfile_cuda`, `classname_cuda`, `name_cuda`, `testfile_xpu`,
   `classname_xpu`, `name_xpu`, `status_xpu`, `message_xpu`, `Reason`, `DetailReason`,
-  `Explaination`, `Reason TBD`.
+  `Reason TBD`.
 - Local PyTorch checkout: `/home/daisyden/opencode/classify/pytorch`.
 - XPU test checkout: `/home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu`.
-- Conda environment: `pytorch_opencode_env`.
+- Conda environment: `pytorch_opencode_env` with up-to-date nightly torch, triton-xpu, and
+  source code (see parent `classify_ut/SKILL.md` Environment Setup).
 - GitHub issue source of truth: `intel/torch-xpu-ops` issues first; use PyTorch issues only
   when the message or local source explicitly references a PyTorch issue.
 
@@ -39,16 +40,17 @@ preserved the original workbook.
 - Always read enough code to understand what the test is validating.
 - Always inspect `message_xpu`; if it is missing, empty, truncated beyond usefulness, or only says
   that a process exited, run the exact test locally to get a useful error whenever feasible.
-- Local runs must use `pytorch_opencode_env`.
+- Local runs must use `pytorch_opencode_env` with up-to-date nightly torch, triton-xpu, and
+  source code (see parent `classify_ut/SKILL.md` Environment Setup).
 - Avoid importing the unbuilt source-tree `torch` accidentally. When checking the installed torch
   package directly, run from outside the PyTorch checkout, for example `/tmp/opencode`. When running
   tests, use the correct test root described below.
 - If a matching known issue exists, `DetailReason` must include the issue URL.
 - If no known issue exists after searching `intel/torch-xpu-ops`, `DetailReason` must start with
-  `[Issue TBD]` and include the concrete error summary.
+  `[Issue_TBD]` and include the concrete error summary.
 - Do not change `Reason TBD` after classification. It records whether the original `Reason` was
   blank before analysis.
-- Mark updated `Reason`, `DetailReason`, and `Exaplaination` cells blue; leave unrelated cells alone.
+- Mark updated `Reason` and `DetailReason` cells blue; leave unrelated cells alone.
 
 ## Local Run Rules
 
@@ -77,8 +79,18 @@ Run only targeted tests. Never run a whole suite.
    - `Reason` is blank.
    - `status_xpu` is exactly `failed`.
    - CUDA and XPU metadata identify the exact test case.
-2. Normalize `message_xpu` for readability only. Do not classify solely from text matching.
-   Preserve enough of the original failure in `Exaplaination`.
+2. Check for Community Change regression:
+   - If `last_status_xpu = passed` (test previously passed but now fails):
+     a. Use `git log --oneline -20 -- <testfile_cuda>` to find recent commits.
+     b. Use `git show <commit_hash> -- <testfile_cuda>` to inspect diffs.
+     c. Look for: test logic changed, expected values updated, new assertions added,
+        API signature changed.
+     d. If a community commit changed the test in a way that breaks XPU but not CUDA:
+        Reason = `Community Change`,
+        DetailReason = `Community commit <hash> (<author>, <date>) - <summary>`.
+     e. If no relevant commit, continue to step 3.
+3. Normalize `message_xpu` for readability only. Do not classify solely from text matching.
+   Preserve enough of the original failure in `DetailReason`.
 3. Inspect the relevant local source:
    - Base test under `test/`.
    - XPU wrapper/direct file under `third_party/torch-xpu-ops/test/xpu/**` if present.
@@ -95,12 +107,12 @@ Run only targeted tests. Never run a whole suite.
       issue/source describes unsupported functionality rather than a broken implementation.
     - Local run passes and existing failure appears stale -> `Reason = Local Passed` (with evidence
       saved to local verify dir).
-    - No known issue after search -> `Reason = Failures (xpu broken)` and `DetailReason` starts with
-      `[Issue TBD]`.
+  - No known issue after search -> `Reason = Failures (xpu broken)` and `DetailReason` starts with
+    `[Issue_TBD]`.
 7. Write concise evidence:
-   - `DetailReason` includes issue link or `[Issue TBD]` plus the error summary.
-   - `Exaplaination` names the exact test, states that `status_xpu` was `failed`, summarizes
-     `message_xpu` or local-run output, and names the source/issue inspected.
+   - `DetailReason` includes issue link or `[Issue_TBD]` plus the error summary, exact test
+     identity, that `status_xpu` was `failed`, `message_xpu` or local-run output summary,
+     and source/issue inspected.
 
 ## Known Failed-Case Classifications From This Workflow
 
@@ -134,9 +146,10 @@ These are examples, not a substitute for analysis. Re-check source and issue sta
 
 - `Reason`: choose one of the workbook's canonical labels, especially `Failures (xpu broken)`,
   `Feature gap`, or `To be enabled`.
-- `DetailReason`: include the issue URL when known. Otherwise start with `[Issue TBD]`.
-- `Explaination`: use the workbook's requested spelling. Include exact test identity, error source,
-  local-run result if used, and why the chosen Reason follows.
+- `DetailReason`: include the full issue/PR URL when known (e.g.,
+  `https://github.com/intel/torch-xpu-ops/issues/NNNN`), never bare numbers like `#NNNN`.
+  Otherwise start with `[Issue_TBD]`. Extract URLs from `message_xpu` when present.
+  Include exact test identity, error source, local-run result if used, and reasoning.
 
 ## Local Passed for Failed-Status Rows
 
@@ -152,4 +165,4 @@ When `status_xpu = failed` but the test PASSES locally in `pytorch_opencode_env`
 - Confirm no eligible blank `Reason` rows remain for the processed set.
 - Confirm `Reason TBD` values were not flipped after classification.
 - Confirm updated cells are blue.
-- Spot-check at least one known-issue row and one `[Issue TBD]` row against source/issue evidence.
+- Spot-check at least one known-issue row and one `[Issue_TBD]` row against source/issue evidence.

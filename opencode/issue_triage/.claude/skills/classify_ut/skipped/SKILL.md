@@ -24,7 +24,8 @@ semantic analysis of `message_xpu`, linked issues, local source, and targeted lo
 - Do not classify by message pattern alone. The message points to evidence; it is not the conclusion.
 - Always check linked issue state (OPEN vs CLOSED) before classifying.
 - If `message_xpu` is empty or nondiagnostic, run the test locally.
-- Local runs must use `pytorch_opencode_env`.
+- Local runs must use `pytorch_opencode_env` with up-to-date nightly torch, triton-xpu, and
+  source code (see parent `classify_ut/SKILL.md` Environment Setup).
 - Do not change `Reason TBD` after classification.
 - Mark updated cells blue.
 
@@ -35,13 +36,48 @@ semantic analysis of `message_xpu`, linked issues, local source, and targeted lo
 - `status_xpu` is `skipped` or `xfail`
 - CUDA/XPU metadata identifies the exact test case
 
-### Step 2: Analyze `message_xpu`
+### Step 1.5: Check for Community Change Regression
 
-Parse the skip message to identify the skip mechanism:
+If `last_status_xpu = passed` (test previously passed on XPU but is now skipped):
+
+1. This is likely a regression from an upstream commit. Check git log first:
+   ```bash
+   cd /home/daisyden/opencode/classify/pytorch
+   git log --oneline -20 -- <testfile_cuda>
+   ```
+2. For candidate commits, inspect the diff:
+   ```bash
+   git show <commit_hash> -- <testfile_cuda>
+   ```
+3. Look for changes that would cause the skip: new skip decorator, renamed method,
+   changed parametrization, restructured test class, new `TestFailure` entry, etc.
+4. If a guilty commit is found:
+   - Reason: `Community Change`
+   - DetailReason: `Community commit <short_hash> (<author>, <date>) - <summary>.`
+     Include git log + git show evidence, how the commit caused the skip
+5. If no relevant commit found, continue to Step 2 (normal skip analysis).
+
+### Step 2: Check for CPU Test (Priority Rule)
+
+Before analyzing the skip message, check if this is a CPU test:
+- Test name ends with `_cpu` or contains `_cpu_` (e.g., `test_fp8_cpu`, `test_while_loop_with_parameters_cpu`)
+- Test has `cpu` as device parameter in parametrization
+- Skip message says "requires GPU", "requires a GPU", "GPU_TYPE", or similar
+
+If ANY of the above is true:
+- Reason: `Not applicable`
+- DetailReason: `CPU Case. CPU test (device=cpu per test name/parametrization), not relevant to XPU validation`
+- Skip remaining steps.
+
+### Step 3: Analyze `message_xpu`
+
+Parse the skip message to identify the skip mechanism. **When `message_xpu` contains a URL,
+always extract and include the full URL in `DetailReason`.**
 
 | Message Pattern | Skip Mechanism | Next Action |
 |----------------|----------------|-------------|
-| `skipIfXpu: <reason>, <issue_url>` | `@skipIfXpu` decorator | Check issue state |
+| `Test is disabled because an issue exists disabling it: <URL>` | PyTorch disabled-test | Extract URL -> `Community Change`, DetailReason = full URL |
+| `skipIfXpu: <reason>, <issue_url>` | `@skipIfXpu` decorator | Extract URL -> Check issue state |
 | `Test is disabled because an issue exists: <url>` | PyTorch disabled-test | Check issue state + run locally |
 | `test is slow; run with PYTORCH_TEST_WITH_SLOW` | Slow test gate | Run with `PYTORCH_TEST_WITH_SLOW=1` |
 | `Requires at least N GPUs` | Hardware requirement | `Test Enviroment limitation` |
@@ -53,7 +89,7 @@ Parse the skip message to identify the skip mechanism:
 | `sm89 errors out` / `SM90OrLater` | CUDA compute capability gate | `To be enabled` (not CUDA-specific) |
 | Empty / `Skipped test` / `xfail` | Unknown | Run locally + read source |
 
-### Step 3: Check Issue State
+### Step 4: Check Issue State
 
 For ANY issue URL found in the message or source:
 
@@ -76,7 +112,7 @@ Issue CLOSED?
       FAILS  -> "Failures (xpu broken)"
 ```
 
-### Step 4: Handle `Skipped!` Without Clear Message
+### Step 5: Handle `Skipped!` Without Clear Message
 
 When `message_xpu` is just `Skipped!` with no explanation:
 
@@ -103,10 +139,10 @@ When `message_xpu` is just `Skipped!` with no explanation:
 
 5. **Classify based on results**:
    - Base test passes -> `To be enabled` (skip is stale)
-   - Base test fails with known issue -> `Failures (xpu broken)` + issue link
-   - Base test fails without known issue -> `Failures (xpu broken)` + `[Issue TBD]`
+    - Base test fails with known issue -> `Failures (xpu broken)` + issue link in DetailReason
+    - Base test fails without known issue -> `Failures (xpu broken)` + `[Issue_TBD]` prefix in DetailReason
 
-### Step 5: Handle Slow Tests
+### Step 6: Handle Slow Tests
 
 ```bash
 source ~/miniforge3/bin/activate pytorch_opencode_env && \
@@ -117,7 +153,7 @@ PYTORCH_TEST_WITH_SLOW=1 python test/inductor/<file>.py -k "<test_name>" -v
 - FAILS -> Search known issues, classify as failure
 - 0 tests collected -> `Not applicable` (test removed)
 
-### Step 6: Handle PyTorch Disabled-Test Issues
+### Step 7: Handle PyTorch Disabled-Test Issues
 
 ALL PyTorch disabled-test rows should be run locally regardless of issue state:
 
@@ -128,14 +164,14 @@ python test/inductor/<file>.py -k "<test_name>" -v
 - PASSES locally -> `Local Passed` (the disabled-test mechanism is flaky CI, not a real failure)
 - FAILS locally -> `Failures (xpu broken)` or `Feature gap` based on error
 
-### Step 7: Handle `skipIfXpu` with Closed Issues
+### Step 8: Handle `skipIfXpu` with Closed Issues
 
 When `skipIfXpu` references a CLOSED issue:
 - The issue is FIXED but the `skipIfXpu` decorator hasn't been removed yet
 - Classify as `To be enabled`
 - DetailReason: `<issue_url> (CLOSED <date>) - skipIfXpu decorator not yet removed; issue is fixed`
 
-### Step 8: Handle SM89/SM90 Capability Gates
+### Step 9: Handle SM89/SM90 Capability Gates
 
 Tests skipped due to CUDA compute capability checks (e.g., `@unittest.skipIf(not SM90OrLater, ...)`):
 - These test GENERAL functionality that happens to need SM90 on NVIDIA hardware
@@ -177,6 +213,14 @@ Tests skipped due to CUDA compute capability checks (e.g., `@unittest.skipIf(not
 | Slow test with `PYTORCH_TEST_WITH_SLOW=1` | Ran 1 test in 77.9s, OK | `Local Passed` |
 | `test_low_memory_max_pool_dilation_*` | XPU variants pass (use_block_ptr_{False,True}_xpu) | `Local Passed` |
 
+### CPU Tests (Not applicable)
+
+| Test | Evidence | Classification |
+|------|----------|---------------|
+| `test_fp8_cpu` | Test name ends with `_cpu`, skip msg "requires GPU" | `Not applicable`, DetailReason=`CPU Case` |
+| `test_while_loop_with_parameters_cpu` | Test name ends with `_cpu` | `Not applicable`, DetailReason=`CPU Case` |
+| `test_fp8_cpu_with_stack_allocation` | Test name contains `_cpu_` | `Not applicable`, DetailReason=`CPU Case` |
+
 ### Environment Limitations
 
 | Test | Evidence | Classification |
@@ -188,8 +232,9 @@ Tests skipped due to CUDA compute capability checks (e.g., `@unittest.skipIf(not
 ## Output Rules
 
 - `Reason`: use canonical workbook labels exactly as spelled
-- `DetailReason`: include linked issue URL and semantic conclusion
-- `Explaination`: include test identity, tools used, evidence found, reasoning chain
+- `DetailReason`: include full issue/PR URL (e.g., `https://github.com/pytorch/pytorch/issues/NNNNN`),
+  never bare numbers like `#NNNNN`. Extract URLs from `message_xpu` when present.
+  Include test identity, tools used, evidence found, and reasoning chain.
 
 ## Verification
 
