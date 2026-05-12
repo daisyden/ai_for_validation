@@ -56,11 +56,16 @@ classification must follow the status-specific skill.
 
 ### `Reason TBD` (Boolean)
 
-Tracks whether the **original** Reason was blank when the workbook was first processed:
-- If `Reason` is blank at processing time -> set `Reason TBD = True`
-- If `Reason` is already filled -> set `Reason TBD = False`
+Tracks whether the **original** Reason was blank in the SOURCE workbook (e.g.,
+`Inductor_ut_status_ww18_26.xlsx`), NOT the `.agent.xlsx` output:
+- Compare against the ORIGINAL workbook to determine the value
+- If `Reason` is blank in the ORIGINAL workbook -> set `Reason TBD = True`
+- If `Reason` is already filled in the ORIGINAL workbook -> set `Reason TBD = False`
 - **NEVER change `Reason TBD` after initialization.** It is a permanent record of which rows
   required deep analysis, regardless of whether analysis is now complete.
+- **NEVER set `Reason TBD = False` when filling in a Reason.** The column records the ORIGINAL
+  state, not the current state. A row with `Reason TBD = True` and `Reason = "Not applicable"`
+  means "this row originally had no Reason and was classified by deep analysis."
 
 ### `Reason` (String) - Canonical Labels
 
@@ -307,9 +312,10 @@ If the environment is already up-to-date from a recent run in the same session, 
 1. Run the environment setup steps above (update source + packages).
 2. Open the target sheet in the workbook.
 3. Ensure workbook column `Reason TBD` exists.
-4. Initialize `Reason TBD` from the current `Reason` value:
-   - if `Reason` is blank, set `Reason TBD = True`
+4. Initialize `Reason TBD` from the ORIGINAL workbook's `Reason` value (not the `.agent.xlsx`):
+   - if `Reason` is blank in the original, set `Reason TBD = True`
    - otherwise set `Reason TBD = False`
+   - Once set, NEVER modify this column again during classification or reclassification
 5. If XPU test metadata is blank, derive it from CUDA metadata:
    - `classname_cuda` ending with `CUDA` -> replace with `XPU`
    - `name_cuda` ending with `_cuda` -> replace with `_xpu`
