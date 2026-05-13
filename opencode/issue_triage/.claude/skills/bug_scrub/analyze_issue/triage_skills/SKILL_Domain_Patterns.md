@@ -84,6 +84,10 @@ Multi-dimension analysis for:
 - Driver/hardware (device errors)
 
 ### Step 6: Dependency Check
+Run this only after deep analysis has drafted root cause and fix approach.
+Use the diagnosed failing component and proposed fix path as primary evidence,
+then confirm operator-based dependencies with the registry.
+
 ```python
 # From xpu_supported_operators_complete_list.md
 grep("operator_name", path, include="*.md")  # Find operator dependencies

@@ -65,6 +65,8 @@ Notes:
 
 Pick **exactly one** value. Populates Excel column "Dependency".
 
+Run dependency classification **after** drafting `root_cause` and `fix_approach`. Dependency is a final ownership/component classification that should use the confirmed failing component, the diagnosed root cause, and the proposed fix path. Do not assign dependency from title, labels, or operator name before root-cause analysis is complete.
+
 | Value | Use when |
 |---|---|
 | `driver` | ocloc / IGC / libigc / intel-igc-cm / level-zero / compute-runtime / drm_neo / SYCL runtime bug / GPU segfault at driver layer |
@@ -96,7 +98,9 @@ If the input row already has a non-blank `Priority`, treat it as the labeled val
 2. **Locate** test/code/error — read relevant files, grep for the failing symbol.
 3. **Reproduce** (when applicable): write a minimal Python reproducer and verify it triggers the same error. See `SKILL_Mini_Reproducer.md` for the template, iteration budget, and acceptance criteria. Skip for pure tracker / doc / infra issues.
 4. **Cite** file:line evidence (torch-xpu-ops source and/or pytorch source).
-5. **Classify** using the four taxonomies above and write the JSON entry. Preserve an existing non-blank `Priority` from `PyTorchXPU Priority` instead of recomputing it.
+5. **Draft root_cause and fix_approach first** from the evidence. For new issues, existing Excel triage fields may be blank; do not wait for them or treat blanks as evidence.
+6. **Assign dependency, priority, and category last** using the taxonomy docs after root cause/fix approach are known. Dependency should learn from root_cause and fix_approach; category and priority are final classifications, not early keyword passes. Exception: preserve an existing non-blank `Priority` from `PyTorchXPU Priority` instead of recomputing it.
+7. Write the JSON entry.
 
 ### Pinned Reference Paths
 
@@ -177,10 +181,19 @@ See `SKILL_Batch_Orchestration.md` for the wave-based parallel pattern (5 issues
 │ • Multi-dimension analysis based on explore findings            │
 │ • XPU implementation vs CPU fallback comparison                 │
 │ • Kernel code investigation                                      │
+│ • Draft root_cause and fix_approach evidence                    │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│ STEP 6: Dependency Analysis & Report                            │
+│ STEP 6: Final Dependency / Priority / Category Assignment        │
+├─────────────────────────────────────────────────────────────────┤
+│ • Assign Dependency from confirmed failing component, root_cause,│
+│   and fix_approach                                               │
+│ • Assign Priority from verified impact, unless the input row     │
+│   already has labeled PyTorchXPU Priority                        │
+│ • Assign Category from root-cause/source evidence                │
+│ • New-case Excel triage fields may be blank; use issue/log/     │
+│   source evidence, not empty cells, as classification input      │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -578,10 +591,10 @@ bash(command="source ~/miniforge3/bin/activate pytorch_opencode_env && python -c
 
 ## Category Analysis
 
-Add SKILL_Category_Analysis.md to the triage workflow for automatic issue categorization:
+Apply SKILL_Category_Analysis.md only after the issue has gone through triage_skills root-cause analysis and fix_approach drafting. Category assignment uses the root cause, failing component, and source/test evidence; it must not run as an early keyword-only pass.
 
 ```python
-# Step X: Category Analysis
+# Final Step: Category Analysis (after root_cause and fix_approach)
 task(description="category_analysis",
      prompt="Analyze issue for category classification:\n\nCategories:\n1. Distributed - XCCL, NCCL, DDP, FSDP\n2. TorchAO - torchao, quantize_, int4/int8\n3. PT2E - torch.export(), Dynamo, fake_tensor\n4. Flash Attention - flash_attention, SDPA, attention\n5. Sparse - sparse tensor, BSR, CSR, COO\n6. Inductor - torch.compile(), Triton, codegen\n7. Torch Runtime - OOM, kernel launch, memory\n8. Torch Operations - aten::, native ops\n9. Others\n\nAnalyze issue text, stack trace, and code patterns\nto determine primary and secondary categories.",
      subagent_type="explore")
@@ -598,11 +611,11 @@ CATEGORIES = {
 
 ## Priority Analysis
 
-Add SKILL_Priority_Analysis.md for automatic priority classification. If the row already has a non-blank `Priority`, preserve it as the GitHub Projects labeled priority and skip computed priority assignment:
+Apply SKILL_Priority_Analysis.md only after root_cause and fix_approach are drafted. Priority assignment uses the verified failure mode and impact from triage; it must not run before the issue is understood. If the row already has a non-blank `Priority`, preserve it as the GitHub Projects labeled priority and skip computed priority assignment.
 
 ```python
-# Step Y: Priority Analysis
-# Uses weighted scoring across multiple dimensions:
+# Final Step: Priority Analysis (after root_cause and fix_approach)
+# Uses verified triage evidence across multiple dimensions:
 # - Error type (40%): Fatal/Error/Warning
 # - Test failures (30%): Many/few failures
 # - Regression (20%): Was passing, now failing
@@ -623,8 +636,8 @@ Add SKILL_Priority_Analysis.md for automatic priority classification. If the row
 
 | Skill | File | Purpose |
 |-------|------|---------|
-| Priority Analysis | SKILL_Priority_Analysis.md | Automatic priority classification |
-| Category Analysis | SKILL_Category_Analysis.md | Automatic issue categorization |
+| Priority Analysis | SKILL_Priority_Analysis.md | Final priority assignment after root cause/fix approach |
+| Category Analysis | SKILL_Category_Analysis.md | Final category assignment after root cause/fix approach |
 | Deep Analysis | SKILL_Deep_Analysis_Patterns.md | Multi-dimension analysis logic |
 | Domain Patterns | SKILL_Domain_Patterns.md | Quick reference & tools |
 | Mini Reproducer | SKILL_Mini_Reproducer.md | STEP 3.5: write & verify minimal Python reproducer |

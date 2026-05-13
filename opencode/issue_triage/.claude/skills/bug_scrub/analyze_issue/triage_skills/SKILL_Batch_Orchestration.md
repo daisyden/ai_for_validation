@@ -78,10 +78,16 @@ REFERENCES:
 WORKFLOW PER ISSUE:
 1. gh issue view <id> --repo intel/torch-xpu-ops --json title,body,labels,comments,state
 2. Locate test/code/error — cite file:line evidence
-3. Classify using the authoritative Category Taxonomy (8 buckets),
-   Dependency Taxonomy, and Priority rubric from SKILL.md. If the batch input row has a non-blank priority, preserve that value because it came from GitHub Projects `PyTorchXPU Priority`; only compute priority when the input priority is blank.
-4. root_cause: 2-4 sentences with file:line
-5. fix_approach: actionable next steps
+3. root_cause: 2-4 sentences with file:line
+4. fix_approach: actionable next steps
+5. Classify last using the authoritative Category Taxonomy,
+   Dependency Taxonomy, and Priority rubric from SKILL.md. Do not assign
+   dependency/category/priority before root_cause and fix_approach are drafted.
+   Dependency must use the confirmed failing component, root_cause, and
+   fix_approach as evidence. If the batch input row has a non-blank priority,
+   preserve that value because it came from GitHub Projects `PyTorchXPU Priority`;
+   only compute priority when the input priority is blank. New-case Excel triage
+   fields may be blank; use issue/log/source evidence instead.
 
 OUTPUT: JSON array of 5 entries only — no wrapping, no prose, no markdown fences.
 Schema per entry: {row, issue_id, category, priority, dependency, root_cause, fix_approach}

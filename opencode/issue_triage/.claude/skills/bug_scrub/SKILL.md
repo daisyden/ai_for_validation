@@ -1,8 +1,13 @@
 # Bug Scrub Workflow
 
 ## Overview
-Comprehensive workflow for triaging torch-xpu-ops issues through 4 phases,
+Comprehensive workflow for triaging torch-xpu-ops issues through 5 phases,
 collecting AR (Action Required) data for each issue with deep analysis.
+
+**Incremental by default**: when re-running on an existing Excel, each phase
+skips rows that already have completed analysis columns. See
+[Incremental Mode](#incremental-mode-skip-already-completed-work) for the
+full skip-rule table.
 
 ## Workflow Phases
 
@@ -21,6 +26,76 @@ Phase 4: Collect AR (close_or_skip → get_AR_from_issue [with check_pr_status] 
 - `../../result/` → Excel results
 - `../../data/` → JSON data
 - `../../` prefix not shown in paths below
+
+---
+
+## Incremental Mode (Skip Already-Completed Work)
+
+When re-running the pipeline on an existing `torch_xpu_ops_issues.xlsx`,
+each phase MUST check for prior results and **skip rows that are already
+populated**. This avoids duplicated work and preserves manually-curated
+values.
+
+### Skip Rules by Phase
+
+| Phase | Column(s) to Check | Skip Condition |
+|-------|-------------------|----------------|
+| 2.4 check_xpu_case_existence | `xpu_case_existence` | If the cell is non-blank (True or False already set), skip this case entirely. Do NOT re-run the deep analysis. |
+| 3.3 triage_skills | `Category`, `Priority`, `Dependency`, `Root Cause`, `Fix Approach` | If **all five** columns are non-blank for an issue, skip triage for that issue. If any of the five is blank, re-run triage for that issue and fill only the missing columns (preserve existing non-blank values). |
+| 4a–4c (all Phase 4) | — | **NEVER skip.** Phase 4 always re-runs for every issue because PR status, CI results, and comment activity change frequently. Stale AR verdicts are worse than re-computation cost. |
+
+### How to Detect "Already Done"
+
+```python
+import openpyxl
+
+wb = openpyxl.load_workbook("result/torch_xpu_ops_issues.xlsx")
+
+# Phase 2.4: check Test Cases sheet
+tc_sheet = wb["Test Cases"]
+for row in tc_sheet.iter_rows(min_row=2):
+    xpu_case_existence = row[col_index("xpu_case_existence")].value
+    if xpu_case_existence is not None:
+        # SKIP - already checked
+        continue
+
+# Phase 3.3: check Issues sheet
+issues_sheet = wb["Issues"]
+for row in issues_sheet.iter_rows(min_row=2):
+    category = row[col_index("Category")].value
+    priority = row[col_index("Priority")].value
+    dependency = row[col_index("Dependency")].value
+    root_cause = row[col_index("Root Cause")].value
+    fix_approach = row[col_index("Fix Approach")].value
+    if all(v is not None and str(v).strip() for v in
+           [category, priority, dependency, root_cause, fix_approach]):
+        # SKIP - already triaged
+        continue
+```
+
+### Execution Logic with Incremental Checks
+
+Each phase's "For each Issue/Case" loop MUST prepend the skip check:
+
+```
+For each Issue/Case:
+    IF already_done(row, phase):    ← NEW: incremental check
+        LOG "Skipping Issue #{id} for Phase X.Y - already completed"
+        CONTINUE
+    ... original logic ...
+```
+
+### Notes
+
+- Phase 1 (Prepare Data) always runs fully — it fetches fresh data from
+  GitHub and CI. New issues are appended; existing issues are updated with
+  fresh metadata (labels, status, comments) but analysis columns are
+  preserved.
+- Phase 2.1–2.3 (match-ut, match-e2e, case-duplication) always re-run
+  because CI results may have changed. These are fast script-based steps.
+- Phase 5 (Generate Report) always re-runs — it is purely presentational.
+- When in doubt, **preserve existing values**. Never overwrite a non-blank
+  analysis column unless the user explicitly requests a full re-run.
 
 ---
 
@@ -113,20 +188,20 @@ For each Issue in ['Issues' sheet]:
     Run deep triage analysis:
         Analyze title, body, error logs, AR
         Classify Category using predefined patterns
-        Assign Priority based on severity unless Priority is already populated
-        from the GitHub Projects `PyTorchXPU Priority` field
-        Identify Dependency components
         Determine Root Cause type
         Propose Fix Approach
+        Identify Dependency components from the confirmed root cause and fix approach
+        Assign Priority based on severity unless Priority is already populated
+        from the GitHub Projects `PyTorchXPU Priority` field
     
     Set Category = "<analysis result>"
     If existing Priority is non-blank:
         Preserve Priority = "<existing labeled priority>"
     Else:
         Set Priority = "<P0/P1/P2/P3>"
-    Set Dependency = "<component>"
     Set Root Cause = "<root cause type>"
     Set Fix Approach = "<recommended approach>"
+    Set Dependency = "<component>"
 ```
 
 ---
@@ -328,6 +403,7 @@ markdown subset supported, and customization points.
 ---
 
 ## Version
+v4.0 - May 11, 2026 - Added Incremental Mode: skip rules for Phases 2.4 and 3.3 to avoid re-processing rows that already have completed analysis columns (xpu_case_existence, Category/Priority/Dependency/Root Cause/Fix Approach). Phase 4 always re-runs. Preserves existing non-blank values.
 v3.5 - April 27, 2026 - Added Phase 5b (`collect_AR/generate_html_report/`): on-demand interactive HTML report with per-row Done checkboxes (§3/§4, persisted in browser localStorage), sticky filter bar (Assignee / Owner Transferred / Priority / Category / Dependency + free-text + Hide Done), and "Export Done IDs" — fully self-contained, regenerated on demand from the markdown report. Phase 5 markdown remains canonical.
 v3.4 - April 27, 2026 - Phase 4b: added Vector E (scan `Fix Approach` text for PR references) and Step 2.5 (mandatory live `gh pr view` re-check + replacement-PR search via Vectors C/D/E for CLOSED-only verified sets) to fix stale-snapshot and missed-PR mis-verdicts. Phase 5 remains purely presentational.
 v3.3 - April 22, 2026 - Reorganized helper scripts into skill-colocated folders (`analyze_issue/get_AR_from_issue/`, `analyze_issue/triage_skills/`, `collect_AR/generate_report/`) with `__file__`-anchored paths. Added Phase 5 (generate_report) section.

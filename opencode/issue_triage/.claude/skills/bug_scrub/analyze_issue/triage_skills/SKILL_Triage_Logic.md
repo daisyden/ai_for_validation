@@ -550,6 +550,11 @@ def analyze_warning_mismatch(issue_data: dict) -> dict:
 
 ### Step 6: Dependency Analysis
 
+Run dependency analysis after root cause and fix approach have been drafted.
+Use those conclusions as primary evidence: a dependency value should reflect
+where the confirmed bug or required fix lives, not just the operator name or
+initial labels.
+
 #### 6.1 Operator Dependency Registry
 ```python
 # Load from xpu_supported_operators_complete_list.md
@@ -712,6 +717,7 @@ Typical Cases:
 ### Confidence: <high/medium/low>
 
 ## 4. Dependency Analysis
+- Base this on the confirmed root cause and fix suggestions above.
 - Affected dependencies: Triton/oneDNN/IGC/SYCL
 - Version-specific issues: <if applicable>
 
@@ -765,7 +771,7 @@ analysis = deep_analyze_root_cause(issue_data, result)
 #     "action": "Add sequence length thresholding"
 # }
 
-# Step 6: Dependency Check
+# Step 6: Dependency Check, after root cause and fix approach are known
 operator_deps = get_operator_dependencies("scaled_dot_product_attention")
 # ["Triton", "oneDNN"]
 
@@ -782,7 +788,7 @@ Before completing triage, verify:
 2. [ ] IGC/driver version noted
 3. [ ] Reproduce command executed (if not private branch)
 4. [ ] Root cause analysis follows multi-dimension framework
-5. [ ] Dependencies identified from operator registry
+5. [ ] Dependencies identified from root cause, fix approach, and operator registry
 6. [ ] Fix suggestions are expert-level, not generic
 7. [ ] Test case format standardized
 8. [ ] Report follows template structure

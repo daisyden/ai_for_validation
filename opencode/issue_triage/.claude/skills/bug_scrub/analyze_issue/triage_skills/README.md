@@ -21,9 +21,11 @@ To use these skills for triage operations:
 
 2. Apply workflow from `SKILL_Triage_Logic.md`
 
-3. Use patterns from `SKILL_Deep_Analysis_Patterns.md` for analysis
+3. Use patterns from `SKILL_Deep_Analysis_Patterns.md` to draft root cause and fix approach
 
-4. Reference tools from `SKILL_Domain_Patterns.md`
+4. After root cause and fix approach are drafted, assign Dependency from the confirmed failing component plus those conclusions, then apply `SKILL_Priority_Analysis.md` and `SKILL_Category_Analysis.md` for final priority/category assignment. New-case Excel triage fields may be blank and must not be required inputs.
+
+5. Reference tools from `SKILL_Domain_Patterns.md`
 
 ---
 
