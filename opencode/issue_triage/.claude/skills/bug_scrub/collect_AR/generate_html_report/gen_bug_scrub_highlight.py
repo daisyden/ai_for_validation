@@ -347,7 +347,8 @@ def _open_cases_at_boundaries(issues: list[dict], boundaries: list[tuple[str, da
 def _bar_chart_svg(title: str, data: list[tuple[str, int]], width: int = 500, bar_h: int = 18,
                    colors: dict[str, str] | None = None,
                    filter_dim: str | None = None,
-                   show_hidden_on_filter: bool = True) -> str:
+                   show_hidden_on_filter: bool = True,
+                   stale_only: bool = False) -> str:
     """Render a horizontal bar chart as inline SVG."""
     if not data:
         return ""
@@ -355,7 +356,10 @@ def _bar_chart_svg(title: str, data: list[tuple[str, int]], width: int = 500, ba
     left_margin = 140
     chart_w = width - left_margin - 40
     height = len(data) * (bar_h + 6) + 40
-    lines = [f'<svg width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg" '
+    lines = [f'<svg class="bar-chart" data-filter-dim="{esc(filter_dim or "")}" '
+             f'data-chart-width="{chart_w}" data-left-margin="{left_margin}" '
+             f'data-stale-only="{1 if stale_only else 0}" '
+             f'width="{width}" height="{height}" xmlns="http://www.w3.org/2000/svg" '
              f'style="font-family:sans-serif;font-size:11px;">']
     lines.append(f'<text x="{width // 2}" y="14" text-anchor="middle" '
                  f'font-weight="bold" font-size="12">{esc(title)}</text>')
@@ -367,15 +371,16 @@ def _bar_chart_svg(title: str, data: list[tuple[str, int]], width: int = 500, ba
         bar_w = int(val / max_val * chart_w) if max_val else 0
         color = (colors or {}).get(label, palette[idx % len(palette)])
         if filter_dim:
-            lines.append(f'<g class="chart-filter-target" role="button" tabindex="0" '
+            lines.append(f'<g class="chart-filter-target chart-bar" role="button" tabindex="0" '
                          f'data-filter-dim="{esc(filter_dim)}" data-filter-value="{esc(label)}" '
                          f'data-show-hidden="{1 if show_hidden_on_filter else 0}">')
             lines.append(f'<title>Filter table: {esc(label)}</title>')
         lines.append(f'<text x="{left_margin - 4}" y="{y + bar_h // 2 + 4}" '
                      f'text-anchor="end">{esc(label[:20])}</text>')
-        lines.append(f'<rect x="{left_margin}" y="{y}" width="{bar_w}" height="{bar_h}" '
-                     f'fill="{color}" rx="2"/>')
-        lines.append(f'<text x="{left_margin + bar_w + 4}" y="{y + bar_h // 2 + 4}">{val}</text>')
+        lines.append(f'<rect class="chart-bar-rect" x="{left_margin}" y="{y}" '
+                     f'width="{bar_w}" height="{bar_h}" fill="{color}" rx="2"/>')
+        lines.append(f'<text class="chart-bar-value" x="{left_margin + bar_w + 4}" '
+                     f'y="{y + bar_h // 2 + 4}">{val}</text>')
         if filter_dim:
             lines.append('</g>')
         y += bar_h + 6
@@ -388,7 +393,8 @@ def _line_chart_svg(title: str, labels: list[str], series: dict[str, list[int]],
                     fixed_colors: dict[str, str] | None = None,
                     filter_dim: str | None = None,
                     legend_position: str = "right",
-                    show_hidden_on_filter: bool = True) -> str:
+                    show_hidden_on_filter: bool = True,
+                    boundary_dates: list[str] | None = None) -> str:
     """Render a multi-line trend chart as inline SVG with data point labels."""
     if not labels or not series:
         return ""
@@ -409,7 +415,13 @@ def _line_chart_svg(title: str, labels: list[str], series: dict[str, list[int]],
 
     max_val = max((max(vals) for vals in series.values() if vals), default=1) or 1
 
-    lines = [f'<svg width="{total_w}" height="{height}" xmlns="http://www.w3.org/2000/svg" '
+    boundary_data = esc(json.dumps(boundary_dates or []))
+    lines = [f'<svg class="line-chart" data-filter-dim="{esc(filter_dim or "")}" '
+             f'data-max-val="{max_val}" data-boundaries="{boundary_data}" '
+             f'data-margin-l="{margin_l}" data-margin-t="{margin_t}" '
+             f'data-plot-w="{plot_w}" data-plot-h="{plot_h}" '
+             f'width="{total_w}" height="{height}" '
+             f'xmlns="http://www.w3.org/2000/svg" '
              f'style="font-family:sans-serif;font-size:10px;">']
     lines.append(f'<text x="{total_w // 2}" y="16" text-anchor="middle" '
                  f'font-weight="bold" font-size="12">{esc(title)}</text>')
@@ -419,7 +431,7 @@ def _line_chart_svg(title: str, labels: list[str], series: dict[str, list[int]],
         gv = int(gi / 4 * max_val)
         lines.append(f'<line x1="{margin_l}" y1="{gy}" x2="{margin_l + plot_w}" y2="{gy}" '
                      f'stroke="#eee" stroke-width="1"/>')
-        lines.append(f'<text x="{margin_l - 6}" y="{gy + 4}" text-anchor="end" '
+        lines.append(f'<text class="chart-y-label" data-grid-index="{gi}" x="{margin_l - 6}" y="{gy + 4}" text-anchor="end" '
                      f'fill="#999">{gv}</text>')
 
     for bi, label in enumerate(labels):
@@ -438,20 +450,20 @@ def _line_chart_svg(title: str, labels: list[str], series: dict[str, list[int]],
             points.append(f"{x},{y}")
         polyline = " ".join(points)
         if filter_dim:
-            lines.append(f'<g class="chart-filter-target" role="button" tabindex="0" '
+            lines.append(f'<g class="chart-filter-target chart-series" role="button" tabindex="0" '
                          f'data-filter-dim="{esc(filter_dim)}" data-filter-value="{esc(k)}" '
                          f'data-show-hidden="{1 if show_hidden_on_filter else 0}">')
             lines.append(f'<title>Filter table: {esc(k)}</title>')
             lines.append(f'<polyline class="chart-filter-hit" points="{polyline}" fill="none" '
                          f'stroke="#000" stroke-width="12" stroke-linejoin="round"/>')
-        lines.append(f'<polyline points="{polyline}" fill="none" stroke="{colors[k]}" '
+        lines.append(f'<polyline class="chart-line-main" points="{polyline}" fill="none" stroke="{colors[k]}" '
                      f'stroke-width="2" stroke-linejoin="round"/>')
         for bi, v in enumerate(vals):
             x = margin_l + int(bi / max(n - 1, 1) * plot_w) if n > 1 else margin_l + plot_w // 2
             y = margin_t + plot_h - int(v / max_val * plot_h)
-            lines.append(f'<circle cx="{x}" cy="{y}" r="3" fill="{colors[k]}"/>')
+            lines.append(f'<circle class="chart-point" cx="{x}" cy="{y}" r="3" fill="{colors[k]}"/>')
             if bi == n - 1:
-                lines.append(f'<text x="{x + 6}" y="{y + 4}" fill="{colors[k]}" '
+                lines.append(f'<text class="chart-line-value" x="{x + 6}" y="{y + 4}" fill="{colors[k]}" '
                              f'font-size="9" font-weight="bold">{v}</text>')
         if filter_dim:
             lines.append('</g>')
@@ -494,27 +506,32 @@ def _build_charts(issues: list[dict], prio_counts, cat_counts, ar_counts) -> str
     parts.append('<div class="charts-section">')
 
     boundaries = _biweekly_boundaries()
+    boundary_dates = [dt.strftime("%Y-%m-%d") for _, dt in boundaries]
 
     prio_colors = {"P0": "#dc3545", "P1": "#fd7e14", "P2": "#ffc107", "P3": "#28a745"}
     labels, series, keys = _open_cases_at_boundaries(issues, boundaries, "priority", top_n=4)
     parts.append(_line_chart_svg("Open Cases Trend: Priority", labels, series, keys,
                                  width=800, height=320, fixed_colors=prio_colors,
-                                 filter_dim="priority", legend_position="bottom"))
+                                 filter_dim="priority", legend_position="bottom",
+                                 boundary_dates=boundary_dates))
 
     labels, series, keys = _open_cases_at_boundaries(issues, boundaries, "category",
                                                      top_n=len(cat_counts))
     parts.append(_line_chart_svg("Open Cases Trend: Category", labels, series, keys,
-                                 width=900, height=400, filter_dim="category"))
+                                 width=900, height=400, filter_dim="category",
+                                 boundary_dates=boundary_dates))
 
     labels, series, keys = _open_cases_at_boundaries(issues, boundaries, "dependency", top_n=5,
                                                      exclude_vals={"(none)"})
     parts.append(_line_chart_svg("Open Cases Trend: Dependency", labels, series, keys,
-                                 width=700, height=320, filter_dim="dependency"))
+                                 width=700, height=320, filter_dim="dependency",
+                                 boundary_dates=boundary_dates))
 
     labels, series, keys = _open_cases_at_boundaries(issues, boundaries, "test_module",
                                                      top_n=5, exclude_vals={"(none)"})
     parts.append(_line_chart_svg("Open Cases Trend: Test Module", labels, series, keys,
-                                 width=700, height=320, filter_dim="test_module"))
+                                 width=700, height=320, filter_dim="test_module",
+                                 boundary_dates=boundary_dates))
 
     assignee_counts = Counter()
     for i in issues:
@@ -532,7 +549,7 @@ def _build_charts(issues: list[dict], prio_counts, cat_counts, ar_counts) -> str
     stale_assignee_data = stale_assignee_counts.most_common(15)
     parts.append(_bar_chart_svg("Distribution: Assignee — Open Response >1 Week (top 15)",
                                 stale_assignee_data, width=600, filter_dim="assignee",
-                                show_hidden_on_filter=False))
+                                show_hidden_on_filter=False, stale_only=True))
 
     ar_data = sorted(ar_counts.items(), key=lambda x: -x[1])
     parts.append(_bar_chart_svg("Distribution: AR", ar_data, filter_dim="ar"))
@@ -566,9 +583,10 @@ def build_html(issues: list[dict]) -> str:
     body_parts.append("<h2>Summary</h2>")
     body_parts.append('<div class="summary-grid">')
     for p in PRIO_ORDER:
+        count = prio_counts.get(p, 0)
         body_parts.append(
-            f'<div class="summary-card priority-{p.lower()}">'
-            f'<div class="sc-num">{prio_counts.get(p, 0)}</div>'
+            f'<div class="summary-card priority-{p.lower()}" data-summary-priority="{esc(p)}">'
+            f'<div class="sc-num" data-total="{count}">{count}/{count}</div>'
             f'<div class="sc-label">{p}</div></div>'
         )
     body_parts.append("</div>")
@@ -579,7 +597,7 @@ def build_html(issues: list[dict]) -> str:
     body_parts.append("<ul>")
     for p in PRIO_ORDER:
         cnt = len(by_prio.get(p, []))
-        body_parts.append(f'<li><a href="#sec-{p.lower()}">{p} ({cnt} issues)</a></li>')
+        body_parts.append(f'<li><a data-index-priority="{esc(p)}" href="#sec-{p.lower()}">{p} ({cnt} issues)</a></li>')
     if by_prio.get("Other"):
         body_parts.append(f'<li><a href="#sec-other">Other ({len(by_prio["Other"])} issues)</a></li>')
     body_parts.append("</ul>")
@@ -591,7 +609,8 @@ def build_html(issues: list[dict]) -> str:
     for p in all_prios:
         group = by_prio[p]
         anchor = p.lower()
-        body_parts.append(f'<h2 id="sec-{anchor}">{p} &mdash; {len(group)} issues</h2>')
+        body_parts.append(f'<h2 id="sec-{anchor}" data-priority-title="{esc(p)}" '
+                          f'data-title-prefix="{esc(p)}">{p} &mdash; {len(group)} issues</h2>')
 
         # Sub-group by category
         by_cat: dict[str, list[dict]] = defaultdict(list)
@@ -607,7 +626,8 @@ def build_html(issues: list[dict]) -> str:
             non_stale = [i for i in cat_issues if not i["is_stale"]]
 
             body_parts.append(
-                f'<h3 id="{esc(cat_anchor)}">{esc(cat)} &middot; {len(cat_issues)} issues</h3>'
+                f'<h3 id="{esc(cat_anchor)}" data-category-title="{esc(cat)}" '
+                f'data-title-prefix="{esc(cat)}">{esc(cat)} &middot; {len(cat_issues)} issues</h3>'
             )
 
             table_id = f"tbl-{anchor}-{cat.lower().replace(' ', '-').replace('/', '-')}"
@@ -779,6 +799,7 @@ table.ar-table tr.more-shown.hidden { display: none; }
 .ms-dd-item .count { flex: 0 0 auto; color: var(--muted); font-size: 11px; background: #f1f3f5;
   padding: 0 6px; border-radius: 8px; min-width: 22px; text-align: center; }
 .ms-dd-item.none-opt .label { font-style: italic; color: var(--muted); }
+.ms-dd-item.zero-count { opacity: .45; }
 .ms-dd-actions {
   display: flex; gap: 4px; padding: 4px 6px; border-top: 1px solid var(--border);
   margin-top: 2px; position: sticky; bottom: 0; background: white;
@@ -794,6 +815,8 @@ table.ar-table tr.more-shown.hidden { display: none; }
 .chart-filter-target:hover text { font-weight: 700; text-decoration: underline; }
 .chart-filter-target:hover polyline:not(.chart-filter-hit), .chart-filter-target:hover rect { filter: brightness(.9); }
 .chart-filter-hit { opacity: 0; }
+.chart-filter-target.filtered-out { opacity: .18; }
+.chart-filter-target.filtered-zero { opacity: .28; }
 
 /* Custom tooltip popup (replaces native title) */
 .tip-popup {
@@ -985,6 +1008,45 @@ function updateButtonLabel(dd, dim) {
   else { btn.textContent = sel.size + ' of ' + total; btn.title = Array.from(sel).join(', '); }
 }
 
+function rowMatchesAllFiltersExcept(tr, skipDim) {
+  const showHidden = document.getElementById('filter-show-hidden').checked;
+  const isMoreRow = tr.classList.contains('more-hidden') || tr.classList.contains('more-shown');
+  if (isMoreRow && !showHidden) return false;
+  for (const dim of FILTER_DIMS) {
+    if (dim === skipDim) continue;
+    if (!rowMatchesDim(tr, dim, SELECTED[dim])) return false;
+  }
+  const search = (document.getElementById('filter-search').value || '').trim().toLowerCase();
+  if (search && !(tr.dataset.search || '').includes(search)) return false;
+  if (document.getElementById('filter-hide-done').checked && tr.classList.contains('done')) return false;
+  if (showDupsOnly && tr.dataset.isDup !== '1') return false;
+  const dateVal = document.getElementById('filter-date').value;
+  if (dateVal) {
+    const created = tr.dataset.created || '';
+    if (created && created < dateVal) return false;
+  }
+  return true;
+}
+
+function updateFacetCounts() {
+  const allRows = Array.from(document.querySelectorAll('table.ar-table tbody tr[data-issue]'));
+  for (const dim of FILTER_DIMS) {
+    const dd = document.getElementById('filter-' + dim);
+    if (!dd) continue;
+    const counts = new Map();
+    for (const tr of allRows) {
+      if (!rowMatchesAllFiltersExcept(tr, dim)) continue;
+      for (const v of rowValuesForDim(tr, dim)) counts.set(v, (counts.get(v) || 0) + 1);
+    }
+    dd.querySelectorAll('.ms-dd-item').forEach(item => {
+      const cb = item.querySelector('input[type=checkbox]');
+      const count = counts.get(cb.value) || 0;
+      item.querySelector('.count').textContent = String(count);
+      item.classList.toggle('zero-count', count === 0);
+    });
+  }
+}
+
 function setSingleFilter(dim, value, showHiddenRows = true) {
   const dd = document.getElementById('filter-' + dim);
   if (!dd) return;
@@ -1014,6 +1076,141 @@ function initChartFilters() {
       }
     });
   });
+}
+
+function visibleIssueRows() {
+  return Array.from(document.querySelectorAll('table.ar-table tbody tr[data-issue]:not(.hidden):not(.more-hidden)'));
+}
+
+function rowValuesForDim(tr, dim) {
+  const sourceDims = (dim === 'assignee') ? ['assignee', 'owner_transferred'] : [dim];
+  const vals = new Set();
+  for (const sd of sourceDims) {
+    const key = sd.replace('_', '-');
+    const raw = tr.dataset[sd] || tr.dataset[key] || '';
+    for (const t of tokensFor(sd, raw)) vals.add(t);
+  }
+  if (sourceDims.length > 1 && vals.size > 1) vals.delete(NONE_TOKEN);
+  return vals;
+}
+
+function countVisibleRowsByDim(rows, dim, extraFilter) {
+  const counts = new Map();
+  for (const tr of rows) {
+    if (extraFilter && !extraFilter(tr)) continue;
+    for (const v of rowValuesForDim(tr, dim)) counts.set(v, (counts.get(v) || 0) + 1);
+  }
+  return counts;
+}
+
+function updateVisibleCounts(rows) {
+  const priorityCounts = countVisibleRowsByDim(rows, 'priority');
+  document.querySelectorAll('[data-summary-priority]').forEach(card => {
+    const priority = card.dataset.summaryPriority;
+    const num = card.querySelector('.sc-num');
+    if (num) {
+      const total = num.dataset.total || '0';
+      num.textContent = String(priorityCounts.get(priority) || 0) + '/' + total;
+    }
+  });
+  document.querySelectorAll('[data-index-priority]').forEach(link => {
+    const priority = link.dataset.indexPriority;
+    link.textContent = priority + ' (' + (priorityCounts.get(priority) || 0) + ' issues)';
+  });
+  document.querySelectorAll('table.ar-table').forEach(table => {
+    const rowsInTable = table.querySelectorAll('tbody tr[data-issue]:not(.hidden):not(.more-hidden)').length;
+    const h3 = table.previousElementSibling;
+    if (h3 && h3.dataset.titlePrefix) {
+      h3.innerHTML = h3.dataset.titlePrefix + ' &middot; ' + rowsInTable + ' issues';
+    }
+  });
+  document.querySelectorAll('[data-priority-title]').forEach(h2 => {
+    const priority = h2.dataset.priorityTitle;
+    h2.innerHTML = h2.dataset.titlePrefix + ' &mdash; ' + (priorityCounts.get(priority) || 0) + ' issues';
+  });
+}
+
+function updateBarCharts(rows) {
+  document.querySelectorAll('svg.bar-chart[data-filter-dim]').forEach(svg => {
+    const dim = svg.dataset.filterDim;
+    if (!dim) return;
+    const staleOnly = svg.dataset.staleOnly === '1';
+    const counts = countVisibleRowsByDim(rows, dim, staleOnly ? tr => tr.dataset.isStale === '1' : null);
+    const bars = Array.from(svg.querySelectorAll('.chart-bar'));
+    const maxVal = Math.max(1, ...bars.map(g => counts.get(g.dataset.filterValue) || 0));
+    const chartW = Number(svg.dataset.chartWidth || 1);
+    const left = Number(svg.dataset.leftMargin || 0);
+    for (const g of bars) {
+      const val = counts.get(g.dataset.filterValue) || 0;
+      const w = Math.round(val / maxVal * chartW);
+      const rect = g.querySelector('.chart-bar-rect');
+      const text = g.querySelector('.chart-bar-value');
+      if (rect) rect.setAttribute('width', String(w));
+      if (text) {
+        text.textContent = String(val);
+        text.setAttribute('x', String(left + w + 4));
+      }
+      g.classList.toggle('filtered-zero', val === 0);
+    }
+  });
+}
+
+function updateLineCharts(rows) {
+  document.querySelectorAll('svg.line-chart[data-filter-dim]').forEach(svg => {
+    const dim = svg.dataset.filterDim;
+    if (!dim) return;
+    const boundaries = JSON.parse(svg.dataset.boundaries || '[]');
+    if (!boundaries.length) return;
+    const marginL = Number(svg.dataset.marginL || 0);
+    const marginT = Number(svg.dataset.marginT || 0);
+    const plotW = Number(svg.dataset.plotW || 1);
+    const plotH = Number(svg.dataset.plotH || 1);
+    const seriesGroups = Array.from(svg.querySelectorAll('.chart-series'));
+    const series = new Map();
+    let maxVal = 1;
+    for (const g of seriesGroups) {
+      const value = g.dataset.filterValue;
+      const vals = boundaries.map(boundary => rows.filter(tr => {
+        const created = tr.dataset.created || '';
+        return created && created <= boundary && rowValuesForDim(tr, dim).has(value);
+      }).length);
+      series.set(g, vals);
+      maxVal = Math.max(maxVal, ...vals);
+    }
+    svg.querySelectorAll('.chart-y-label').forEach(label => {
+      const idx = Number(label.dataset.gridIndex || 0);
+      label.textContent = String(Math.floor(idx / 4 * maxVal));
+    });
+    for (const [g, vals] of series.entries()) {
+      const points = vals.map((v, i) => {
+        const x = marginL + Math.round(i / Math.max(boundaries.length - 1, 1) * plotW);
+        const y = marginT + plotH - Math.round(v / maxVal * plotH);
+        return [x, y];
+      });
+      const pointText = points.map(([x, y]) => x + ',' + y).join(' ');
+      g.querySelectorAll('polyline').forEach(p => p.setAttribute('points', pointText));
+      g.querySelectorAll('.chart-point').forEach((circle, i) => {
+        const [x, y] = points[i];
+        circle.setAttribute('cx', String(x));
+        circle.setAttribute('cy', String(y));
+      });
+      const valText = g.querySelector('.chart-line-value');
+      if (valText && points.length) {
+        const [x, y] = points[points.length - 1];
+        valText.textContent = String(vals[vals.length - 1] || 0);
+        valText.setAttribute('x', String(x + 6));
+        valText.setAttribute('y', String(y + 4));
+      }
+      g.classList.toggle('filtered-zero', (vals[vals.length - 1] || 0) === 0);
+    }
+  });
+}
+
+function updateDynamicReportState() {
+  const rows = visibleIssueRows();
+  updateVisibleCounts(rows);
+  updateBarCharts(rows);
+  updateLineCharts(rows);
 }
 
 function rowMatchesDim(tr, dim, selectedSet) {
@@ -1189,6 +1386,8 @@ function applyFilters() {
 
   document.getElementById('filter-stats').textContent = visible + ' / ' + total + ' rows';
   hideEmptySections();
+  updateFacetCounts();
+  updateDynamicReportState();
 }
 
 function hideEmptySections() {
