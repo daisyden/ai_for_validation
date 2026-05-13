@@ -40,8 +40,9 @@ values.
 
 | Phase | Column(s) to Check | Skip Condition |
 |-------|-------------------|----------------|
+| 2.3 case-duplication-detection | `duplicate_group_id` | If the cell is non-blank, skip duplicate detection for this row. Do NOT force a full case-duplication rerun in incremental mode. |
 | 2.4 check_xpu_case_existence | `xpu_case_existence` | If the cell is non-blank (True or False already set), skip this case entirely. Do NOT re-run the deep analysis. |
-| 3.3 triage_skills | `Category`, `Priority`, `Dependency`, `Root Cause`, `Fix Approach` | If **all five** columns are non-blank for an issue, skip triage for that issue. If any of the five is blank, re-run triage for that issue and fill only the missing columns (preserve existing non-blank values). |
+| 3.3 triage_skills | `Category`, `Priority`, `Root Cause`, `Fix Approach` | If **all four** columns are non-blank for an issue, skip triage for that issue. If any of the four is blank, re-run triage for that issue and fill only the missing columns (preserve existing non-blank values). `Dependency` is optional and must not be used as a completion gate because not all issues have one. |
 | 4a–4c (all Phase 4) | — | **NEVER skip.** Phase 4 always re-runs for every issue because PR status, CI results, and comment activity change frequently. Stale AR verdicts are worse than re-computation cost. |
 
 ### How to Detect "Already Done"
@@ -51,12 +52,19 @@ import openpyxl
 
 wb = openpyxl.load_workbook("result/torch_xpu_ops_issues.xlsx")
 
-# Phase 2.4: check Test Cases sheet
+# Phase 2.3: check Test Cases sheet for duplicate detection
 tc_sheet = wb["Test Cases"]
+for row in tc_sheet.iter_rows(min_row=2):
+    duplicate_group_id = row[col_index("duplicate_group_id")].value
+    if duplicate_group_id is not None:
+        # SKIP 2.3 - duplicate detection already checked
+        continue
+
+# Phase 2.4: check Test Cases sheet for case existence
 for row in tc_sheet.iter_rows(min_row=2):
     xpu_case_existence = row[col_index("xpu_case_existence")].value
     if xpu_case_existence is not None:
-        # SKIP - already checked
+        # SKIP 2.4 - case existence already checked
         continue
 
 # Phase 3.3: check Issues sheet
@@ -64,11 +72,10 @@ issues_sheet = wb["Issues"]
 for row in issues_sheet.iter_rows(min_row=2):
     category = row[col_index("Category")].value
     priority = row[col_index("Priority")].value
-    dependency = row[col_index("Dependency")].value
     root_cause = row[col_index("Root Cause")].value
     fix_approach = row[col_index("Fix Approach")].value
     if all(v is not None and str(v).strip() for v in
-           [category, priority, dependency, root_cause, fix_approach]):
+           [category, priority, root_cause, fix_approach]):
         # SKIP - already triaged
         continue
 ```
@@ -91,8 +98,9 @@ For each Issue/Case:
   GitHub and CI. New issues are appended; existing issues are updated with
   fresh metadata (labels, status, comments) but analysis columns are
   preserved.
-- Phase 2.1–2.3 (match-ut, match-e2e, case-duplication) always re-run
-  because CI results may have changed. These are fast script-based steps.
+- Phase 2.1–2.2 (match-ut, match-e2e) always re-run because CI results may
+  have changed. Phase 2.3 case-duplication can skip rows with an existing
+  `duplicate_group_id` in incremental mode.
 - Phase 5 (Generate Report) always re-runs — it is purely presentational.
 - When in doubt, **preserve existing values**. Never overwrite a non-blank
   analysis column unless the user explicitly requests a full re-run.
@@ -403,7 +411,8 @@ markdown subset supported, and customization points.
 ---
 
 ## Version
-v4.0 - May 11, 2026 - Added Incremental Mode: skip rules for Phases 2.4 and 3.3 to avoid re-processing rows that already have completed analysis columns (xpu_case_existence, Category/Priority/Dependency/Root Cause/Fix Approach). Phase 4 always re-runs. Preserves existing non-blank values.
+v4.1 - May 13, 2026 - Refined Incremental Mode: Phase 2.3 case-duplication can skip rows with existing duplicate_group_id, and Phase 3.3 completion no longer requires Dependency because not all issues have one.
+v4.0 - May 11, 2026 - Added Incremental Mode: skip rules for Phases 2.4 and 3.3 to avoid re-processing rows that already have completed analysis columns. Phase 4 always re-runs. Preserves existing non-blank values.
 v3.5 - April 27, 2026 - Added Phase 5b (`collect_AR/generate_html_report/`): on-demand interactive HTML report with per-row Done checkboxes (§3/§4, persisted in browser localStorage), sticky filter bar (Assignee / Owner Transferred / Priority / Category / Dependency + free-text + Hide Done), and "Export Done IDs" — fully self-contained, regenerated on demand from the markdown report. Phase 5 markdown remains canonical.
 v3.4 - April 27, 2026 - Phase 4b: added Vector E (scan `Fix Approach` text for PR references) and Step 2.5 (mandatory live `gh pr view` re-check + replacement-PR search via Vectors C/D/E for CLOSED-only verified sets) to fix stale-snapshot and missed-PR mis-verdicts. Phase 5 remains purely presentational.
 v3.3 - April 22, 2026 - Reorganized helper scripts into skill-colocated folders (`analyze_issue/get_AR_from_issue/`, `analyze_issue/triage_skills/`, `collect_AR/generate_report/`) with `__file__`-anchored paths. Added Phase 5 (generate_report) section.
