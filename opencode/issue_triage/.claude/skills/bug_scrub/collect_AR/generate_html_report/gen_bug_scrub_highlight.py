@@ -175,6 +175,7 @@ def load_issues(xlsx_path: Path) -> list[dict]:
             "created": created,
             "created_dt": parse_dt(created),
             "milestone": g(r, "Milestone"),
+            "test_module": g(r, "Test Module"),
             "dependency": g(r, "Dependency"),
             "category": g(r, "Category"),
             "priority": g(r, "Priority"),
@@ -228,6 +229,7 @@ def render_issue_row(issue: dict, show_done: bool = True) -> str:
         f'data-owner_transferred="{esc(i["owner_transferred"])}"',
         f'data-dependency="{esc(i["dependency"])}"',
         f'data-milestone="{esc(i["milestone"])}"',
+        f'data-test_module="{esc(i["test_module"])}"',
         f'data-ar="{esc(i["ar"])}"',
         f'data-is-dup="{1 if i["is_dup"] else 0}"',
         f'data-is-stale="{1 if i["is_stale"] else 0}"',
@@ -508,6 +510,11 @@ def _build_charts(issues: list[dict], prio_counts, cat_counts, ar_counts) -> str
                                                      exclude_vals={"(none)"})
     parts.append(_line_chart_svg("Open Cases Trend: Dependency", labels, series, keys,
                                  width=700, height=320, filter_dim="dependency"))
+
+    labels, series, keys = _open_cases_at_boundaries(issues, boundaries, "test_module",
+                                                     top_n=5, exclude_vals={"(none)"})
+    parts.append(_line_chart_svg("Open Cases Trend: Test Module", labels, series, keys,
+                                 width=700, height=320, filter_dim="test_module"))
 
     assignee_counts = Counter()
     for i in issues:
@@ -858,10 +865,10 @@ const NONE_TOKEN = '(none)';
 const MULTI_VALUE_DIMS = new Set(['assignee', 'owner_transferred']);
 const MULTI_SPLIT_RE = /[,;|]/;
 
-const FILTER_DIMS = ['ar', 'assignee', 'priority', 'category', 'milestone', 'dependency'];
+const FILTER_DIMS = ['ar', 'assignee', 'priority', 'category', 'milestone', 'dependency', 'test_module'];
 const FILTER_LABELS = {
   ar: 'AR', assignee: 'Assignee', priority: 'Priority', category: 'Category',
-  milestone: 'Milestone', dependency: 'Dependency'
+  milestone: 'Milestone', dependency: 'Dependency', test_module: 'Test Module'
 };
 const SELECTED = Object.fromEntries(FILTER_DIMS.map(d => [d, new Set()]));
 
