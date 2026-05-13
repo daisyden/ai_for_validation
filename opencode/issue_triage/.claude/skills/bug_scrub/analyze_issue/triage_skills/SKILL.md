@@ -87,6 +87,8 @@ Pick **exactly one** value. Populates Excel column "Dependency".
 
 P0 = crash/segfault/>5% perf regression/custom-model blocker · P1 = UT >20 failures or regression · P2 = E2E issues, few failures · P3 = minor/cosmetic. See `SKILL_Priority_Analysis.md`.
 
+If the input row already has a non-blank `Priority`, treat it as the labeled value imported from GitHub Projects `PyTorchXPU Priority` and preserve it. Still perform root-cause/fix-approach analysis, but do not replace the row's `Priority` with a computed value. Only compute priority when the input `Priority` is blank.
+
 ### Standard Investigation Pattern (per issue)
 
 1. **Fetch**: `gh issue view <id> --repo intel/torch-xpu-ops --json title,body,labels,comments,state`
@@ -94,7 +96,7 @@ P0 = crash/segfault/>5% perf regression/custom-model blocker · P1 = UT >20 fail
 2. **Locate** test/code/error — read relevant files, grep for the failing symbol.
 3. **Reproduce** (when applicable): write a minimal Python reproducer and verify it triggers the same error. See `SKILL_Mini_Reproducer.md` for the template, iteration budget, and acceptance criteria. Skip for pure tracker / doc / infra issues.
 4. **Cite** file:line evidence (torch-xpu-ops source and/or pytorch source).
-5. **Classify** using the four taxonomies above and write the JSON entry.
+5. **Classify** using the four taxonomies above and write the JSON entry. Preserve an existing non-blank `Priority` from `PyTorchXPU Priority` instead of recomputing it.
 
 ### Pinned Reference Paths
 
@@ -596,7 +598,7 @@ CATEGORIES = {
 
 ## Priority Analysis
 
-Add SKILL_Priority_Analysis.md for automatic priority classification:
+Add SKILL_Priority_Analysis.md for automatic priority classification. If the row already has a non-blank `Priority`, preserve it as the GitHub Projects labeled priority and skip computed priority assignment:
 
 ```python
 # Step Y: Priority Analysis

@@ -28,6 +28,7 @@ Creates torch_xpu_ops_issues.xlsx by collecting open issues from intel/torch-xpu
 Extract fields:
 - **Basic Info**: Issue ID, Title, Status, Assignee, Reporter, Labels, Created/Updated Time, Milestone
 - **Classification**: Type (bug/feature/performance), Module (distributed/inductor/autograd/etc), Test Module (ut/e2e/build)
+- **Project Priority**: Fetch each issue's GitHub Projects field `PyTorchXPU Priority` (or `Priority` on the `PyTorchXPU` project). If it is non-blank and contains `P0`/`P1`/`P2`/`P3`, initialize the Excel `Priority` column with that value.
 
 ### Step 3: Parse Test Cases
 Parse from issue body in formats:
@@ -40,7 +41,7 @@ Extract: Benchmark (huggingface/timm/torchbench), Model, Phase (training/inferen
 
 ### Step 5: Create Excel File
 Three sheets:
-1. **Issues**: Issue ID, Title, Status, Assignee, Labels, Type, Module, Test Module, Dependency
+1. **Issues**: Issue ID, Title, Status, Assignee, Labels, Type, Module, Test Module, Dependency, Priority
 2. **Test Cases**: Issue ID, Test Reproducer, Test Type, Test File, Origin Test File, Test Class, Test Case
 3. **E2E Test Cases**: Issue ID, Test Reproducer, Benchmark, Model, Phase, Dtype, AMP, Backend, Test Type, Cudagraph
 
@@ -56,7 +57,7 @@ python3 generate_excel.py
 - `../../../result/torch_xpu_ops_issues.xlsx` (Issues, Test Cases, E2E Test Cases sheets)
 
 ## Prerequisites
-- GitHub token with repo access (set GITHUB_TOKEN env var)
+- GitHub token with repo + Projects access (set GITHUB_TOKEN env var) to fetch `PyTorchXPU Priority`; without it, issue data is still generated but project priority stays blank.
 - Python with: openpyxl, requests, json
 
 ## Script Location

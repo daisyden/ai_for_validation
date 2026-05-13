@@ -18,6 +18,110 @@ GITHUB_HEADERS = {
     "Accept": "application/vnd.github.v3+json",
     "Authorization": f"token {GITHUB_TOKEN}"
 } if GITHUB_TOKEN else {}
+GITHUB_GRAPHQL_URL = "https://api.github.com/graphql"
+PROJECT_PRIORITY_FIELD = "PyTorchXPU Priority"
+VALID_PRIORITIES = {"P0", "P1", "P2", "P3"}
+
+
+def normalize_project_priority(value):
+    text = str(value or "").strip().upper()
+    if not text:
+        return ""
+    match = re.search(r"\bP[0-3]\b", text)
+    return match.group(0) if match else ""
+
+
+def project_field_name(field_value):
+    field = field_value.get("field") or {}
+    return str(field.get("name") or "").strip()
+
+
+def project_field_value(field_value):
+    for key in ("name", "text", "title", "number", "date"):
+        value = field_value.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return ""
+
+
+def fetch_project_priority(issue):
+    if not GITHUB_TOKEN:
+        return ""
+    node_id = issue.get("node_id")
+    if not node_id:
+        return ""
+    query = """
+    query($id: ID!) {
+      node(id: $id) {
+        ... on Issue {
+          projectItems(first: 20) {
+            nodes {
+              project { title }
+              fieldValues(first: 50) {
+                nodes {
+                  ... on ProjectV2ItemFieldSingleSelectValue {
+                    name
+                    field { ... on ProjectV2FieldCommon { name } }
+                  }
+                  ... on ProjectV2ItemFieldTextValue {
+                    text
+                    field { ... on ProjectV2FieldCommon { name } }
+                  }
+                  ... on ProjectV2ItemFieldNumberValue {
+                    number
+                    field { ... on ProjectV2FieldCommon { name } }
+                  }
+                  ... on ProjectV2ItemFieldIterationValue {
+                    title
+                    field { ... on ProjectV2FieldCommon { name } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    """
+    response = requests.post(
+        GITHUB_GRAPHQL_URL,
+        headers=GITHUB_HEADERS,
+        json={"query": query, "variables": {"id": node_id}},
+        timeout=30,
+    )
+    if response.status_code != 200:
+        return ""
+    data = response.json()
+    if data.get("errors"):
+        return ""
+    project_items = (((data.get("data") or {}).get("node") or {}).get("projectItems") or {}).get("nodes") or []
+    for item in project_items:
+        project_title = ((item.get("project") or {}).get("title") or "").strip()
+        field_values = ((item.get("fieldValues") or {}).get("nodes") or [])
+        for field_value in field_values:
+            field_name = project_field_name(field_value)
+            if field_name != PROJECT_PRIORITY_FIELD and not (
+                project_title == "PyTorchXPU" and field_name == "Priority"
+            ):
+                continue
+            priority = normalize_project_priority(project_field_value(field_value))
+            if priority in VALID_PRIORITIES:
+                return priority
+    return ""
+
+
+def populate_project_priorities(issues):
+    if not GITHUB_TOKEN:
+        print("GITHUB_TOKEN not set; skipping PyTorchXPU project priority fetch")
+        return
+    missing = [issue for issue in issues if "project_priority" not in issue]
+    if not missing:
+        return
+    print(f"Fetching {PROJECT_PRIORITY_FIELD} from GitHub Projects for {len(missing)} issues...")
+    for idx, issue in enumerate(missing, 1):
+        issue["project_priority"] = fetch_project_priority(issue)
+        if idx % 50 == 0:
+            print(f"Fetched project priorities for {idx}/{len(missing)} issues...")
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description="Generate Excel report for torch-xpu-ops issues")
@@ -65,6 +169,11 @@ else:
 if TARGET_ISSUE_IDS:
     issues = [i for i in issues if i['number'] in TARGET_ISSUE_IDS]
     print(f"Filtered to {len(issues)} target issues: {sorted(TARGET_ISSUE_IDS)}")
+
+populate_project_priorities(issues)
+if GITHUB_TOKEN and not TARGET_ISSUE_IDS:
+    with open(issues_json_path, 'w') as f:
+        json.dump(issues, f)
 
 # Known test types
 KNOWN_TEST_TYPES = ['op_ut', 'op_extend', 'op_extended', 'e2e', 'benchmark', 'ut', 'test_xpu']
@@ -227,7 +336,7 @@ def parse_e2e_info(body, title):
     
     # Extract backend
     backend = 'inductor'
-    if '--backend=(\w+)' in text:
+    if '--backend=' in text:
         match = re.search(r'--backend=(\w+)', text)
         if match:
             backend = match.group(1)
@@ -852,10 +961,12 @@ ws_issues.title = "Issues"
 
 # Core columns for basic issue info
 # Note: PR columns (PR, PR Owner, PR Status, PR Description) populated by ../pr-extraction/
-# Note: owner_transfer, action_TBD, priority, Category, Root Cause columns populated by update_test_results/
+# Note: owner_transfer, action_TBD, Category, Root Cause columns populated by update_test_results/
+# Priority is initialized from GitHub Projects when PyTorchXPU Priority is set;
+# otherwise Phase 3 fills it from triage analysis.
 headers = ["Issue ID", "Title", "Status", "Assignee", "Reporter", "Labels",
            "Created Time", "Updated Time", "Milestone", "Summary", "Type",
-           "Module", "Test Module", "Dependency"]
+           "Module", "Test Module", "Dependency", "Priority"]
 
 for col, header in enumerate(headers, 1):
     cell = ws_issues.cell(row=1, column=col, value=header)
@@ -913,6 +1024,7 @@ for issue in issues:
     module = classify_module(body, title, labels)
     test_module = classify_test_module(body, title, labels)
     dependency = get_dependency_from_body(body, labels)
+    project_priority = normalize_project_priority(issue.get('project_priority', ''))
     
     # Error Message, Traceback, torch-ops, dependency deferred to test_result_analysis/
     # Leave blank for now - will be populated by test_result_analysis/Test_Cases/
@@ -932,6 +1044,7 @@ for issue in issues:
     ws_issues.cell(row=issue_row, column=12, value=module)
     ws_issues.cell(row=issue_row, column=13, value=test_module)
     ws_issues.cell(row=issue_row, column=14, value=dependency)
+    ws_issues.cell(row=issue_row, column=15, value=project_priority)
     
     # Parse test cases and e2e info
     test_cases = parse_test_cases_from_body(body)

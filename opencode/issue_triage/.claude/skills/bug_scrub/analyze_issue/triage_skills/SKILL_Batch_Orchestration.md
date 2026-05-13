@@ -41,7 +41,7 @@ Use `/home/daisydeng/pytorch/agent_space/phase3_triage/` as the scratch root (gi
 
 ### 1. Export issues from Excel to JSON
 
-Read the Issues sheet, emit one object per row with the columns needed for triage (row, issue_id, title, module, test_module, existing dependency if any). Write `issues_all.json`.
+Read the Issues sheet, emit one object per row with the columns needed for triage (row, issue_id, title, module, test_module, existing dependency if any, existing priority if any). Write `issues_all.json`.
 
 ### 2. Pre-prepare all batches for all waves upfront
 
@@ -79,7 +79,7 @@ WORKFLOW PER ISSUE:
 1. gh issue view <id> --repo intel/torch-xpu-ops --json title,body,labels,comments,state
 2. Locate test/code/error — cite file:line evidence
 3. Classify using the authoritative Category Taxonomy (8 buckets),
-   Dependency Taxonomy, and Priority rubric from SKILL.md.
+   Dependency Taxonomy, and Priority rubric from SKILL.md. If the batch input row has a non-blank priority, preserve that value because it came from GitHub Projects `PyTorchXPU Priority`; only compute priority when the input priority is blank.
 4. root_cause: 2-4 sentences with file:line
 5. fix_approach: actionable next steps
 
@@ -115,7 +115,7 @@ Sanity checks: row-count equality, no gaps, no extras.
 ### 6. Single final write to Excel
 
 - **Always back up first**: `cp tracker.xlsx tracker_bk_before_phase3_write.xlsx`.
-- Write only the triage columns (Dependency, Category, Priority, Root Cause, Fix Approach). Preserve all other columns.
+- Write only the triage columns (Dependency, Category, Priority, Root Cause, Fix Approach). Preserve all other columns. For `Priority`, preserve any existing non-blank value from Phase 1's `PyTorchXPU Priority` import; only write the computed Phase 3 priority into blank cells.
 - Verify post-write: reload Excel, print Counter of Category / Priority / Dependency to catch any taxonomy drift.
 - If drift found, fix with a targeted remap script (don't re-triage).
 

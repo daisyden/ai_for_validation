@@ -28,8 +28,9 @@ Phase 4: Collect AR (close_or_skip → get_AR_from_issue [with check_pr_status] 
 
 ### 1.1 Issue Basic Info Extraction
 - **Skill**: `prepare_data/issue-basic-info-extraction/`
-- **Steps**: Fetch open issues from GitHub API → Parse to Excel
+- **Steps**: Fetch open issues from GitHub API → Fetch `PyTorchXPU Priority` from GitHub Projects → Parse to Excel
 - **Output**: `result/torch_xpu_ops_issues.xlsx` (Issues, Test Cases, E2E Test Cases sheets)
+- **Priority initialization**: If the issue's GitHub Projects field `PyTorchXPU Priority` is non-blank, set Excel `Priority` to that labeled value (`P0`/`P1`/`P2`/`P3`). Leave `Priority` blank only when the project field is blank or unavailable.
 
 ### 1.2 Download CI Result
 - **Skill**: `prepare_data/download_ci_result/`
@@ -112,13 +113,17 @@ For each Issue in ['Issues' sheet]:
     Run deep triage analysis:
         Analyze title, body, error logs, AR
         Classify Category using predefined patterns
-        Assign Priority based on severity
+        Assign Priority based on severity unless Priority is already populated
+        from the GitHub Projects `PyTorchXPU Priority` field
         Identify Dependency components
         Determine Root Cause type
         Propose Fix Approach
     
     Set Category = "<analysis result>"
-    Set Priority = "<P0/P1/P2/P3>"
+    If existing Priority is non-blank:
+        Preserve Priority = "<existing labeled priority>"
+    Else:
+        Set Priority = "<P0/P1/P2/P3>"
     Set Dependency = "<component>"
     Set Root Cause = "<root cause type>"
     Set Fix Approach = "<recommended approach>"

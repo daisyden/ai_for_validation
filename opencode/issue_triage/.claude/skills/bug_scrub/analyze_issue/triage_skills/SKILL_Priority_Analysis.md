@@ -433,6 +433,10 @@ def analyze_performance_regression(error_log: str, issue_body: str) -> dict:
 
 ---
 
+## Priority Assignment Workflow
+
+If the input row already has a non-blank `Priority`, preserve that value. Phase 1 initializes `Priority` from the GitHub Projects `PyTorchXPU Priority` field, and that labeled priority is authoritative over computed priority. Only run computed priority assignment when the input row's `Priority` is blank.
+
 ## Combined Priority Analysis
 
 ### Priority Analyzer
