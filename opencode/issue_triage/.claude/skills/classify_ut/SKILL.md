@@ -90,6 +90,7 @@ Tracks whether the **original** Reason was blank in the SOURCE workbook (e.g.,
 | `Test Enviroment limitation` | True hardware/process constraint (multi-GPU, GCC version). NOT for skips that are stale or fixable. |
 | `Not applicable` | Either (a) a CPU-only test not relevant to XPU validation (`DetailReason` = `CPU Case`), or (b) a CUDA-only behavior whose API/torch op is listed in the **`Not applicable` sheet** of `${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx` (column `Operation/API`). `DetailReason` MUST name the exact API/feature (e.g., `CUDA-specific API: torch.cuda.jiterator`) and cite the matching `Not applicable`-sheet row (`Issue ID`). Never use generic "CUDA-only test" or "No XPU test data" — always identify the specific API or feature that XPU does not support. See the **CUDA-Only Judgement Rule** below. |
 | `Community Change` | The base function/case no longer exists in the source being compared, was renamed/refactored/moved, or the test is disabled by an upstream PyTorch community issue/commit. `DetailReason` MUST include the full issue/PR URL when available, or exact source/commit evidence. Do not require `last_status_xpu = passed`; base-function absence is enough. |
+| `Need human check` | Deep analysis was performed but no category could be assigned with HIGH or MEDIUM confidence (see **Confidence Rubric & Need-Human-Check Rule** below). Only valid when `Reason TBD = True`. `DetailReason` MUST start with `[Confidence: LOW]` and enumerate which signals were checked and why each was inconclusive (no `Not applicable`-sheet match, base function ambiguous, no xpu wrapper located, no known issue in either repo, etc.). Never use this label as a shortcut to skip analysis — it is the explicit outcome of a thorough but inconclusive investigation. |
 
 ### `DetailReason` (String)
 
@@ -194,6 +195,91 @@ not_applicable_ops = [(row[id_col].value, row[op_col].value)
 - Inventing a new CUDA-only API entry locally instead of adding it to the workbook sheet first.
   If you genuinely discover a new CUDA-only API, add a row to the `Not applicable` sheet
   (see the `create-not-applicable-sheet` skill) before classifying.
+
+## Confidence Rubric & Need-Human-Check Rule (authoritative for `Reason TBD = True` rows)
+
+Every row with `Reason TBD = True` MUST have its `DetailReason` prefixed with a confidence
+tag reflecting the strength of the evidence behind the assigned `Reason`:
+
+```
+[Confidence: HIGH]    strong, verifiable evidence on at least one decisive axis
+[Confidence: MEDIUM]  partial / indirect evidence; best-fit category but signals incomplete
+[Confidence: LOW]     analysis performed but no axis yields a confident category -> Reason = "Need human check"
+```
+
+The prefix is REQUIRED for every `Reason TBD = True` row, regardless of which `Reason` is assigned.
+Rows with `Reason TBD = False` keep their existing `DetailReason` untouched and do NOT need this
+prefix (the original Reason was authoritative).
+
+### Decision axes (check ALL that apply per row)
+
+For each `Reason TBD = True` row, evaluate these axes from real sources, not pattern matching:
+
+| Axis | HIGH signal | MEDIUM signal | LOW signal |
+|------|-------------|---------------|------------|
+| **CUDA-Only sheet match** | Exact `Operation/API` match in `Not applicable` sheet with cited `Issue ID` | Plausible API mentioned in the sheet but match is by family/parent, not exact | No matching entry, yet the test clearly uses a CUDA-only API in source |
+| **Base function in `$PYTORCH_SRC`** | Located in `<testfile_cuda>` with file path + line range cited | Located in a refactored/renamed location; need user confirmation | Not found after thorough search of PyTorch + `third_party/torch-xpu-ops` |
+| **XPU wrapper / generated case** | `_xpu`-suffixed case located in `test/xpu/**` or via `instantiate_device_type_tests(..., allow_xpu=True)` with file cited | XPU instantiation present but the specific case is not yet generated (e.g., dtype/OpInfo filter ambiguity) | No XPU wrapper / no `allow_xpu` / device list excludes XPU |
+| **Known issue (both repos)** | Open/closed issue in `intel/torch-xpu-ops` or `pytorch/pytorch` with URL cited and verified via `gh issue view` | Issue mentioned in skip decorator but URL not verified | No issue found after `gh search issues` on both repos with multiple keyword variations |
+| **Local verification** | Test actually executed locally with output saved to `/tmp/opencode/<workbook>_local_verify/` | Partial run / timeout / interpreted output | Not run |
+| **Source-evidence for `Community Change`** | Guilty commit hash + author + date + diff that explains the regression | `git log` shows candidate commits but causal link not proven | No relevant commit found |
+
+### Assigning a confidence level
+
+- **HIGH** — At least ONE decisive axis is HIGH and there is no contradicting signal. Example: a
+  Failure with a verified open issue URL → `Failures (xpu broken)` HIGH; or a verified
+  `Not applicable`-sheet hit → `Not applicable` HIGH; or a verified guilty commit →
+  `Community Change` HIGH; or a verified XPU wrapper with closed-issue skip →
+  `To be enabled` HIGH.
+- **MEDIUM** — Best-fit category is identifiable but the strongest signal is indirect.
+  Example: base function exists, XPU wrapper *should* be generated but I cannot confirm the
+  specific dtype/parameter slice → `To be enabled` MEDIUM.
+- **LOW** — After running the full workflow, no axis produced a confident category. Set
+  `Reason = "Need human check"`. LOW is NOT a fallback for skipping work; it is the explicit
+  outcome of a complete-but-inconclusive investigation.
+
+### When `Need human check` is and is not appropriate
+
+USE `Need human check` (LOW) when ALL of the following hold:
+
+1. The CUDA-Only sheet check was performed and did not produce an exact match.
+2. The base function check in `$PYTORCH_SRC` (including `third_party/torch-xpu-ops/test/xpu/**`)
+   was performed and the result is ambiguous or absent.
+3. Known-issue search in BOTH `intel/torch-xpu-ops` and `pytorch/pytorch` was performed and
+   yielded no usable evidence.
+4. No other category (`To be enabled`, `Local Passed`, `Feature gap`, `Failures (xpu broken)`,
+   `Test Enviroment limitation`, `Not applicable`, `Community Change`) can be assigned at HIGH
+   or MEDIUM confidence.
+
+DO NOT use `Need human check` when:
+
+- You simply did not perform one of the checks above. Run the check first.
+- The category is ambiguous between two clearly-applicable labels (e.g., `Feature gap` vs
+  `To be enabled` when XPU clearly lacks the op). Pick the best-fit and mark MEDIUM.
+- The test is CPU-only. Use `Not applicable` with `DetailReason = CPU Case`.
+
+### `DetailReason` content requirements per confidence level
+
+- **HIGH**: cite the decisive evidence directly (file path + line range, Issue URL, sheet
+  `Issue ID`, commit hash). Example:
+  `[Confidence: HIGH] To be enabled. Base function test_sdpa at $PYTORCH_SRC/test/test_nn.py#L1234-L1267; XPU wrapper $PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu/test_nn_xpu.py uses instantiate_device_type_tests with allow_xpu=True.`
+
+- **MEDIUM**: cite the strongest signal AND name the unresolved gap. Example:
+  `[Confidence: MEDIUM] To be enabled. Base test_foo found at .../test_x.py#L42; XPU instantiation present but dtype=bfloat16 slice not confirmed in test/xpu/test_x_xpu.py.`
+
+- **LOW** (→ `Need human check`): enumerate which axes were checked and why each was
+  inconclusive. Example:
+  `[Confidence: LOW] Need human check. Not applicable sheet: no match for torch.foo.bar. Base function: candidate test_foo present but signature changed (device-agnostic refactor in commit abc1234, behavior on XPU unclear). XPU wrapper: not located in test/xpu/**. Known issues: gh search on 'test_foo xpu' returned 0 results in both intel/torch-xpu-ops and pytorch/pytorch. Local run not attempted (test requires multi-GPU).`
+
+### Workflow integration
+
+- The status-specific subskills (`blank/`, `failed/`, `skipped/`) MUST emit a confidence level
+  alongside their `Reason` decision for every `Reason TBD = True` row.
+- When saving `.agent.xlsx`, blue-fill cells per the existing convention. NEVER modify
+  `Reason TBD`.
+- For LOW rows, `Reason` becomes `Need human check` and the original best-guess (if any) is
+  preserved in `DetailReason` after the `[Confidence: LOW]` prefix, so a human reviewer can see
+  what was considered.
 
 ## Deep Analysis Requirements (CRITICAL)
 

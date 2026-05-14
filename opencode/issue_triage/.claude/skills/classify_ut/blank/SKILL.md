@@ -66,6 +66,11 @@ and targeted local runs when needed.
   exists after parametrization, do not call it community changes.
 - Do not change `Reason TBD` after classification. Mark updated `Reason`, `DetailReason`, and
   `DetailReason` cells blue.
+- For every row with `Reason TBD = True`, `DetailReason` MUST start with a confidence prefix
+  `[Confidence: HIGH|MEDIUM|LOW]` per the **Confidence Rubric & Need-Human-Check Rule** in the
+  parent skill. When the rubric resolves to LOW, set `Reason = "Need human check"` and explain
+  in `DetailReason` which axes were checked and why each was inconclusive. Never use
+  `Need human check` without first performing the full workflow.
 
 ## Workflow
 
