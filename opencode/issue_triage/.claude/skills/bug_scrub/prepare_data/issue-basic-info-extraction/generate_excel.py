@@ -8,7 +8,7 @@ import requests
 import argparse
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-ROOT_DIR = "/home/daisydeng/ai_for_validation/opencode/issue_triage"
+ROOT_DIR = "/home/daisyden/opencode/ai_for_validation/opencode/issue_triage"
 RESULT_DIR = os.path.join(ROOT_DIR, "result")
 DATA_DIR = os.path.join(ROOT_DIR, "data")
 # DOC_DIR = os.path.join(ROOT_DIR, "doc")  # Removed ops_dep loading
@@ -19,8 +19,43 @@ GITHUB_HEADERS = {
     "Authorization": f"token {GITHUB_TOKEN}"
 } if GITHUB_TOKEN else {}
 GITHUB_GRAPHQL_URL = "https://api.github.com/graphql"
-PROJECT_PRIORITY_FIELD = "PyTorchXPU Priority"
 VALID_PRIORITIES = {"P0", "P1", "P2", "P3"}
+
+# Mapping: prefixed field name (used outside the PyTorchXPU project) -> cache key
+PROJECT_FIELDS_PREFIXED = {
+    "PyTorchXPU Priority": "project_priority",
+    "PyTorchXPU Status": "project_status",
+    "PyTorchXPU Estimate": "project_estimate",
+    "PyTorchXPU Depending": "project_depending",
+    "PyTorchXPU Short Comments": "project_short_comments",
+}
+# Mapping: bare field name (used inside the PyTorchXPU project) -> cache key
+PYTORCHXPU_FIELD_MAP = {
+    "Priority": "project_priority",
+    "Status": "project_status",
+    "Estimate": "project_estimate",
+    "Depending": "project_depending",
+    "Short Comments": "project_short_comments",
+}
+ALL_PROJECT_KEYS = set(PROJECT_FIELDS_PREFIXED.values())
+
+# Excel cell limits
+EXCEL_MAX_CELL_LEN = 32767
+try:
+    from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
+except ImportError:
+    ILLEGAL_CHARACTERS_RE = re.compile(r"[\x00-\x08\x0b-\x0c\x0e-\x1f]")
+
+
+def sanitize_cell(value):
+    """Strip Excel-illegal control chars and truncate to Excel cell limit."""
+    if value is None:
+        return ""
+    text = str(value)
+    text = ILLEGAL_CHARACTERS_RE.sub("", text)
+    if len(text) > EXCEL_MAX_CELL_LEN:
+        text = text[:EXCEL_MAX_CELL_LEN]
+    return text
 
 
 def normalize_project_priority(value):
@@ -44,12 +79,19 @@ def project_field_value(field_value):
     return ""
 
 
-def fetch_project_priority(issue):
+def fetch_project_fields(issue):
+    """Fetch all 5 PyTorchXPU project fields for one issue in a single GraphQL request.
+
+    Returns a dict with keys: project_priority, project_status, project_estimate,
+    project_depending, project_short_comments. Missing fields are empty strings.
+    Priority is normalized to P0/P1/P2/P3; other fields are raw strings.
+    """
+    result = {key: "" for key in ALL_PROJECT_KEYS}
     if not GITHUB_TOKEN:
-        return ""
+        return result
     node_id = issue.get("node_id")
     if not node_id:
-        return ""
+        return result
     query = """
     query($id: ID!) {
       node(id: $id) {
@@ -90,38 +132,48 @@ def fetch_project_priority(issue):
         timeout=30,
     )
     if response.status_code != 200:
-        return ""
+        return result
     data = response.json()
     if data.get("errors"):
-        return ""
+        return result
     project_items = (((data.get("data") or {}).get("node") or {}).get("projectItems") or {}).get("nodes") or []
     for item in project_items:
         project_title = ((item.get("project") or {}).get("title") or "").strip()
         field_values = ((item.get("fieldValues") or {}).get("nodes") or [])
         for field_value in field_values:
             field_name = project_field_name(field_value)
-            if field_name != PROJECT_PRIORITY_FIELD and not (
-                project_title == "PyTorchXPU" and field_name == "Priority"
-            ):
+            # Determine which result key this field maps to.
+            cache_key = PROJECT_FIELDS_PREFIXED.get(field_name)
+            if cache_key is None and project_title == "PyTorchXPU":
+                cache_key = PYTORCHXPU_FIELD_MAP.get(field_name)
+            if cache_key is None:
                 continue
-            priority = normalize_project_priority(project_field_value(field_value))
-            if priority in VALID_PRIORITIES:
-                return priority
-    return ""
+            raw = project_field_value(field_value)
+            if cache_key == "project_priority":
+                priority = normalize_project_priority(raw)
+                if priority in VALID_PRIORITIES and not result[cache_key]:
+                    result[cache_key] = priority
+            else:
+                if raw and not result[cache_key]:
+                    result[cache_key] = raw
+    return result
 
 
-def populate_project_priorities(issues):
+def populate_project_fields(issues):
     if not GITHUB_TOKEN:
-        print("GITHUB_TOKEN not set; skipping PyTorchXPU project priority fetch")
+        print("GITHUB_TOKEN not set; skipping PyTorchXPU project field fetch")
         return
-    missing = [issue for issue in issues if "project_priority" not in issue]
+    # Skip issue only when ALL 5 field keys are already present on the cached dict.
+    missing = [issue for issue in issues if not ALL_PROJECT_KEYS.issubset(issue.keys())]
     if not missing:
         return
-    print(f"Fetching {PROJECT_PRIORITY_FIELD} from GitHub Projects for {len(missing)} issues...")
+    print(f"Fetching PyTorchXPU project fields for {len(missing)} issues...")
     for idx, issue in enumerate(missing, 1):
-        issue["project_priority"] = fetch_project_priority(issue)
+        fields = fetch_project_fields(issue)
+        for key, value in fields.items():
+            issue[key] = value
         if idx % 50 == 0:
-            print(f"Fetched project priorities for {idx}/{len(missing)} issues...")
+            print(f"Fetched project fields for {idx}/{len(missing)} issues...")
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description="Generate Excel report for torch-xpu-ops issues")
@@ -170,7 +222,7 @@ if TARGET_ISSUE_IDS:
     issues = [i for i in issues if i['number'] in TARGET_ISSUE_IDS]
     print(f"Filtered to {len(issues)} target issues: {sorted(TARGET_ISSUE_IDS)}")
 
-populate_project_priorities(issues)
+populate_project_fields(issues)
 if GITHUB_TOKEN and not TARGET_ISSUE_IDS:
     with open(issues_json_path, 'w') as f:
         json.dump(issues, f)
@@ -952,6 +1004,37 @@ def get_dependency_from_body(body, labels=None):
     return 'None'
 
 
+# Patterns for extracting error/traceback when an issue has no parsed test cases.
+ERROR_LINE_RE = re.compile(
+    r'^\s*(?:[A-Za-z_][\w\.]*(?:Error|Exception|Warning)|RuntimeError|AssertionError|'
+    r'ValueError|TypeError|IndexError|KeyError|ImportError|NotImplementedError|'
+    r'AttributeError|InductorError):\s*.+',
+    re.MULTILINE,
+)
+TRACEBACK_RE = re.compile(
+    r'Traceback \(most recent call last\):.*?(?=\n\s*\n|\n###|\n```|\Z)',
+    re.DOTALL,
+)
+
+
+def extract_error_message(body):
+    if not body:
+        return ""
+    match = ERROR_LINE_RE.search(body)
+    if match:
+        return match.group(0).strip()
+    return ""
+
+
+def extract_traceback(body):
+    if not body:
+        return ""
+    match = TRACEBACK_RE.search(body)
+    if match:
+        return match.group(0).strip()
+    return ""
+
+
 # Create Excel
 wb = openpyxl.Workbook()
 
@@ -965,8 +1048,10 @@ ws_issues.title = "Issues"
 # Priority is initialized from GitHub Projects when PyTorchXPU Priority is set;
 # otherwise Phase 3 fills it from triage analysis.
 headers = ["Issue ID", "Title", "Status", "Assignee", "Reporter", "Labels",
-           "Created Time", "Updated Time", "Milestone", "Summary", "Type",
-           "Module", "Test Module", "Dependency", "Priority"]
+            "Created Time", "Updated Time", "Milestone", "Summary", "Type",
+           "Module", "Test Module", "Dependency", "Priority",
+           "PyTorchXPU Status", "PyTorchXPU Estimate",
+           "PyTorchXPU Depending", "PyTorchXPU Short Comments"]
 
 for col, header in enumerate(headers, 1):
     cell = ws_issues.cell(row=1, column=col, value=header)
@@ -996,9 +1081,22 @@ for col, header in enumerate(e2e_headers, 1):
     cell.font = Font(bold=True, color="FFFFFF")
     cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
 
+# Sheet 4: Others (issues without UT or E2E test cases)
+ws_others = wb.create_sheet("Others")
+others_headers = ["ID", "Title", "Labels", "reproduce step", "Error Message", "Traceback"]
+
+for col, header in enumerate(others_headers, 1):
+    cell = ws_others.cell(row=1, column=col, value=header)
+    cell.font = Font(bold=True, color="FFFFFF")
+    cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+
 issue_row = 2
 case_row = 2
 e2e_row = 2
+others_row = 2
+
+issues_with_ut = set()
+issues_with_e2e = set()
 
 # Track test case duplicates: (test_file, test_class, test_case) per issue
 # Also skip cases where test_case or test_class cannot be extracted
@@ -1045,6 +1143,10 @@ for issue in issues:
     ws_issues.cell(row=issue_row, column=13, value=test_module)
     ws_issues.cell(row=issue_row, column=14, value=dependency)
     ws_issues.cell(row=issue_row, column=15, value=project_priority)
+    ws_issues.cell(row=issue_row, column=16, value=sanitize_cell(issue.get('project_status', '')))
+    ws_issues.cell(row=issue_row, column=17, value=sanitize_cell(issue.get('project_estimate', '')))
+    ws_issues.cell(row=issue_row, column=18, value=sanitize_cell(issue.get('project_depending', '')))
+    ws_issues.cell(row=issue_row, column=19, value=sanitize_cell(issue.get('project_short_comments', '')))
     
     # Parse test cases and e2e info
     test_cases = parse_test_cases_from_body(body)
@@ -1092,6 +1194,7 @@ for issue in issues:
             ws_cases.cell(row=case_row, column=7, value=test_case)
             # Columns 8-11: Error Message, Traceback, torch-ops, dependency - left blank for test_result_analysis/
             case_row += 1
+            issues_with_ut.add(num)
 
     # Add to e2e sheet
     if e2e_info:
@@ -1109,6 +1212,7 @@ for issue in issues:
             ws_e2e.cell(row=e2e_row, column=10, value=info.get('disable_cudagraphs', ''))
             # Columns 11-12: Error Message, Traceback - left blank for test_result_analysis/
             e2e_row += 1
+            issues_with_e2e.add(num)
     elif test_module == 'e2e':
         # Add e2e issues without specific model info
         ws_e2e.cell(row=e2e_row, column=1, value=num)
@@ -1116,6 +1220,7 @@ for issue in issues:
         ws_e2e.cell(row=e2e_row, column=3, value='unknown')
         # Columns 11-12: Error Message, Traceback - left blank for test_result_analysis/
         e2e_row += 1
+        issues_with_e2e.add(num)
 
     issue_row += 1
 
@@ -1126,7 +1231,29 @@ print(f"\nTotal issues: {issue_row-2}")
 print(f"Total test case rows: {case_row-2}")
 print(f"Total e2e case rows: {e2e_row-2}")
 
-for ws in [ws_issues, ws_cases, ws_e2e]:
+for issue in issues:
+    num = issue['number']
+    if num in issues_with_ut or num in issues_with_e2e:
+        continue
+    title = issue['title']
+    body = issue.get('body', '') or ''
+    labels = issue.get('labels', [])
+    label_str = ", ".join([l['name'] for l in labels])
+    reproduce_step = extract_e2e_reproducer(body, title)
+    error_msg = extract_error_message(body)
+    traceback_text = extract_traceback(body)
+
+    ws_others.cell(row=others_row, column=1, value=num)
+    ws_others.cell(row=others_row, column=2, value=sanitize_cell(title))
+    ws_others.cell(row=others_row, column=3, value=sanitize_cell(label_str))
+    ws_others.cell(row=others_row, column=4, value=sanitize_cell(reproduce_step))
+    ws_others.cell(row=others_row, column=5, value=sanitize_cell(error_msg))
+    ws_others.cell(row=others_row, column=6, value=sanitize_cell(traceback_text))
+    others_row += 1
+
+print(f"Total others rows: {others_row-2}")
+
+for ws in [ws_issues, ws_cases, ws_e2e, ws_others]:
     for col in ws.columns:
         max_length = 0
         col_letter = col[0].column_letter

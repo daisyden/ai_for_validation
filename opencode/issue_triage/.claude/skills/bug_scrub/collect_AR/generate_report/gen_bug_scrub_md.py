@@ -106,8 +106,10 @@ C = {k: col(k) for k in [
     "owner_transferred","duplicated_issue","Dependency","action_Type",
 ]}
 
-# Traceback index: {issue_id: [ {source, test_case, test_file, error, traceback}, ... ]}
-tb_by_issue: dict[int, list[dict]] = defaultdict(list)
+# Test case index: {issue_id: [ {source, name, file, error, traceback, ...status cols}, ... ]}
+# Includes ALL test case rows (not just those with traceback) so detail files
+# can render a complete results table AND inline tracebacks.
+tc_by_issue: dict[int, list[dict]] = defaultdict(list)
 for sheet_name, src_label in [("Test Cases", "UT"), ("E2E Test Cases", "E2E")]:
     ws_tb = wb[sheet_name]
     h_tb = [c.value for c in ws_tb[1]]
@@ -116,10 +118,21 @@ for sheet_name, src_label in [("Test Cases", "UT"), ("E2E Test Cases", "E2E")]:
     tf_i = h_tb.index("Test File") if "Test File" in h_tb else None
     mdl_i = h_tb.index("Model") if "Model" in h_tb else None
     bench_i = h_tb.index("Benchmark") if "Benchmark" in h_tb else None
+    # Status columns (may not exist in every sheet)
+    def _safe_idx(name):
+        return h_tb.index(name) if name in h_tb else None
+    xpu_st_i = _safe_idx("XPU Status")
+    stock_st_i = _safe_idx("Stock Status")
+    xpu_acc_i = _safe_idx("XPU Accuracy Status")
+    xpu_exist_i = _safe_idx("XPU Case Exist")
+    cuda_exist_i = _safe_idx("CUDA Case Exist")
+    dup_i = _safe_idx("duplicated_issue")
+    tc_class_i = _safe_idx("Test Class")
+    phase_i = _safe_idx("Phase")
+    dtype_i = _safe_idx("Dtype")
     for r_tb in ws_tb.iter_rows(min_row=2, values_only=True):
         iid_v = r_tb[idx["Issue ID"]]
-        tb_v = r_tb[idx["Traceback"]]
-        if iid_v is None or not tb_v:
+        if iid_v is None:
             continue
         try:
             iid_int = int(iid_v)
@@ -130,13 +143,31 @@ for sheet_name, src_label in [("Test Cases", "UT"), ("E2E Test Cases", "E2E")]:
             name = str(r_tb[tc_i])
         elif mdl_i is not None and r_tb[mdl_i]:
             name = f"{r_tb[bench_i] or ''}/{r_tb[mdl_i]}".strip("/")
-        tb_by_issue[iid_int].append({
+        tb_v = r_tb[idx["Traceback"]]
+        entry = {
             "source": src_label,
             "name": name,
             "file": str(r_tb[tf_i]) if tf_i is not None and r_tb[tf_i] else "",
+            "test_class": str(r_tb[tc_class_i]) if tc_class_i is not None and r_tb[tc_class_i] else "",
             "error": str(r_tb[idx["Error Message"]]) if r_tb[idx["Error Message"]] else "",
-            "traceback": str(tb_v),
-        })
+            "traceback": str(tb_v) if tb_v else "",
+            "xpu_status": str(r_tb[xpu_st_i]) if xpu_st_i is not None and r_tb[xpu_st_i] else "",
+            "stock_status": str(r_tb[stock_st_i]) if stock_st_i is not None and r_tb[stock_st_i] else "",
+            "xpu_accuracy": str(r_tb[xpu_acc_i]) if xpu_acc_i is not None and r_tb[xpu_acc_i] else "",
+            "xpu_case_exist": str(r_tb[xpu_exist_i]) if xpu_exist_i is not None and r_tb[xpu_exist_i] else "",
+            "cuda_case_exist": str(r_tb[cuda_exist_i]) if cuda_exist_i is not None and r_tb[cuda_exist_i] else "",
+            "dup": str(r_tb[dup_i]) if dup_i is not None and r_tb[dup_i] else "",
+            "phase": str(r_tb[phase_i]) if phase_i is not None and r_tb[phase_i] else "",
+            "dtype": str(r_tb[dtype_i]) if dtype_i is not None and r_tb[dtype_i] else "",
+        }
+        tc_by_issue[iid_int].append(entry)
+
+# Legacy alias used by write_detail — rows with non-empty traceback only
+tb_by_issue: dict[int, list[dict]] = defaultdict(list)
+for iid, entries in tc_by_issue.items():
+    for e in entries:
+        if e["traceback"]:
+            tb_by_issue[iid].append(e)
 
 rows = [tuple(c.value for c in r) for r in ws.iter_rows(min_row=2)]
 print(f"loaded {len(rows)} rows")
@@ -487,6 +518,37 @@ def write_detail(r) -> None:
         iid_int = int(iid)
     except (TypeError, ValueError):
         iid_int = None
+
+    all_cases = tc_by_issue.get(iid_int, []) if iid_int is not None else []
+    if all_cases:
+        ut_cases = [e for e in all_cases if e["source"] == "UT"]
+        e2e_cases = [e for e in all_cases if e["source"] == "E2E"]
+
+        if ut_cases:
+            a(f"## UT Test Case Results ({len(ut_cases)})")
+            a("")
+            a("| # | Test Case | Test File | XPU Status | Stock Status | XPU Case Exist | Error Message |")
+            a("|---|---|---|---|---|---|---|")
+            for i, e in enumerate(ut_cases, start=1):
+                err_short = e["error"][:120] + ("…" if len(e["error"]) > 120 else "") if e["error"] else ""
+                err_short = err_short.replace("|", "\\|").replace("\n", " ")
+                file_cell = f"`{e['file']}`" if e["file"] else ""
+                a(f"| {i} | {e['name']} | {file_cell}"
+                  f" | {e['xpu_status']} | {e['stock_status']} | {e['xpu_case_exist']} | {err_short} |")
+            a("")
+
+        if e2e_cases:
+            a(f"## E2E Test Case Results ({len(e2e_cases)})")
+            a("")
+            a("| # | Model | Phase | Dtype | XPU Accuracy Status | Error Message |")
+            a("|---|---|---|---|---|---|")
+            for i, e in enumerate(e2e_cases, start=1):
+                err_short = e["error"][:120] + ("…" if len(e["error"]) > 120 else "") if e["error"] else ""
+                err_short = err_short.replace("|", "\\|").replace("\n", " ")
+                a(f"| {i} | {e['name']} | {e['phase']} | {e['dtype']}"
+                  f" | {e['xpu_accuracy']} | {err_short} |")
+            a("")
+
     tbs = tb_by_issue.get(iid_int, []) if iid_int is not None else []
     if tbs:
         a(f"## Test Cases & Traceback ({len(tbs)})")

@@ -64,7 +64,7 @@ flowchart TD
     end
 
     %% ========== ARTIFACTS ==========
-    XLSX[(result/torch_xpu_ops_issues.xlsx<br/><b>Issues</b> · Test Cases · E2E · Not Applicable)]:::art
+    XLSX[(result/torch_xpu_ops_issues.xlsx<br/><b>Issues</b> · Test Cases · E2E · <b>Others</b> · Not Applicable)]:::art
     CIART[(ci_results/)]:::art
     BACK[(pytorch_xpu_backend_analysis.md)]:::art
     REPORT[(result/bug_scrub.md<br/>result/bug_scrub_ut.md<br/>result/details/{id}.md × N)]:::out
@@ -75,7 +75,7 @@ flowchart TD
     CI --> S12
     PT --> S14
 
-    S11 -->|"Issues · Test Cases · E2E sheets"| XLSX
+    S11 -->|"Issues · Test Cases · E2E · Others sheets<br/>+ PyTorchXPU Status/Estimate/Depending/Short Comments"| XLSX
     S12 --> CIART
     S13 -->|"+ Not Applicable sheet"| XLSX
     S14 --> BACK
@@ -150,7 +150,7 @@ Each skill's contract, in the order the columns appear in the Excel:
 
 | Phase | Skill | Reads | Writes (Issues sheet) | Writes (Test Cases sheet) |
 |---|---|---|---|---|
-| 1.1 | issue-basic-info-extraction | GitHub API | Issue ID, Title, Status, Assignee, Reporter, Labels, Created Time, Body | Test Case, Test File, Error Message, Traceback |
+| 1.1 | issue-basic-info-extraction | GitHub API + PyTorchXPU Project (GraphQL) | Issue ID, Title, Status, Assignee, Reporter, Labels, Created Time, Body, Priority, **PyTorchXPU Status**, **PyTorchXPU Estimate**, **PyTorchXPU Depending**, **PyTorchXPU Short Comments**; also writes **Others** sheet (issues with no UT/E2E case) | Test Case, Test File, Error Message, Traceback |
 | 1.2 | download_ci_result | CI artifacts URL | — (produces `ci_results/`) | — |
 | 1.3 | create-not-applicable-sheet | Issue labels | *(writes "Not Applicable" sheet)* | — |
 | 1.4 | pytorch_xpu_backend_analysis | pytorch repo | — (produces standalone .md) | — |
@@ -435,6 +435,7 @@ flowchart TD
 
 ## Version
 
+v1.7 — 2026-05-14 — §1 master diagram + §2 Skill→Column Matrix updated for Phase 1.1: now extracts all 5 PyTorchXPU project fields (Priority, Status, Estimate, Depending, Short Comments) in a single GraphQL call per issue and writes the four non-Priority fields to Issues cols 16-19. Added new "Others" sheet to the Excel artifact node (issues with no parseable UT or E2E reproducer).
 v1.6 — 2026-04-29 — Retired `run_pass_backfill.py` post-pass node from §6 sub-workflow. Its classification rule (VERIFIED+MERGED→VERIFY_AND_CLOSE / +OPEN→TRACK_PR / +CLOSED-unmerged→RETRIAGE_PRS) was inlined into the Phase 4b agent prompt as the **DERIVATION RULE** (`agent_space/phase4b/AGENT_INSTRUCTIONS.md`), so verdicts are emitted during deep analysis rather than patched after merge.
 v1.5 — 2026-04-27 — Added Phase 5b (`generate_html_report`) node to §1 master diagram: `gen_bug_scrub_html.py` consumes `bug_scrub.md` + `Issues` sheet (for Category/Dependency backfill) and emits self-contained `bug_scrub.html`. Phase 5 markdown remains canonical and unchanged.
 v1.4 — 2026-04-27 — Reverted Phase 5 reconciliation node added in v1.3. PR-state fixes belong in Phase 4b only (Vector E + Step 2.5 in §6 sub-workflow remain). Phase 5 is purely presentational: `run_action_type.py` → `gen_bug_scrub_md.py`.
