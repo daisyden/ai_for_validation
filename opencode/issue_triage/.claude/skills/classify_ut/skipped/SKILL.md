@@ -34,6 +34,10 @@ semantic analysis of `message_xpu`, linked issues, local source, and targeted lo
   parent skill. When the rubric resolves to LOW, set `Reason = "Need human check"` and
   enumerate which axes were checked (sheet match, base function, XPU wrapper, known issue,
   local run) and why each was inconclusive.
+- When a candidate test maps to an `Issues`-sheet row carrying the `skipped` label (and not
+  also `not_target` / `wontfix`), follow the **Dynamic-Skip Rule** in the parent skill:
+  local verification via `port-pytorch-tests-xpu` on a `daisyden/pytorch` branch is REQUIRED
+  to split `Failures (xpu broken)` vs `Feature gap` vs (rarely) `To be enabled`.
 
 ## Workflow Steps
 
@@ -88,7 +92,7 @@ always extract and include the full URL in `DetailReason`.**
 | `test is slow; run with PYTORCH_TEST_WITH_SLOW` | Slow test gate | Run with `PYTORCH_TEST_WITH_SLOW=1` |
 | `Requires at least N GPUs` | Hardware requirement | `Test Enviroment limitation` |
 | `not-support-multithread` | XPU feature gap | `Feature gap` + #3098 |
-| `Only runs on cuda` | CUDA-only gate | Apply **CUDA-Only Judgement Rule** (parent skill): look up the API in the `Not applicable` sheet of `${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx`. Match -> `Not applicable` with Issue ID cited. No match -> `To be enabled` (often a stale gate or SM-capability check). |
+| `Only runs on cuda` | CUDA-only gate | Apply **CUDA-Only Judgement Rule** (parent skill): look up the API in the `Issues` sheet of `${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx` filtered by `Labels` containing `not_target` OR a `wontfix` variant. Match -> `Not applicable` with `Issue ID` and deciding label cited. No match -> `To be enabled` (often a stale gate or SM-capability check). |
 | `Skipped!` (generic) | Various mechanisms | Read source to find skip dict/decorator |
 | `Fails with Triton update` | Unconditional `unittest.skip` | `Test Enviroment limitation` (all backends) |
 | `Fails under GCC 13` | Compiler version | `Test Enviroment limitation` |

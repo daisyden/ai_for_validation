@@ -88,7 +88,7 @@ Tracks whether the **original** Reason was blank in the SOURCE workbook (e.g.,
 | `Feature gap` | XPU lacks a feature/API needed by the test. Known issue link required if available. |
 | `Failures (xpu broken)` / `Failures (XPU broken)` | Test fails due to an XPU implementation bug. Known issue link required. |
 | `Test Enviroment limitation` | True hardware/process constraint (multi-GPU, GCC version). NOT for skips that are stale or fixable. |
-| `Not applicable` | Either (a) a CPU-only test not relevant to XPU validation (`DetailReason` = `CPU Case`), or (b) a CUDA-only behavior whose API/torch op is listed in the **`Not applicable` sheet** of `${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx` (column `Operation/API`). `DetailReason` MUST name the exact API/feature (e.g., `CUDA-specific API: torch.cuda.jiterator`) and cite the matching `Not applicable`-sheet row (`Issue ID`). Never use generic "CUDA-only test" or "No XPU test data" — always identify the specific API or feature that XPU does not support. See the **CUDA-Only Judgement Rule** below. |
+| `Not applicable` | Either (a) a CPU-only test not relevant to XPU validation (`DetailReason` = `CPU Case`), or (b) a CUDA-only / out-of-scope behavior covered by an issue in the `Issues` sheet of `${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx` whose `Labels` column contains `not_target` OR a `wontfix` variant. `DetailReason` MUST name the exact API/feature (e.g., `CUDA-specific API: torch.cuda.jiterator`), cite the matching `Issue ID`, and quote the deciding label. Never use generic "CUDA-only test" or "No XPU test data" — always identify the specific API or feature that XPU does not support. See the **CUDA-Only Judgement Rule** below. |
 | `Community Change` | The base function/case no longer exists in the source being compared, was renamed/refactored/moved, or the test is disabled by an upstream PyTorch community issue/commit. `DetailReason` MUST include the full issue/PR URL when available, or exact source/commit evidence. Do not require `last_status_xpu = passed`; base-function absence is enough. |
 | `Need human check` | Deep analysis was performed but no category could be assigned with HIGH or MEDIUM confidence (see **Confidence Rubric & Need-Human-Check Rule** below). Only valid when `Reason TBD = True`. `DetailReason` MUST start with `[Confidence: LOW]` and enumerate which signals were checked and why each was inconclusive (no `not_target`-label match, base function ambiguous, no xpu wrapper located, no known issue in either repo, etc.). Never use this label as a shortcut to skip analysis — it is the explicit outcome of a thorough but inconclusive investigation. |
 
@@ -133,39 +133,46 @@ Specific content requirements per Reason:
 
 ## CUDA-Only Judgement Rule (authoritative for `Not applicable`)
 
-The **only** authoritative source for "CUDA-only behavior with no XPU equivalent" is the
-`not_target` label on issues in the reference workbook:
+The **only** authoritative source for "CUDA-only behavior with no XPU equivalent" is an
+issue in the reference workbook tagged with either of two equivalent label markers:
+
+- `not_target` — explicitly out of XPU scope (the original CUDA-only marker)
+- `wontfix` / `won't fix` / `won_t_fix` — XPU side has decided not to address the issue,
+  which is treated as equivalent to "not in XPU scope" for classification purposes
 
 ```
 ${ISSUE_TRIAGE_ROOT:-$HOME/opencode/ai_for_validation/opencode/issue_triage}/result/torch_xpu_ops_issues.xlsx
                                                                                               └─ sheet: "Issues"
-                                                                                                 └─ filter: Labels contains "not_target"
+                                                                                                 └─ filter: Labels contains "not_target" OR matches /won.?t.?fix/i
 ```
 
 (Historical note: the standalone `Not applicable` sheet that previously held these entries
-has been consolidated into the `Issues` sheet via the `not_target` label. The misspelled
-`Not Appliable` sheet was first renamed to `Not applicable`, then merged. All CUDA-only
-judgements now flow through `not_target`-labeled issues. Cross-reference via the
-`Test Cases` sheet to locate specific test bindings.)
+has been consolidated into the `Issues` sheet via labels. The misspelled `Not Appliable`
+sheet was first renamed to `Not applicable`, then merged. All CUDA-only judgements now flow
+through label-tagged issues. Cross-reference via the `Test Cases` sheet to locate specific
+test bindings.)
 
-### How to use the label
+### How to use the labels
 
 1. Open the workbook with `openpyxl` and load sheet `Issues`.
 2. The sheet columns are:
    `Issue ID | Title | Status | Assignee | Reporter | Labels | Created Time | Updated Time | Milestone | Summary`.
 3. To judge whether a row's failing/skipped API is CUDA-only, filter rows where the
-   `Labels` cell contains the literal string `not_target`. Then match the issue's
-   `Title` / `Summary` against the test in question by:
+   `Labels` cell contains EITHER `not_target` OR any `wontfix` variant
+   (case-insensitive, allowing `wontfix`, `won't fix`, `won_t_fix`, `wont fix`).
+   Then match the issue's `Title` / `Summary` against the test in question by:
    - exact op or test name in the title (e.g., `Support efficient attention`,
      `RuntimeError: expected scalar type Half but found Float`)
    - explicit test-name reference inside `Summary`
    - cross-lookup via the `Test Cases` sheet (`Test Case` column) — joining
-     `Test Cases.Issue ID` -> `Issues.Issue ID` filtered by `not_target`
-4. If a matching `not_target` issue exists -> the behavior IS CUDA-only -> classify
-   `Not applicable`, and in `DetailReason` cite the matching `Issue ID` and label verbatim:
-   `CUDA-specific behavior covered by not_target Issue #2285 ("Support efficient attention")`.
-5. **If no matching `not_target` issue exists, the behavior is NOT CUDA-only.** Do not
-   classify `Not applicable` on the CUDA-only branch. Re-route to the correct label:
+     `Test Cases.Issue ID` -> `Issues.Issue ID` filtered by the labels above
+4. If a matching `not_target`- or `wontfix`-labeled issue exists -> the behavior IS
+   CUDA-only / out-of-scope -> classify `Not applicable`, and in `DetailReason` cite the
+   matching `Issue ID` and the deciding label verbatim:
+   `CUDA-specific behavior covered by not_target Issue #2285 ("Support efficient attention")`,
+   or `Issue #NNNN labeled wontfix - XPU will not address`.
+5. **If no matching `not_target`/`wontfix` issue exists, the behavior is NOT CUDA-only.**
+   Do not classify `Not applicable` on the CUDA-only branch. Re-route to the correct label:
    - device-agnostic test that XPU should support -> `To be enabled`
    - XPU implementation bug -> `Failures (xpu broken)`
    - missing XPU feature -> `Feature gap`
@@ -173,12 +180,12 @@ judgements now flow through `not_target`-labeled issues. Cross-reference via the
    - test is CPU-only (`_cpu` suffix, `requires GPU`, etc.) -> `Not applicable` (CPU branch),
      `DetailReason = CPU Case`
 6. The CPU branch of `Not applicable` (`DetailReason = CPU Case`) does NOT require a
-   `not_target` match and is unaffected by this rule.
+   label match and is unaffected by this rule.
 
 ### Workflow snippet
 
 ```python
-import openpyxl, os
+import openpyxl, os, re
 xlsx = os.path.expanduser(
     os.environ.get("ISSUE_TRIAGE_ROOT", "~/opencode/ai_for_validation/opencode/issue_triage")
 ) + "/result/torch_xpu_ops_issues.xlsx"
@@ -188,26 +195,127 @@ header = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
 id_col = header.index("Issue ID")
 title_col = header.index("Title")
 label_col = header.index("Labels")
-not_target_issues = [
-    (row[id_col].value, row[title_col].value)
+WONTFIX = re.compile(r"won.?t.?fix", re.I)
+not_applicable_issues = [
+    (row[id_col].value, row[title_col].value, row[label_col].value)
     for row in ws.iter_rows(min_row=2)
-    if row[label_col].value and "not_target" in str(row[label_col].value)
+    if row[label_col].value and (
+        "not_target" in str(row[label_col].value).lower()
+        or WONTFIX.search(str(row[label_col].value))
+    )
 ]
-# Match candidate test/API against not_target_issues by title/summary keywords;
-# only mark Not applicable on a confirmed match.
 ```
+
+The matched issue must still be cross-referenced against the test by API/title; the label
+makes the issue eligible to anchor a `Not applicable` verdict but does not by itself prove
+the candidate test is the one the issue describes.
 
 ### Anti-patterns
 
 - Marking a row `Not applicable` because `name_cuda` contains the substring `cuda`.
 - Marking a row `Not applicable` because the skip message says `Only runs on cuda` without
-  confirming the underlying behavior is covered by a `not_target`-labeled issue (many such
-  gates are SM-capability gates or stale skips -> `To be enabled`).
+  confirming the underlying behavior is covered by a `not_target`- or `wontfix`-labeled
+  issue (many such gates are SM-capability gates or stale skips -> `To be enabled`).
 - Inventing a CUDA-only judgement locally instead of opening / labeling an issue with
-  `not_target` first. If you genuinely discover new CUDA-only behavior, open an issue in
-  `intel/torch-xpu-ops` and apply the `not_target` label before classifying.
+  `not_target` (or having an existing issue moved to `wontfix`) first. If you genuinely
+  discover new CUDA-only behavior, open an issue in `intel/torch-xpu-ops` and apply the
+  `not_target` label before classifying.
+- Treating `wontfix` as a generic "won't fix this bug report" without checking that the
+  issue actually scopes the API/test as out-of-scope on XPU. `wontfix` on a narrow
+  reproducer that the team simply triaged away does NOT make the entire op CUDA-only.
 - Citing the `Not applicable` sheet — that sheet no longer exists. Use the `not_target`
-  label on the `Issues` sheet.
+  or `wontfix` labels on the `Issues` sheet.
+
+## Dynamic-Skip Rule (`skipped` label semantics)
+
+The `skipped` label on an `Issues`-sheet row means the test (or test family) is currently
+dynamically skipped on XPU because some issue is preventing it from running successfully —
+**the test cases exist and would execute, but a skip decorator or runtime gate stops them**.
+This is NOT a CUDA-only judgement; it is an XPU-side problem that needs to be reclassified
+as either `Failures (xpu broken)` or `Feature gap` based on what the skip is actually
+hiding.
+
+### Decision flow
+
+When a candidate test maps to an issue with the `skipped` label (and NO `not_target` /
+`wontfix` label — those override and yield `Not applicable`):
+
+1. **Local verify is REQUIRED.** Do not classify on issue body keywords alone. The issue
+   describes WHY the case is skipped; you still need to run it with the skip lifted to
+   know whether it is a broken kernel (Failures) or a missing feature (Feature gap).
+2. Port / enable the case via the `port-pytorch-tests-xpu` workflow (see the
+   "Local Verification via XPU Port" section below) and run it.
+3. Read the actual failure mode of the executed run:
+   - Crash, accuracy mismatch, hang, `RuntimeError` from an existing XPU kernel, or any
+     other defect inside an XPU operator that exists -> `Failures (xpu broken)`.
+     `DetailReason` must cite the `skipped`-labeled issue AND describe the observed
+     failure mode from the local run.
+   - `NotImplementedError`, "operator not implemented for 'XPU'", "no XPU kernel for ...",
+     dispatch miss, an explicit `aten::<op>` registration gap, or a clear "this feature
+     does not exist on XPU yet" signal -> `Feature gap`.
+     `DetailReason` must cite the `skipped`-labeled issue AND name the missing
+     operator/feature observed locally.
+   - Test passes after the skip is lifted -> `To be enabled` (the skip is stale and just
+     needs to be removed). `DetailReason` cites both the `skipped`-labeled issue and the
+     successful local-run artifact.
+4. **Same `skipped`-labeled issue → same verdict for every test in its scope.** Cluster
+   the rows by their referenced issue and apply the verdict from one local run to all
+   siblings, citing the same evidence.
+
+### Anti-patterns
+
+- Classifying a `skipped`-label row as `Not applicable`. `skipped` is an XPU-side gate,
+  not a CUDA-only scope decision.
+- Picking `Failures (xpu broken)` vs `Feature gap` from issue text alone when local
+  verification is feasible. The two labels imply very different remediation paths
+  (fix kernel vs. implement feature) and the wrong one misleads the human reviewer.
+- Skipping the local run because "the issue title says feature". Issue titles drift;
+  the runtime behavior is what determines the label.
+
+## Local Verification via XPU Port (`To be enabled` and `skipped`-label cases)
+
+When a row's verdict depends on actually running the case on XPU — specifically:
+
+- Any `To be enabled` row where the goal is to confirm the test works once XPU is
+  enabled (no tracked issue or only stale skip information).
+- Any `skipped`-label row that needs the Failures-vs-Feature-gap split (see above).
+
+…the local-run **MUST** be performed via the standard porting workflow, not via ad-hoc
+device monkey-patches inside the workspace:
+
+1. Load and follow the `port-pytorch-tests-xpu` skill at
+   `${ISSUE_TRIAGE_ROOT}/.claude/skills/unittest_dev/port-pytorch-tests-xpu/SKILL.md` for
+   the exact porting recipe (direct copy vs. `XPUPatchForImport` hook, hook-body parity
+   rules, instantiation pattern). That skill is authoritative for HOW to port.
+2. Do the porting work in a **new branch on `daisyden/pytorch`** (NOT in upstream
+   `pytorch/pytorch`, NOT directly in `~/upstream/pytorch`). Branch from the same base
+   commit that `~/upstream/pytorch` is synced to so the port mirrors current upstream.
+3. Save the executed-test stdout/stderr (and any artifact paths) under
+   `/tmp/opencode/<workbook>_local_verify/<case>.log`. This is the path that the
+   Confidence Rubric recognizes as a HIGH-evidence "local verification artifact".
+4. Use the run outcome to assign the Reason per the matrix below:
+   - PASS -> `To be enabled` HIGH (cite log path).
+   - FAIL with crash/accuracy/runtime error on an existing XPU kernel ->
+     `Failures (xpu broken)` HIGH (cite log path + observed error).
+   - FAIL with `NotImplementedError` / dispatch miss / "no XPU kernel" ->
+     `Feature gap` HIGH (cite log path + missing op).
+   - Test is CPU-only or genuinely not portable -> reclassify via the regular rules,
+     do NOT use a port as the gate (porting CPU-only tests is a category error).
+5. The DetailReason MUST cite the `daisyden/pytorch` branch name AND the log artifact
+   path, e.g.:
+   `[Confidence: HIGH] To be enabled. Ported via daisyden/pytorch branch
+   xpu-port-test-foo; local run /tmp/opencode/Non_inductor_ut_status_ww18_26_v2.agent_local_verify/test_foo.log shows PASS.`
+
+### Anti-patterns
+
+- Running a one-off `python test_foo.py -k case` inside the workspace's PyTorch checkout
+  and treating that as the local-verification artifact. Use the porting workflow so the
+  run is reproducible and reviewable through a `daisyden/pytorch` branch.
+- Reusing an old log from a prior run that did not actually exercise the case after
+  the skip was lifted. Each local-verification claim must point at a fresh run executed
+  for this classification.
+- Pushing the port to `pytorch/pytorch` or to `intel/torch-xpu-ops` directly. Local
+  verification ports stay on `daisyden/pytorch` until the human review approves promotion.
 
 ## Confidence Rubric & Need-Human-Check Rule (authoritative for `Reason TBD = True` rows)
 
@@ -232,11 +340,11 @@ For each `Reason TBD = True` row, evaluate these axes from real sources, not pat
 
 | Axis | HIGH signal | MEDIUM signal | LOW signal |
 |------|-------------|---------------|------------|
-| **CUDA-Only sheet match** | Exact `Operation/API` match in `Not applicable` sheet with cited `Issue ID` | Plausible API mentioned in the sheet but match is by family/parent, not exact | No matching entry, yet the test clearly uses a CUDA-only API in source |
+| **CUDA-Only label match** | Exact `Operation/API` match in an `Issues`-sheet row whose `Labels` contains `not_target` OR a `wontfix` variant, with cited `Issue ID` | Plausible API mentioned by such an issue but match is by family/parent, not exact | No matching labeled entry, yet the test clearly uses a CUDA-only API in source |
 | **Base function in `$PYTORCH_SRC`** | Located in `<testfile_cuda>` with file path + line range cited | Located in a refactored/renamed location; need user confirmation | Not found after thorough search of PyTorch + `third_party/torch-xpu-ops` |
 | **XPU wrapper / generated case** | `_xpu`-suffixed case located in `test/xpu/**` or via `instantiate_device_type_tests(..., allow_xpu=True)` with file cited | XPU instantiation present but the specific case is not yet generated (e.g., dtype/OpInfo filter ambiguity) | No XPU wrapper / no `allow_xpu` / device list excludes XPU |
-| **Known issue (both repos)** | Open/closed issue in `intel/torch-xpu-ops` or `pytorch/pytorch` with URL cited and verified via `gh issue view` | Issue mentioned in skip decorator but URL not verified | No issue found after `gh search issues` on both repos with multiple keyword variations |
-| **Local verification** | Test actually executed locally with output saved to `/tmp/opencode/<workbook>_local_verify/` | Partial run / timeout / interpreted output | Not run |
+| **Known issue (both repos)** | Open/closed issue in `intel/torch-xpu-ops` or `pytorch/pytorch` with URL cited and verified via `gh issue view`; for `skipped`-labeled issues the verdict is anchored by a local-run artifact (see below) | Issue mentioned in skip decorator but URL not verified | No issue found after `gh search issues` on both repos with multiple keyword variations |
+| **Local verification** | Case ported via `port-pytorch-tests-xpu` on a `daisyden/pytorch` branch and executed, with stdout/stderr saved to `/tmp/opencode/<workbook>_local_verify/<case>.log` (cite both branch name and log path) | Partial run / timeout / interpreted output without an artifact path | Not run |
 | **Source-evidence for `Community Change`** | Guilty commit hash + author + date + diff that explains the regression | `git log` shows candidate commits but causal link not proven | No relevant commit found |
 
 ### Assigning a confidence level

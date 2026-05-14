@@ -53,14 +53,14 @@ and targeted local runs when needed.
   XPU graph support exists via `_XPUGraph`, `torch.xpu.XPUGraph`, and `torch.accelerator.Graph`;
   missing/failing coverage is `To be enabled` with an XPU graph DetailReason.
 - A row may only be classified `Not applicable` on the CUDA-only branch when the underlying
-  API/torch op is listed in the `Not applicable` sheet of
-  `${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx` (column `Operation/API`). See the
-  **CUDA-Only Judgement Rule** in the parent skill. `DetailReason` must cite the matching
-  `Issue ID` and `Operation/API` from that sheet. Without a sheet match, do NOT use the
-  CUDA-only branch — re-route to `To be enabled`, `Failures (xpu broken)`, `Feature gap`, or
-  `Community Change`.
+  API/torch op is covered by an `Issues`-sheet row in
+  `${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx` whose `Labels` column contains
+  `not_target` OR a `wontfix` variant. See the **CUDA-Only Judgement Rule** in the parent
+  skill. `DetailReason` must cite the matching `Issue ID` and quote the deciding label.
+  Without a labeled match, do NOT use the CUDA-only branch — re-route to `To be enabled`,
+  `Failures (xpu broken)`, `Feature gap`, or `Community Change`.
 - `Not applicable` for CUDA-specific APIs must name the exact API in `DetailReason`, such as
-  `CUDA-specific API: torch.cuda.jiterator (Not applicable sheet, Issue NNNN)`.
+  `CUDA-specific API: torch.cuda.jiterator (not_target Issue #NNNN)`.
 - `Community Change` is used when the base function/case is removed, renamed, refactored, moved, or
   disabled by an upstream community issue/commit in the source being compared. If an XPU variant
   exists after parametrization, do not call it community changes.

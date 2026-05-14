@@ -148,9 +148,10 @@ These are examples, not a substitute for analysis. Re-check source and issue sta
     deterministic behavior is tracked for XPU.
   - Known issue: `https://github.com/intel/torch-xpu-ops/issues/2481` when the case matches.
   - Reason: `Failures (xpu broken)` for failed rows. For skipped rows whose underlying API is
-    listed in the `Not applicable` sheet of `${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx`
-    (see the **CUDA-Only Judgement Rule** in the parent skill), use `Not applicable` instead;
-    otherwise use `Feature gap` and let the skipped-case skill handle it.
+    covered by an `Issues`-sheet row labeled `not_target` or `wontfix` in
+    `${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx` (see the **CUDA-Only Judgement
+    Rule** in the parent skill), use `Not applicable` instead; otherwise use `Feature gap`
+    and let the skipped-case skill handle it.
 
 ## Output Rules
 
