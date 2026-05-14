@@ -215,10 +215,12 @@ Every row with `Reason TBD = True` MUST have its `DetailReason` prefixed with a 
 tag reflecting the strength of the evidence behind the assigned `Reason`:
 
 ```
-[Confidence: HIGH]    strong, verifiable evidence on at least one decisive axis
-[Confidence: MEDIUM]  partial / indirect evidence; best-fit category but signals incomplete
-[Confidence: LOW]     analysis performed but no axis yields a confident category -> Reason = "Need human check"
+[Confidence: HIGH]    DetailReason cites STRONG EVIDENCE: a tracked issue link (intel/torch-xpu-ops or pytorch/pytorch issue URL / `#NNNN`) OR a local verification result (test actually executed, output saved under /tmp/opencode/<workbook>_local_verify/, or a cited file path + line range that directly proves the verdict).
+[Confidence: MEDIUM]  Best-fit category from a deep analysis, but DetailReason does NOT cite an issue link or a local verification result (e.g., reasoning from base-function existence + XPU instantiation patterns without a tracked issue or local run).
+[Confidence: LOW]     Analysis performed but no axis yields a confident category -> Reason = "Need human check". Escape hatch only; never a shortcut for skipping work.
 ```
+
+**HIGH evidence is binary**: either DetailReason contains a verifiable issue reference (URL or `#NNNN` cross-checked via `gh issue view`) OR it cites a concrete local-verification artifact (executed test output OR source file path + line range that proves the claim, e.g. an in-test skip at a specific line). If DetailReason contains neither, the row is MEDIUM regardless of how confident the analyst feels.
 
 The prefix is REQUIRED for every `Reason TBD = True` row, regardless of which `Reason` is assigned.
 Rows with `Reason TBD = False` keep their existing `DetailReason` untouched and do NOT need this
@@ -239,14 +241,19 @@ For each `Reason TBD = True` row, evaluate these axes from real sources, not pat
 
 ### Assigning a confidence level
 
-- **HIGH** — At least ONE decisive axis is HIGH and there is no contradicting signal. Example: a
-  Failure with a verified open issue URL → `Failures (xpu broken)` HIGH; or a verified
-  `Not applicable`-sheet hit → `Not applicable` HIGH; or a verified guilty commit →
-  `Community Change` HIGH; or a verified XPU wrapper with closed-issue skip →
-  `To be enabled` HIGH.
-- **MEDIUM** — Best-fit category is identifiable but the strongest signal is indirect.
-  Example: base function exists, XPU wrapper *should* be generated but I cannot confirm the
-  specific dtype/parameter slice → `To be enabled` MEDIUM.
+- **HIGH** — DetailReason cites at least ONE of:
+  - A tracked issue: `https://github.com/intel/torch-xpu-ops/issues/NNNN`,
+    `https://github.com/pytorch/pytorch/issues/NNNN`, or a bare `#NNNN` cross-checked
+    via `gh issue view NNNN --repo <owner>/<repo>`.
+  - A local verification artifact: an executed-test result (path under
+    `/tmp/opencode/<workbook>_local_verify/`), OR a concrete source-code citation
+    (`<file>#L<start>-L<end>`) that directly proves the verdict (e.g. an in-test
+    `skipIfXpu` / `unittest.skip` at the cited line; a `not_target`-labeled issue
+    matched by `Operation/API`; a guilty commit hash + diff).
+- **MEDIUM** — Deep analysis assigns a best-fit category, but DetailReason does NOT
+  cite an issue link or a local verification result. Typical case: base function
+  exists, XPU instantiation is present in `test/xpu/**`, but the specific failure /
+  skip / dtype slice is not pinned to a tracked issue or a cited source line.
 - **LOW** — After running the full workflow, no axis produced a confident category. Set
   `Reason = "Need human check"`. LOW is NOT a fallback for skipping work; it is the explicit
   outcome of a complete-but-inconclusive investigation.
@@ -273,12 +280,19 @@ DO NOT use `Need human check` when:
 
 ### `DetailReason` content requirements per confidence level
 
-- **HIGH**: cite the decisive evidence directly (file path + line range, Issue URL, sheet
-  `Issue ID`, commit hash). Example:
-  `[Confidence: HIGH] To be enabled. Base function test_sdpa at $PYTORCH_SRC/test/test_nn.py#L1234-L1267; XPU wrapper $PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu/test_nn_xpu.py uses instantiate_device_type_tests with allow_xpu=True.`
+- **HIGH**: cite the decisive evidence inline — at least one of:
+  - Issue reference: full URL OR `#NNNN` (with the repo unambiguous from context).
+  - Local-verification artifact: `/tmp/opencode/<workbook>_local_verify/<file>` path,
+    OR a source-code citation `<file>#L<start>-L<end>` that directly proves the claim.
 
-- **MEDIUM**: cite the strongest signal AND name the unresolved gap. Example:
-  `[Confidence: MEDIUM] To be enabled. Base test_foo found at .../test_x.py#L42; XPU instantiation present but dtype=bfloat16 slice not confirmed in test/xpu/test_x_xpu.py.`
+  Examples:
+  `[Confidence: HIGH] Failures (xpu broken). PVC fp16 accuracy issue in test_Conv2d_naive_groups - https://github.com/intel/torch-xpu-ops/issues/3346.`
+  `[Confidence: HIGH] To be enabled. In-test skip at $PYTORCH_SRC/test/test_transformers.py#L5165 ('_fill_mem_eff_dropout_mask too many threads') fires on both cuda and xpu; XPU wrapper at third_party/torch-xpu-ops/test/xpu/test_transformers_xpu.py uses allow_xpu=True.`
+
+- **MEDIUM**: deep analysis assigns a best-fit category, but no issue link and no
+  local-verification artifact is available. State the best-fit reasoning AND the
+  evidence gap. Example:
+  `[Confidence: MEDIUM] To be enabled. Base test_foo found at .../test_x.py; XPU instantiation present in test/xpu/test_x_xpu.py; no tracked issue identified and local run not attempted.`
 
 - **LOW** (→ `Need human check`): enumerate which axes were checked and why each was
   inconclusive. Example:
