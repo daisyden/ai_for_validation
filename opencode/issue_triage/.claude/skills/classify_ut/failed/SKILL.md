@@ -53,11 +53,6 @@ preserved the original workbook.
 - Do not change `Reason TBD` after classification. It records whether the original `Reason` was
   blank before analysis.
 - Mark updated `Reason` and `DetailReason` cells blue; leave unrelated cells alone.
-- For every row with `Reason TBD = True`, `DetailReason` MUST start with a confidence prefix
-  `[Confidence: HIGH|MEDIUM|LOW]` per the **Confidence Rubric & Need-Human-Check Rule** in the
-  parent skill. The `[Issue_TBD]` prefix and the `[Confidence: ...]` prefix coexist when both
-  apply, e.g. `[Confidence: MEDIUM][Issue_TBD] XPU fails with RuntimeError ...`. When the rubric
-  resolves to LOW, set `Reason = "Need human check"` and document which axes were checked.
 
 ## Local Run Rules
 
