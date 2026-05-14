@@ -90,7 +90,7 @@ Tracks whether the **original** Reason was blank in the SOURCE workbook (e.g.,
 | `Test Enviroment limitation` | True hardware/process constraint (multi-GPU, GCC version). NOT for skips that are stale or fixable. |
 | `Not applicable` | Either (a) a CPU-only test not relevant to XPU validation (`DetailReason` = `CPU Case`), or (b) a CUDA-only behavior whose API/torch op is listed in the **`Not applicable` sheet** of `${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx` (column `Operation/API`). `DetailReason` MUST name the exact API/feature (e.g., `CUDA-specific API: torch.cuda.jiterator`) and cite the matching `Not applicable`-sheet row (`Issue ID`). Never use generic "CUDA-only test" or "No XPU test data" — always identify the specific API or feature that XPU does not support. See the **CUDA-Only Judgement Rule** below. |
 | `Community Change` | The base function/case no longer exists in the source being compared, was renamed/refactored/moved, or the test is disabled by an upstream PyTorch community issue/commit. `DetailReason` MUST include the full issue/PR URL when available, or exact source/commit evidence. Do not require `last_status_xpu = passed`; base-function absence is enough. |
-| `Need human check` | Deep analysis was performed but no category could be assigned with HIGH or MEDIUM confidence (see **Confidence Rubric & Need-Human-Check Rule** below). Only valid when `Reason TBD = True`. `DetailReason` MUST start with `[Confidence: LOW]` and enumerate which signals were checked and why each was inconclusive (no `not_target`-label match, base function ambiguous, no xpu wrapper located, no known issue in either repo, etc.). Never use this label as a shortcut to skip analysis — it is the explicit outcome of a thorough but inconclusive investigation. |
+| `Need human check` | Deep analysis was performed but no category could be assigned with HIGH or MEDIUM confidence (see **Confidence Rubric & Need-Human-Check Rule** below). Only valid when `Reason TBD = True`. `DetailReason` MUST start with `[Confidence: LOW]` and enumerate which signals were checked and why each was inconclusive (no `Not applicable`-sheet match, base function ambiguous, no xpu wrapper located, no known issue in either repo, etc.). Never use this label as a shortcut to skip analysis — it is the explicit outcome of a thorough but inconclusive investigation. |
 
 ### `DetailReason` (String)
 
@@ -134,46 +134,40 @@ Specific content requirements per Reason:
 ## CUDA-Only Judgement Rule (authoritative for `Not applicable`)
 
 The **only** authoritative source for "CUDA-only behavior with no XPU equivalent" is the
-`not_target` label on issues in the reference workbook:
+`Not applicable` sheet of the reference workbook:
 
 ```
 ${ISSUE_TRIAGE_ROOT:-$HOME/opencode/ai_for_validation/opencode/issue_triage}/result/torch_xpu_ops_issues.xlsx
-                                                                                              └─ sheet: "Issues"
-                                                                                                 └─ filter: Labels contains "not_target"
+                                                                                              └─ sheet: "Not applicable"
 ```
 
-(Historical note: the standalone `Not applicable` sheet that previously held these entries
-has been consolidated into the `Issues` sheet via the `not_target` label. The misspelled
-`Not Appliable` sheet was first renamed to `Not applicable`, then merged. All CUDA-only
-judgements now flow through `not_target`-labeled issues. Cross-reference via the
-`Test Cases` sheet to locate specific test bindings.)
+(Historical note: this sheet was previously misspelled "Not Appliable" and has been renamed.
+All `Not Appliable` logic is collapsed into `Not applicable`.)
 
-### How to use the label
+### How to use the sheet
 
-1. Open the workbook with `openpyxl` and load sheet `Issues`.
+1. Open the workbook with `openpyxl` and load sheet `Not applicable`.
 2. The sheet columns are:
-   `Issue ID | Title | Status | Assignee | Reporter | Labels | Created Time | Updated Time | Milestone | Summary`.
-3. To judge whether a row's failing/skipped API is CUDA-only, filter rows where the
-   `Labels` cell contains the literal string `not_target`. Then match the issue's
-   `Title` / `Summary` against the test in question by:
-   - exact op or test name in the title (e.g., `Support efficient attention`,
-     `RuntimeError: expected scalar type Half but found Float`)
-   - explicit test-name reference inside `Summary`
-   - cross-lookup via the `Test Cases` sheet (`Test Case` column) — joining
-     `Test Cases.Issue ID` -> `Issues.Issue ID` filtered by `not_target`
-4. If a matching `not_target` issue exists -> the behavior IS CUDA-only -> classify
-   `Not applicable`, and in `DetailReason` cite the matching `Issue ID` and label verbatim:
-   `CUDA-specific behavior covered by not_target Issue #2285 ("Support efficient attention")`.
-5. **If no matching `not_target` issue exists, the behavior is NOT CUDA-only.** Do not
-   classify `Not applicable` on the CUDA-only branch. Re-route to the correct label:
+   `Issue ID | Title | Operation/API | Category | Technical Details | Labels | State`.
+3. To judge whether a row's failing/skipped API is CUDA-only, scan the `Operation/API` column
+   for an entry that names the same torch op, ATen op, Python API, or backend feature the test
+   exercises. Match by:
+   - exact op name (e.g., `aten::_cudnn_rnn`, `torch._C._broadcast_coalesced`)
+   - parent module/API (e.g., `torch.cuda.jiterator`, `cuBLAS`, `cuDNN`, `TensorExpr CUDA fuser`)
+   - explicit test-name reference inside the cell (e.g., `test_no_cuda_monkeypatch`)
+4. If a matching row exists -> the behavior IS CUDA-only -> classify `Not applicable`, and in
+   `DetailReason` cite the matching `Issue ID` and the `Operation/API` value verbatim, e.g.
+   `CUDA-specific API: aten::_cudnn_rnn (Not applicable sheet, Issue 2472)`.
+5. **If no matching row exists, the behavior is NOT CUDA-only.** Do not classify `Not applicable`
+   on the CUDA-only branch. Re-route to the correct label:
    - device-agnostic test that XPU should support -> `To be enabled`
    - XPU implementation bug -> `Failures (xpu broken)`
    - missing XPU feature -> `Feature gap`
    - base function removed/renamed/refactored upstream -> `Community Change`
    - test is CPU-only (`_cpu` suffix, `requires GPU`, etc.) -> `Not applicable` (CPU branch),
      `DetailReason = CPU Case`
-6. The CPU branch of `Not applicable` (`DetailReason = CPU Case`) does NOT require a
-   `not_target` match and is unaffected by this rule.
+6. The CPU branch of `Not applicable` (`DetailReason = CPU Case`) does NOT require a sheet match
+   and is unaffected by this rule.
 
 ### Workflow snippet
 
@@ -183,31 +177,24 @@ xlsx = os.path.expanduser(
     os.environ.get("ISSUE_TRIAGE_ROOT", "~/opencode/ai_for_validation/opencode/issue_triage")
 ) + "/result/torch_xpu_ops_issues.xlsx"
 wb = openpyxl.load_workbook(xlsx, read_only=True, data_only=True)
-ws = wb["Issues"]
+ws = wb["Not applicable"]
 header = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+op_col = header.index("Operation/API")
 id_col = header.index("Issue ID")
-title_col = header.index("Title")
-label_col = header.index("Labels")
-not_target_issues = [
-    (row[id_col].value, row[title_col].value)
-    for row in ws.iter_rows(min_row=2)
-    if row[label_col].value and "not_target" in str(row[label_col].value)
-]
-# Match candidate test/API against not_target_issues by title/summary keywords;
-# only mark Not applicable on a confirmed match.
+not_applicable_ops = [(row[id_col].value, row[op_col].value)
+                      for row in ws.iter_rows(min_row=2) if row[op_col].value]
+# Match candidate API against not_applicable_ops; only mark Not applicable on a hit.
 ```
 
 ### Anti-patterns
 
 - Marking a row `Not applicable` because `name_cuda` contains the substring `cuda`.
 - Marking a row `Not applicable` because the skip message says `Only runs on cuda` without
-  confirming the underlying behavior is covered by a `not_target`-labeled issue (many such
-  gates are SM-capability gates or stale skips -> `To be enabled`).
-- Inventing a CUDA-only judgement locally instead of opening / labeling an issue with
-  `not_target` first. If you genuinely discover new CUDA-only behavior, open an issue in
-  `intel/torch-xpu-ops` and apply the `not_target` label before classifying.
-- Citing the `Not applicable` sheet — that sheet no longer exists. Use the `not_target`
-  label on the `Issues` sheet.
+  confirming the underlying API is in the sheet (many such gates are SM-capability gates or
+  stale skips -> `To be enabled`).
+- Inventing a new CUDA-only API entry locally instead of adding it to the workbook sheet first.
+  If you genuinely discover a new CUDA-only API, add a row to the `Not applicable` sheet
+  (see the `create-not-applicable-sheet` skill) before classifying.
 
 ## Confidence Rubric & Need-Human-Check Rule (authoritative for `Reason TBD = True` rows)
 
@@ -282,7 +269,7 @@ DO NOT use `Need human check` when:
 
 - **LOW** (→ `Need human check`): enumerate which axes were checked and why each was
   inconclusive. Example:
-  `[Confidence: LOW] Need human check. not_target label: no matching issue for torch.foo.bar in Issues sheet. Base function: candidate test_foo present but signature changed (device-agnostic refactor in commit abc1234, behavior on XPU unclear). XPU wrapper: not located in test/xpu/**. Known issues: gh search on 'test_foo xpu' returned 0 results in both intel/torch-xpu-ops and pytorch/pytorch. Local run not attempted (test requires multi-GPU).`
+  `[Confidence: LOW] Need human check. Not applicable sheet: no match for torch.foo.bar. Base function: candidate test_foo present but signature changed (device-agnostic refactor in commit abc1234, behavior on XPU unclear). XPU wrapper: not located in test/xpu/**. Known issues: gh search on 'test_foo xpu' returned 0 results in both intel/torch-xpu-ops and pytorch/pytorch. Local run not attempted (test requires multi-GPU).`
 
 ### Workflow integration
 
@@ -293,34 +280,6 @@ DO NOT use `Need human check` when:
 - For LOW rows, `Reason` becomes `Need human check` and the original best-guess (if any) is
   preserved in `DetailReason` after the `[Confidence: LOW]` prefix, so a human reviewer can see
   what was considered.
-
-### `Confidence` column (workbook schema)
-
-In addition to the `[Confidence: ...]` prefix inside `DetailReason`, every `.agent.xlsx`
-workbook MUST carry a dedicated `Confidence` column immediately AFTER `Reason TBD`:
-
-```
-... | Reason | DetailReason | Reason TBD | Confidence | ...
-       col22   col23          col24        col25
-```
-
-- Allowed values: `HIGH`, `MEDIUM`, `LOW` (uppercase, no other strings).
-- Empty when `Reason TBD = False` (the legacy authoritative path doesn't need it).
-- Required when `Reason TBD = True` — and MUST match the level in the `DetailReason` prefix.
-- Blue-filled like other agent-written cells.
-
-Purpose: enables Excel filtering / pivot-table aggregation without parsing the
-`DetailReason` text. The `DetailReason` prefix remains the human-readable single source of
-truth (full evidence); the column is the machine-readable index. If the two disagree, the
-prefix wins and the column must be corrected.
-
-Schema check before saving:
-
-```python
-header = [ws.cell(row=1, column=c).value for c in range(1, ws.max_column + 1)]
-assert header[23] == "Reason TBD" and header[24] == "Confidence", \
-    f"Confidence column missing or misplaced: got {header[23:25]}"
-```
 
 ## Deep Analysis Requirements (CRITICAL)
 
