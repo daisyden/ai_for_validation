@@ -1,0 +1,1710 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>torch-xpu-ops Bug Scrub — Requested Highlight</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root {
+  --bg: #f8f9fa; --fg: #212529; --muted: #6c757d;
+  --border: #dee2e6; --accent: #0066cc; --done-bg: #e9ecef; --done-fg: #adb5bd;
+  --filter-bg: #ffffff; --hl: #fff3cd;
+}
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13px; line-height: 1.5; color: var(--fg); background: var(--bg);
+  margin: 0; padding: 0; }
+h1, h2, h3, h4 { line-height: 1.2; margin-top: 1.5em; }
+h1 { font-size: 1.8em; } h2 { font-size: 1.4em; border-bottom: 2px solid var(--border); padding-bottom: .3em; }
+h3 { font-size: 1.15em; } h4 { font-size: 1em; color: var(--muted); }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { background: #f1f3f5; padding: 1px 4px; border-radius: 3px; font-size: .9em; }
+.meta { color: var(--muted); font-size: .9em; margin: .3em 0; }
+.content { max-width: 100%; padding: 1em 1.5em 4em; }
+
+/* Summary cards */
+.summary-grid { display: flex; gap: 1em; margin: .5em 0 1em; flex-wrap: wrap; }
+.summary-card { border: 1px solid var(--border); border-radius: 6px; padding: .6em 1.2em;
+  text-align: center; min-width: 90px; background: white; }
+.summary-card .sc-num { font-size: 1.8em; font-weight: 700; }
+.summary-card .sc-label { font-size: .9em; color: var(--muted); }
+.priority-p0 { border-left: 4px solid #dc3545; }
+.priority-p1 { border-left: 4px solid #fd7e14; }
+.priority-p2 { border-left: 4px solid #ffc107; }
+.priority-p3 { border-left: 4px solid #28a745; }
+
+/* Sticky filter bar */
+.filter-bar {
+  position: sticky; top: 0; z-index: 100;
+  background: var(--filter-bg); border-bottom: 1px solid var(--border);
+  padding: .6em 1em; display: flex; flex-wrap: wrap; gap: .8em; align-items: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+.filter-bar > label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+.filter-bar select, .filter-bar input[type=text], .filter-bar input[type=date] {
+  font-size: 13px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 3px;
+  background: white; min-width: 120px;
+}
+.filter-bar input[type=text] { min-width: 200px; }
+.filter-bar button {
+  font-size: 12px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 3px;
+  background: white; cursor: pointer;
+}
+.filter-bar button:hover { background: #f1f3f5; }
+.filter-bar button.active { background: var(--accent); color: white; border-color: var(--accent); }
+.filter-bar .stats { margin-left: auto; color: var(--muted); font-size: 12px; }
+
+/* Tables */
+table.ar-table { border-collapse: collapse; width: 100%; margin: .5em 0 .3em; font-size: 12px; }
+table.ar-table th, table.ar-table td { border: 1px solid var(--border); padding: 4px 6px;
+  vertical-align: top; text-align: left; }
+table.ar-table thead th { background: #e7eaf0; position: sticky; top: 56px; z-index: 50; }
+table.ar-table td.done-col, table.ar-table th.done-col { width: 40px; text-align: center; }
+table.ar-table tr:nth-child(even) td { background: #fafbfc; }
+table.ar-table tr.done td { background: var(--done-bg) !important; color: var(--done-fg); }
+table.ar-table tr.done td a { color: var(--done-fg); }
+table.ar-table tr.done td:not(.done-col) { text-decoration: line-through; }
+table.ar-table tr.hidden { display: none; }
+table.ar-table tr.more-hidden { display: none; }
+table.ar-table tr.more-shown { display: table-row; }
+table.ar-table tr.more-shown.hidden { display: none; }
+
+/* Tooltip for priority/category cells */
+.tip-cell { cursor: help; }
+.tip-cell[title]:hover { background: var(--hl) !important; }
+
+/* More link */
+.more-link { display: inline-block; margin: 0 0 1em 0.5em; font-size: 12px; color: var(--accent); cursor: pointer; }
+.more-link.expanded { color: var(--muted); }
+
+/* Section hidden by filter */
+.section-hidden { display: none !important; }
+
+/* Multi-select dropdown */
+.ms-dd { position: relative; display: inline-block; }
+.ms-dd-btn {
+  font-size: 13px; padding: 3px 24px 3px 6px; border: 1px solid var(--border);
+  border-radius: 3px; background: white; cursor: pointer; min-width: 140px;
+  text-align: left; position: relative; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 220px;
+}
+.ms-dd-btn::after {
+  content: "\25BE"; position: absolute; right: 6px; top: 50%;
+  transform: translateY(-50%); color: var(--muted); font-size: 10px;
+}
+.ms-dd-panel {
+  display: none; position: absolute; top: calc(100% + 2px); left: 0;
+  background: white; border: 1px solid var(--border); border-radius: 3px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.12); z-index: 200;
+  max-height: 320px; overflow-y: auto; min-width: 200px; padding: 4px 0;
+}
+.ms-dd.open .ms-dd-panel { display: block; }
+.ms-dd-search {
+  width: calc(100% - 12px); margin: 4px 6px; padding: 3px 5px;
+  border: 1px solid var(--border); border-radius: 3px; font-size: 12px;
+}
+.ms-dd-item {
+  display: flex; flex-direction: row; align-items: center; gap: 4px;
+  padding: 3px 10px; cursor: pointer; font-size: 12px; user-select: none;
+}
+.ms-dd-item:hover { background: #f1f3f5; }
+.ms-dd-item input[type=checkbox] { margin: 0; flex: 0 0 auto; width: 14px; height: 14px; accent-color: var(--accent); }
+.ms-dd-item .label { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+.ms-dd-item .count { flex: 0 0 auto; color: var(--muted); font-size: 11px; background: #f1f3f5;
+  padding: 0 6px; border-radius: 8px; min-width: 22px; text-align: center; }
+.ms-dd-item.none-opt .label { font-style: italic; color: var(--muted); }
+.ms-dd-item.zero-count { opacity: .45; }
+.ms-dd-actions {
+  display: flex; gap: 4px; padding: 4px 6px; border-top: 1px solid var(--border);
+  margin-top: 2px; position: sticky; bottom: 0; background: white;
+}
+.ms-dd-actions button { flex: 1; font-size: 11px; padding: 2px 4px; border: 1px solid var(--border);
+  border-radius: 3px; background: white; cursor: pointer; }
+.ms-dd-actions button:hover { background: #f1f3f5; }
+
+/* Charts */
+.charts-section { margin: 1em 0 2em; display: flex; flex-wrap: wrap; gap: 1.5em; }
+.charts-section svg { background: white; border: 1px solid var(--border); border-radius: 4px; padding: 8px; }
+.chart-filter-target { cursor: pointer; }
+.chart-filter-target:hover text { font-weight: 700; text-decoration: underline; }
+.chart-filter-target:hover polyline:not(.chart-filter-hit), .chart-filter-target:hover rect { filter: brightness(.9); }
+.chart-filter-hit { opacity: 0; }
+.chart-filter-target.filtered-out { opacity: .18; }
+.chart-filter-target.filtered-zero { opacity: .28; }
+
+/* Custom tooltip popup (replaces native title) */
+.tip-popup {
+  display: none; position: fixed; z-index: 9999; max-width: 500px;
+  background: #333; color: #fff; padding: 8px 12px; border-radius: 4px;
+  font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word;
+  pointer-events: none; box-shadow: 0 2px 8px rgba(0,0,0,.3);
+}
+.tip-popup.visible { display: block; }
+.tips-section { background: #fff; border: 1px solid var(--border); border-radius: 6px;
+  padding: 1em 1.5em; margin: 1em 0; }
+.tips-section h3 { margin-top: .8em; }
+.tips-section ul, .tips-section ol { margin: .3em 0; padding-left: 1.5em; }
+.tips-section li { margin: .2em 0; }
+</style>
+</head>
+<body>
+<div class="content">
+<h1>XPU Ops Bug Scrub — Highlight Report</h1>
+<p class="meta">Repository: <code>intel/torch-xpu-ops</code> &middot; Requested issue subset: 39 found, 0 missing. Generated: 2026-05-14 &middot; Total issues: 39</p>
+<h2>Summary</h2>
+<div class="summary-grid">
+<div class="summary-card priority-p0" data-summary-priority="P0"><div class="sc-num" data-total="0">0/0</div><div class="sc-label">P0</div></div>
+<div class="summary-card priority-p1" data-summary-priority="P1"><div class="sc-num" data-total="18">18/18</div><div class="sc-label">P1</div></div>
+<div class="summary-card priority-p2" data-summary-priority="P2"><div class="sc-num" data-total="17">17/17</div><div class="sc-label">P2</div></div>
+<div class="summary-card priority-p3" data-summary-priority="P3"><div class="sc-num" data-total="4">4/4</div><div class="sc-label">P3</div></div>
+</div>
+<div class="charts-section">
+<svg class="line-chart" data-filter-dim="priority" data-max-val="18" data-boundaries="[&quot;2025-12-14&quot;, &quot;2025-12-28&quot;, &quot;2026-01-11&quot;, &quot;2026-01-25&quot;, &quot;2026-02-08&quot;, &quot;2026-02-22&quot;, &quot;2026-03-08&quot;, &quot;2026-03-22&quot;, &quot;2026-04-05&quot;, &quot;2026-04-19&quot;, &quot;2026-05-03&quot;, &quot;2026-05-17&quot;]" data-margin-l="50" data-margin-t="30" data-plot-w="720" data-plot-h="200" width="800" height="320" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif;font-size:10px;">
+<text x="400" y="16" text-anchor="middle" font-weight="bold" font-size="12">Open Cases Trend: Priority</text>
+<line x1="50" y1="230" x2="770" y2="230" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="0" x="44" y="234" text-anchor="end" fill="#999">0</text>
+<line x1="50" y1="180" x2="770" y2="180" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="1" x="44" y="184" text-anchor="end" fill="#999">4</text>
+<line x1="50" y1="130" x2="770" y2="130" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="2" x="44" y="134" text-anchor="end" fill="#999">9</text>
+<line x1="50" y1="80" x2="770" y2="80" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="3" x="44" y="84" text-anchor="end" fill="#999">13</text>
+<line x1="50" y1="30" x2="770" y2="30" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="4" x="44" y="34" text-anchor="end" fill="#999">18</text>
+<text x="50" y="244" text-anchor="end" fill="#666" transform="rotate(-45 50 244)">WW49</text>
+<text x="115" y="244" text-anchor="end" fill="#666" transform="rotate(-45 115 244)">WW51</text>
+<text x="180" y="244" text-anchor="end" fill="#666" transform="rotate(-45 180 244)">WW01</text>
+<text x="246" y="244" text-anchor="end" fill="#666" transform="rotate(-45 246 244)">WW03</text>
+<text x="311" y="244" text-anchor="end" fill="#666" transform="rotate(-45 311 244)">WW05</text>
+<text x="377" y="244" text-anchor="end" fill="#666" transform="rotate(-45 377 244)">WW07</text>
+<text x="442" y="244" text-anchor="end" fill="#666" transform="rotate(-45 442 244)">WW09</text>
+<text x="508" y="244" text-anchor="end" fill="#666" transform="rotate(-45 508 244)">WW11</text>
+<text x="573" y="244" text-anchor="end" fill="#666" transform="rotate(-45 573 244)">WW13</text>
+<text x="639" y="244" text-anchor="end" fill="#666" transform="rotate(-45 639 244)">WW15</text>
+<text x="704" y="244" text-anchor="end" fill="#666" transform="rotate(-45 704 244)">WW17</text>
+<text x="770" y="244" text-anchor="end" fill="#666" transform="rotate(-45 770 244)">WW19</text>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="priority" data-filter-value="P1" data-show-hidden="1">
+<title>Filter table: P1</title>
+<polyline class="chart-filter-hit" points="50,86 115,75 180,75 246,75 311,64 377,64 442,53 508,53 573,30 639,30 704,30 770,30" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,86 115,75 180,75 246,75 311,64 377,64 442,53 508,53 573,30 639,30 704,30 770,30" fill="none" stroke="#fd7e14" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="86" r="3" fill="#fd7e14"/>
+<circle class="chart-point" cx="115" cy="75" r="3" fill="#fd7e14"/>
+<circle class="chart-point" cx="180" cy="75" r="3" fill="#fd7e14"/>
+<circle class="chart-point" cx="246" cy="75" r="3" fill="#fd7e14"/>
+<circle class="chart-point" cx="311" cy="64" r="3" fill="#fd7e14"/>
+<circle class="chart-point" cx="377" cy="64" r="3" fill="#fd7e14"/>
+<circle class="chart-point" cx="442" cy="53" r="3" fill="#fd7e14"/>
+<circle class="chart-point" cx="508" cy="53" r="3" fill="#fd7e14"/>
+<circle class="chart-point" cx="573" cy="30" r="3" fill="#fd7e14"/>
+<circle class="chart-point" cx="639" cy="30" r="3" fill="#fd7e14"/>
+<circle class="chart-point" cx="704" cy="30" r="3" fill="#fd7e14"/>
+<circle class="chart-point" cx="770" cy="30" r="3" fill="#fd7e14"/>
+<text class="chart-line-value" x="776" y="34" fill="#fd7e14" font-size="9" font-weight="bold">18</text>
+</g>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="priority" data-filter-value="P2" data-show-hidden="1">
+<title>Filter table: P2</title>
+<polyline class="chart-filter-hit" points="50,164 115,153 180,130 246,130 311,97 377,86 442,64 508,53 573,42 639,42 704,42 770,42" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,164 115,153 180,130 246,130 311,97 377,86 442,64 508,53 573,42 639,42 704,42 770,42" fill="none" stroke="#ffc107" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="164" r="3" fill="#ffc107"/>
+<circle class="chart-point" cx="115" cy="153" r="3" fill="#ffc107"/>
+<circle class="chart-point" cx="180" cy="130" r="3" fill="#ffc107"/>
+<circle class="chart-point" cx="246" cy="130" r="3" fill="#ffc107"/>
+<circle class="chart-point" cx="311" cy="97" r="3" fill="#ffc107"/>
+<circle class="chart-point" cx="377" cy="86" r="3" fill="#ffc107"/>
+<circle class="chart-point" cx="442" cy="64" r="3" fill="#ffc107"/>
+<circle class="chart-point" cx="508" cy="53" r="3" fill="#ffc107"/>
+<circle class="chart-point" cx="573" cy="42" r="3" fill="#ffc107"/>
+<circle class="chart-point" cx="639" cy="42" r="3" fill="#ffc107"/>
+<circle class="chart-point" cx="704" cy="42" r="3" fill="#ffc107"/>
+<circle class="chart-point" cx="770" cy="42" r="3" fill="#ffc107"/>
+<text class="chart-line-value" x="776" y="46" fill="#ffc107" font-size="9" font-weight="bold">17</text>
+</g>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="priority" data-filter-value="P3" data-show-hidden="1">
+<title>Filter table: P3</title>
+<polyline class="chart-filter-hit" points="50,208 115,208 180,208 246,208 311,208 377,208 442,208 508,208 573,186 639,186 704,186 770,186" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,208 115,208 180,208 246,208 311,208 377,208 442,208 508,208 573,186 639,186 704,186 770,186" fill="none" stroke="#28a745" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="208" r="3" fill="#28a745"/>
+<circle class="chart-point" cx="115" cy="208" r="3" fill="#28a745"/>
+<circle class="chart-point" cx="180" cy="208" r="3" fill="#28a745"/>
+<circle class="chart-point" cx="246" cy="208" r="3" fill="#28a745"/>
+<circle class="chart-point" cx="311" cy="208" r="3" fill="#28a745"/>
+<circle class="chart-point" cx="377" cy="208" r="3" fill="#28a745"/>
+<circle class="chart-point" cx="442" cy="208" r="3" fill="#28a745"/>
+<circle class="chart-point" cx="508" cy="208" r="3" fill="#28a745"/>
+<circle class="chart-point" cx="573" cy="186" r="3" fill="#28a745"/>
+<circle class="chart-point" cx="639" cy="186" r="3" fill="#28a745"/>
+<circle class="chart-point" cx="704" cy="186" r="3" fill="#28a745"/>
+<circle class="chart-point" cx="770" cy="186" r="3" fill="#28a745"/>
+<text class="chart-line-value" x="776" y="190" fill="#28a745" font-size="9" font-weight="bold">4</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="priority" data-filter-value="P1" data-show-hidden="1">
+<title>Filter table: P1</title>
+<rect x="50" y="298" width="12" height="4" fill="#fd7e14" rx="1"/>
+<text x="66" y="303" fill="#333">P1</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="priority" data-filter-value="P2" data-show-hidden="1">
+<title>Filter table: P2</title>
+<rect x="98" y="298" width="12" height="4" fill="#ffc107" rx="1"/>
+<text x="114" y="303" fill="#333">P2</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="priority" data-filter-value="P3" data-show-hidden="1">
+<title>Filter table: P3</title>
+<rect x="146" y="298" width="12" height="4" fill="#28a745" rx="1"/>
+<text x="162" y="303" fill="#333">P3</text>
+</g>
+</svg>
+<svg class="line-chart" data-filter-dim="category" data-max-val="9" data-boundaries="[&quot;2025-12-14&quot;, &quot;2025-12-28&quot;, &quot;2026-01-11&quot;, &quot;2026-01-25&quot;, &quot;2026-02-08&quot;, &quot;2026-02-22&quot;, &quot;2026-03-08&quot;, &quot;2026-03-22&quot;, &quot;2026-04-05&quot;, &quot;2026-04-19&quot;, &quot;2026-05-03&quot;, &quot;2026-05-17&quot;]" data-margin-l="50" data-margin-t="30" data-plot-w="820" data-plot-h="280" width="1070" height="400" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif;font-size:10px;">
+<text x="535" y="16" text-anchor="middle" font-weight="bold" font-size="12">Open Cases Trend: Category</text>
+<line x1="50" y1="310" x2="870" y2="310" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="0" x="44" y="314" text-anchor="end" fill="#999">0</text>
+<line x1="50" y1="240" x2="870" y2="240" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="1" x="44" y="244" text-anchor="end" fill="#999">2</text>
+<line x1="50" y1="170" x2="870" y2="170" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="2" x="44" y="174" text-anchor="end" fill="#999">4</text>
+<line x1="50" y1="100" x2="870" y2="100" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="3" x="44" y="104" text-anchor="end" fill="#999">6</text>
+<line x1="50" y1="30" x2="870" y2="30" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="4" x="44" y="34" text-anchor="end" fill="#999">9</text>
+<text x="50" y="324" text-anchor="end" fill="#666" transform="rotate(-45 50 324)">WW49</text>
+<text x="124" y="324" text-anchor="end" fill="#666" transform="rotate(-45 124 324)">WW51</text>
+<text x="199" y="324" text-anchor="end" fill="#666" transform="rotate(-45 199 324)">WW01</text>
+<text x="273" y="324" text-anchor="end" fill="#666" transform="rotate(-45 273 324)">WW03</text>
+<text x="348" y="324" text-anchor="end" fill="#666" transform="rotate(-45 348 324)">WW05</text>
+<text x="422" y="324" text-anchor="end" fill="#666" transform="rotate(-45 422 324)">WW07</text>
+<text x="497" y="324" text-anchor="end" fill="#666" transform="rotate(-45 497 324)">WW09</text>
+<text x="571" y="324" text-anchor="end" fill="#666" transform="rotate(-45 571 324)">WW11</text>
+<text x="646" y="324" text-anchor="end" fill="#666" transform="rotate(-45 646 324)">WW13</text>
+<text x="720" y="324" text-anchor="end" fill="#666" transform="rotate(-45 720 324)">WW15</text>
+<text x="795" y="324" text-anchor="end" fill="#666" transform="rotate(-45 795 324)">WW17</text>
+<text x="870" y="324" text-anchor="end" fill="#666" transform="rotate(-45 870 324)">WW19</text>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Flash Attention" data-show-hidden="1">
+<title>Filter table: Flash Attention</title>
+<polyline class="chart-filter-hit" points="50,217 124,217 199,186 273,186 348,155 422,155 497,155 571,155 646,30 720,30 795,30 870,30" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,217 124,217 199,186 273,186 348,155 422,155 497,155 571,155 646,30 720,30 795,30 870,30" fill="none" stroke="#4e79a7" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="217" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="124" cy="217" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="199" cy="186" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="273" cy="186" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="348" cy="155" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="422" cy="155" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="497" cy="155" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="571" cy="155" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="646" cy="30" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="720" cy="30" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="795" cy="30" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="870" cy="30" r="3" fill="#4e79a7"/>
+<text class="chart-line-value" x="876" y="34" fill="#4e79a7" font-size="9" font-weight="bold">9</text>
+</g>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Inductor" data-show-hidden="1">
+<title>Filter table: Inductor</title>
+<polyline class="chart-filter-hit" points="50,186 124,186 199,186 273,186 348,155 422,124 497,62 571,62 646,62 720,62 795,62 870,62" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,186 124,186 199,186 273,186 348,155 422,124 497,62 571,62 646,62 720,62 795,62 870,62" fill="none" stroke="#f28e2b" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="186" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="124" cy="186" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="199" cy="186" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="273" cy="186" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="348" cy="155" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="422" cy="124" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="497" cy="62" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="571" cy="62" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="646" cy="62" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="720" cy="62" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="795" cy="62" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="870" cy="62" r="3" fill="#f28e2b"/>
+<text class="chart-line-value" x="876" y="66" fill="#f28e2b" font-size="9" font-weight="bold">8</text>
+</g>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Torch Ops - gemm" data-show-hidden="1">
+<title>Filter table: Torch Ops - gemm</title>
+<polyline class="chart-filter-hit" points="50,186 124,186 199,186 273,186 348,155 422,155 497,155 571,155 646,155 720,155 795,155 870,155" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,186 124,186 199,186 273,186 348,155 422,155 497,155 571,155 646,155 720,155 795,155 870,155" fill="none" stroke="#e15759" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="186" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="124" cy="186" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="199" cy="186" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="273" cy="186" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="348" cy="155" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="422" cy="155" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="497" cy="155" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="571" cy="155" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="646" cy="155" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="720" cy="155" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="795" cy="155" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="870" cy="155" r="3" fill="#e15759"/>
+<text class="chart-line-value" x="876" y="159" fill="#e15759" font-size="9" font-weight="bold">5</text>
+</g>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Sparse" data-show-hidden="1">
+<title>Filter table: Sparse</title>
+<polyline class="chart-filter-hit" points="50,217 124,217 199,217 273,217 348,217 422,217 497,217 571,217 646,186 720,186 795,186 870,186" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,217 124,217 199,217 273,217 348,217 422,217 497,217 571,217 646,186 720,186 795,186 870,186" fill="none" stroke="#76b7b2" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="217" r="3" fill="#76b7b2"/>
+<circle class="chart-point" cx="124" cy="217" r="3" fill="#76b7b2"/>
+<circle class="chart-point" cx="199" cy="217" r="3" fill="#76b7b2"/>
+<circle class="chart-point" cx="273" cy="217" r="3" fill="#76b7b2"/>
+<circle class="chart-point" cx="348" cy="217" r="3" fill="#76b7b2"/>
+<circle class="chart-point" cx="422" cy="217" r="3" fill="#76b7b2"/>
+<circle class="chart-point" cx="497" cy="217" r="3" fill="#76b7b2"/>
+<circle class="chart-point" cx="571" cy="217" r="3" fill="#76b7b2"/>
+<circle class="chart-point" cx="646" cy="186" r="3" fill="#76b7b2"/>
+<circle class="chart-point" cx="720" cy="186" r="3" fill="#76b7b2"/>
+<circle class="chart-point" cx="795" cy="186" r="3" fill="#76b7b2"/>
+<circle class="chart-point" cx="870" cy="186" r="3" fill="#76b7b2"/>
+<text class="chart-line-value" x="876" y="190" fill="#76b7b2" font-size="9" font-weight="bold">4</text>
+</g>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Torch Ops - eltwise" data-show-hidden="1">
+<title>Filter table: Torch Ops - eltwise</title>
+<polyline class="chart-filter-hit" points="50,248 124,248 199,217 273,217 348,217 422,217 497,217 571,217 646,217 720,217 795,217 870,217" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,248 124,248 199,217 273,217 348,217 422,217 497,217 571,217 646,217 720,217 795,217 870,217" fill="none" stroke="#59a14f" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="248" r="3" fill="#59a14f"/>
+<circle class="chart-point" cx="124" cy="248" r="3" fill="#59a14f"/>
+<circle class="chart-point" cx="199" cy="217" r="3" fill="#59a14f"/>
+<circle class="chart-point" cx="273" cy="217" r="3" fill="#59a14f"/>
+<circle class="chart-point" cx="348" cy="217" r="3" fill="#59a14f"/>
+<circle class="chart-point" cx="422" cy="217" r="3" fill="#59a14f"/>
+<circle class="chart-point" cx="497" cy="217" r="3" fill="#59a14f"/>
+<circle class="chart-point" cx="571" cy="217" r="3" fill="#59a14f"/>
+<circle class="chart-point" cx="646" cy="217" r="3" fill="#59a14f"/>
+<circle class="chart-point" cx="720" cy="217" r="3" fill="#59a14f"/>
+<circle class="chart-point" cx="795" cy="217" r="3" fill="#59a14f"/>
+<circle class="chart-point" cx="870" cy="217" r="3" fill="#59a14f"/>
+<text class="chart-line-value" x="876" y="221" fill="#59a14f" font-size="9" font-weight="bold">3</text>
+</g>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Torch Runtime" data-show-hidden="1">
+<title>Filter table: Torch Runtime</title>
+<polyline class="chart-filter-hit" points="50,248 124,248 199,248 273,248 348,248 422,248 497,248 571,217 646,217 720,217 795,217 870,217" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,248 124,248 199,248 273,248 348,248 422,248 497,248 571,217 646,217 720,217 795,217 870,217" fill="none" stroke="#edc948" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="248" r="3" fill="#edc948"/>
+<circle class="chart-point" cx="124" cy="248" r="3" fill="#edc948"/>
+<circle class="chart-point" cx="199" cy="248" r="3" fill="#edc948"/>
+<circle class="chart-point" cx="273" cy="248" r="3" fill="#edc948"/>
+<circle class="chart-point" cx="348" cy="248" r="3" fill="#edc948"/>
+<circle class="chart-point" cx="422" cy="248" r="3" fill="#edc948"/>
+<circle class="chart-point" cx="497" cy="248" r="3" fill="#edc948"/>
+<circle class="chart-point" cx="571" cy="217" r="3" fill="#edc948"/>
+<circle class="chart-point" cx="646" cy="217" r="3" fill="#edc948"/>
+<circle class="chart-point" cx="720" cy="217" r="3" fill="#edc948"/>
+<circle class="chart-point" cx="795" cy="217" r="3" fill="#edc948"/>
+<circle class="chart-point" cx="870" cy="217" r="3" fill="#edc948"/>
+<text class="chart-line-value" x="876" y="221" fill="#edc948" font-size="9" font-weight="bold">3</text>
+</g>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Others" data-show-hidden="1">
+<title>Filter table: Others</title>
+<polyline class="chart-filter-hit" points="50,279 124,279 199,279 273,279 348,248 422,248 497,248 571,248 646,248 720,248 795,248 870,248" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,279 124,279 199,279 273,279 348,248 422,248 497,248 571,248 646,248 720,248 795,248 870,248" fill="none" stroke="#b07aa1" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="279" r="3" fill="#b07aa1"/>
+<circle class="chart-point" cx="124" cy="279" r="3" fill="#b07aa1"/>
+<circle class="chart-point" cx="199" cy="279" r="3" fill="#b07aa1"/>
+<circle class="chart-point" cx="273" cy="279" r="3" fill="#b07aa1"/>
+<circle class="chart-point" cx="348" cy="248" r="3" fill="#b07aa1"/>
+<circle class="chart-point" cx="422" cy="248" r="3" fill="#b07aa1"/>
+<circle class="chart-point" cx="497" cy="248" r="3" fill="#b07aa1"/>
+<circle class="chart-point" cx="571" cy="248" r="3" fill="#b07aa1"/>
+<circle class="chart-point" cx="646" cy="248" r="3" fill="#b07aa1"/>
+<circle class="chart-point" cx="720" cy="248" r="3" fill="#b07aa1"/>
+<circle class="chart-point" cx="795" cy="248" r="3" fill="#b07aa1"/>
+<circle class="chart-point" cx="870" cy="248" r="3" fill="#b07aa1"/>
+<text class="chart-line-value" x="876" y="252" fill="#b07aa1" font-size="9" font-weight="bold">2</text>
+</g>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Torch Ops - others" data-show-hidden="1">
+<title>Filter table: Torch Ops - others</title>
+<polyline class="chart-filter-hit" points="50,279 124,248 199,248 273,248 348,248 422,248 497,248 571,248 646,248 720,248 795,248 870,248" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,279 124,248 199,248 273,248 348,248 422,248 497,248 571,248 646,248 720,248 795,248 870,248" fill="none" stroke="#ff9da7" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="279" r="3" fill="#ff9da7"/>
+<circle class="chart-point" cx="124" cy="248" r="3" fill="#ff9da7"/>
+<circle class="chart-point" cx="199" cy="248" r="3" fill="#ff9da7"/>
+<circle class="chart-point" cx="273" cy="248" r="3" fill="#ff9da7"/>
+<circle class="chart-point" cx="348" cy="248" r="3" fill="#ff9da7"/>
+<circle class="chart-point" cx="422" cy="248" r="3" fill="#ff9da7"/>
+<circle class="chart-point" cx="497" cy="248" r="3" fill="#ff9da7"/>
+<circle class="chart-point" cx="571" cy="248" r="3" fill="#ff9da7"/>
+<circle class="chart-point" cx="646" cy="248" r="3" fill="#ff9da7"/>
+<circle class="chart-point" cx="720" cy="248" r="3" fill="#ff9da7"/>
+<circle class="chart-point" cx="795" cy="248" r="3" fill="#ff9da7"/>
+<circle class="chart-point" cx="870" cy="248" r="3" fill="#ff9da7"/>
+<text class="chart-line-value" x="876" y="252" fill="#ff9da7" font-size="9" font-weight="bold">2</text>
+</g>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Distributed" data-show-hidden="1">
+<title>Filter table: Distributed</title>
+<polyline class="chart-filter-hit" points="50,310 124,310 199,310 273,310 348,310 422,310 497,279 571,279 646,279 720,279 795,279 870,279" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,310 124,310 199,310 273,310 348,310 422,310 497,279 571,279 646,279 720,279 795,279 870,279" fill="none" stroke="#9c755f" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="310" r="3" fill="#9c755f"/>
+<circle class="chart-point" cx="124" cy="310" r="3" fill="#9c755f"/>
+<circle class="chart-point" cx="199" cy="310" r="3" fill="#9c755f"/>
+<circle class="chart-point" cx="273" cy="310" r="3" fill="#9c755f"/>
+<circle class="chart-point" cx="348" cy="310" r="3" fill="#9c755f"/>
+<circle class="chart-point" cx="422" cy="310" r="3" fill="#9c755f"/>
+<circle class="chart-point" cx="497" cy="279" r="3" fill="#9c755f"/>
+<circle class="chart-point" cx="571" cy="279" r="3" fill="#9c755f"/>
+<circle class="chart-point" cx="646" cy="279" r="3" fill="#9c755f"/>
+<circle class="chart-point" cx="720" cy="279" r="3" fill="#9c755f"/>
+<circle class="chart-point" cx="795" cy="279" r="3" fill="#9c755f"/>
+<circle class="chart-point" cx="870" cy="279" r="3" fill="#9c755f"/>
+<text class="chart-line-value" x="876" y="283" fill="#9c755f" font-size="9" font-weight="bold">1</text>
+</g>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="category" data-filter-value="TorchAO" data-show-hidden="1">
+<title>Filter table: TorchAO</title>
+<polyline class="chart-filter-hit" points="50,310 124,279 199,279 273,279 348,279 422,279 497,279 571,279 646,279 720,279 795,279 870,279" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,310 124,279 199,279 273,279 348,279 422,279 497,279 571,279 646,279 720,279 795,279 870,279" fill="none" stroke="#bab0ac" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="310" r="3" fill="#bab0ac"/>
+<circle class="chart-point" cx="124" cy="279" r="3" fill="#bab0ac"/>
+<circle class="chart-point" cx="199" cy="279" r="3" fill="#bab0ac"/>
+<circle class="chart-point" cx="273" cy="279" r="3" fill="#bab0ac"/>
+<circle class="chart-point" cx="348" cy="279" r="3" fill="#bab0ac"/>
+<circle class="chart-point" cx="422" cy="279" r="3" fill="#bab0ac"/>
+<circle class="chart-point" cx="497" cy="279" r="3" fill="#bab0ac"/>
+<circle class="chart-point" cx="571" cy="279" r="3" fill="#bab0ac"/>
+<circle class="chart-point" cx="646" cy="279" r="3" fill="#bab0ac"/>
+<circle class="chart-point" cx="720" cy="279" r="3" fill="#bab0ac"/>
+<circle class="chart-point" cx="795" cy="279" r="3" fill="#bab0ac"/>
+<circle class="chart-point" cx="870" cy="279" r="3" fill="#bab0ac"/>
+<text class="chart-line-value" x="876" y="283" fill="#bab0ac" font-size="9" font-weight="bold">1</text>
+</g>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Torch Ops - reduction" data-show-hidden="1">
+<title>Filter table: Torch Ops - reduction</title>
+<polyline class="chart-filter-hit" points="50,279 124,279 199,279 273,279 348,279 422,279 497,279 571,279 646,279 720,279 795,279 870,279" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,279 124,279 199,279 273,279 348,279 422,279 497,279 571,279 646,279 720,279 795,279 870,279" fill="none" stroke="#1f77b4" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="279" r="3" fill="#1f77b4"/>
+<circle class="chart-point" cx="124" cy="279" r="3" fill="#1f77b4"/>
+<circle class="chart-point" cx="199" cy="279" r="3" fill="#1f77b4"/>
+<circle class="chart-point" cx="273" cy="279" r="3" fill="#1f77b4"/>
+<circle class="chart-point" cx="348" cy="279" r="3" fill="#1f77b4"/>
+<circle class="chart-point" cx="422" cy="279" r="3" fill="#1f77b4"/>
+<circle class="chart-point" cx="497" cy="279" r="3" fill="#1f77b4"/>
+<circle class="chart-point" cx="571" cy="279" r="3" fill="#1f77b4"/>
+<circle class="chart-point" cx="646" cy="279" r="3" fill="#1f77b4"/>
+<circle class="chart-point" cx="720" cy="279" r="3" fill="#1f77b4"/>
+<circle class="chart-point" cx="795" cy="279" r="3" fill="#1f77b4"/>
+<circle class="chart-point" cx="870" cy="279" r="3" fill="#1f77b4"/>
+<text class="chart-line-value" x="876" y="283" fill="#1f77b4" font-size="9" font-weight="bold">1</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Flash Attention" data-show-hidden="1">
+<title>Filter table: Flash Attention</title>
+<rect x="905" y="40" width="12" height="4" fill="#4e79a7" rx="1"/>
+<text x="921" y="45" fill="#333">Flash Attention</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Inductor" data-show-hidden="1">
+<title>Filter table: Inductor</title>
+<rect x="905" y="56" width="12" height="4" fill="#f28e2b" rx="1"/>
+<text x="921" y="61" fill="#333">Inductor</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Torch Ops - gemm" data-show-hidden="1">
+<title>Filter table: Torch Ops - gemm</title>
+<rect x="905" y="72" width="12" height="4" fill="#e15759" rx="1"/>
+<text x="921" y="77" fill="#333">Torch Ops - gemm</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Sparse" data-show-hidden="1">
+<title>Filter table: Sparse</title>
+<rect x="905" y="88" width="12" height="4" fill="#76b7b2" rx="1"/>
+<text x="921" y="93" fill="#333">Sparse</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Torch Ops - eltwise" data-show-hidden="1">
+<title>Filter table: Torch Ops - eltwise</title>
+<rect x="905" y="104" width="12" height="4" fill="#59a14f" rx="1"/>
+<text x="921" y="109" fill="#333">Torch Ops - eltwise</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Torch Runtime" data-show-hidden="1">
+<title>Filter table: Torch Runtime</title>
+<rect x="905" y="120" width="12" height="4" fill="#edc948" rx="1"/>
+<text x="921" y="125" fill="#333">Torch Runtime</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Others" data-show-hidden="1">
+<title>Filter table: Others</title>
+<rect x="905" y="136" width="12" height="4" fill="#b07aa1" rx="1"/>
+<text x="921" y="141" fill="#333">Others</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Torch Ops - others" data-show-hidden="1">
+<title>Filter table: Torch Ops - others</title>
+<rect x="905" y="152" width="12" height="4" fill="#ff9da7" rx="1"/>
+<text x="921" y="157" fill="#333">Torch Ops - others</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Distributed" data-show-hidden="1">
+<title>Filter table: Distributed</title>
+<rect x="905" y="168" width="12" height="4" fill="#9c755f" rx="1"/>
+<text x="921" y="173" fill="#333">Distributed</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="category" data-filter-value="TorchAO" data-show-hidden="1">
+<title>Filter table: TorchAO</title>
+<rect x="905" y="184" width="12" height="4" fill="#bab0ac" rx="1"/>
+<text x="921" y="189" fill="#333">TorchAO</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="category" data-filter-value="Torch Ops - reduction" data-show-hidden="1">
+<title>Filter table: Torch Ops - reduction</title>
+<rect x="905" y="200" width="12" height="4" fill="#1f77b4" rx="1"/>
+<text x="921" y="205" fill="#333">Torch Ops - reductio</text>
+</g>
+</svg>
+<svg class="line-chart" data-filter-dim="dependency" data-max-val="2" data-boundaries="[&quot;2025-12-14&quot;, &quot;2025-12-28&quot;, &quot;2026-01-11&quot;, &quot;2026-01-25&quot;, &quot;2026-02-08&quot;, &quot;2026-02-22&quot;, &quot;2026-03-08&quot;, &quot;2026-03-22&quot;, &quot;2026-04-05&quot;, &quot;2026-04-19&quot;, &quot;2026-05-03&quot;, &quot;2026-05-17&quot;]" data-margin-l="50" data-margin-t="30" data-plot-w="620" data-plot-h="200" width="772" height="320" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif;font-size:10px;">
+<text x="386" y="16" text-anchor="middle" font-weight="bold" font-size="12">Open Cases Trend: Dependency</text>
+<line x1="50" y1="230" x2="670" y2="230" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="0" x="44" y="234" text-anchor="end" fill="#999">0</text>
+<line x1="50" y1="180" x2="670" y2="180" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="1" x="44" y="184" text-anchor="end" fill="#999">0</text>
+<line x1="50" y1="130" x2="670" y2="130" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="2" x="44" y="134" text-anchor="end" fill="#999">1</text>
+<line x1="50" y1="80" x2="670" y2="80" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="3" x="44" y="84" text-anchor="end" fill="#999">1</text>
+<line x1="50" y1="30" x2="670" y2="30" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="4" x="44" y="34" text-anchor="end" fill="#999">2</text>
+<text x="50" y="244" text-anchor="end" fill="#666" transform="rotate(-45 50 244)">WW49</text>
+<text x="106" y="244" text-anchor="end" fill="#666" transform="rotate(-45 106 244)">WW51</text>
+<text x="162" y="244" text-anchor="end" fill="#666" transform="rotate(-45 162 244)">WW01</text>
+<text x="219" y="244" text-anchor="end" fill="#666" transform="rotate(-45 219 244)">WW03</text>
+<text x="275" y="244" text-anchor="end" fill="#666" transform="rotate(-45 275 244)">WW05</text>
+<text x="331" y="244" text-anchor="end" fill="#666" transform="rotate(-45 331 244)">WW07</text>
+<text x="388" y="244" text-anchor="end" fill="#666" transform="rotate(-45 388 244)">WW09</text>
+<text x="444" y="244" text-anchor="end" fill="#666" transform="rotate(-45 444 244)">WW11</text>
+<text x="500" y="244" text-anchor="end" fill="#666" transform="rotate(-45 500 244)">WW13</text>
+<text x="557" y="244" text-anchor="end" fill="#666" transform="rotate(-45 557 244)">WW15</text>
+<text x="613" y="244" text-anchor="end" fill="#666" transform="rotate(-45 613 244)">WW17</text>
+<text x="670" y="244" text-anchor="end" fill="#666" transform="rotate(-45 670 244)">WW19</text>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="dependency" data-filter-value="oneAPI" data-show-hidden="1">
+<title>Filter table: oneAPI</title>
+<polyline class="chart-filter-hit" points="50,230 106,230 162,230 219,230 275,130 331,130 388,130 444,130 500,30 557,30 613,30 670,30" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,230 106,230 162,230 219,230 275,130 331,130 388,130 444,130 500,30 557,30 613,30 670,30" fill="none" stroke="#4e79a7" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="230" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="106" cy="230" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="162" cy="230" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="219" cy="230" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="275" cy="130" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="331" cy="130" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="388" cy="130" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="444" cy="130" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="500" cy="30" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="557" cy="30" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="613" cy="30" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="670" cy="30" r="3" fill="#4e79a7"/>
+<text class="chart-line-value" x="676" y="34" fill="#4e79a7" font-size="9" font-weight="bold">2</text>
+</g>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="dependency" data-filter-value="oneDNN" data-show-hidden="1">
+<title>Filter table: oneDNN</title>
+<polyline class="chart-filter-hit" points="50,130 106,130 162,130 219,130 275,30 331,30 388,30 444,30 500,30 557,30 613,30 670,30" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,130 106,130 162,130 219,130 275,30 331,30 388,30 444,30 500,30 557,30 613,30 670,30" fill="none" stroke="#f28e2b" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="130" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="106" cy="130" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="162" cy="130" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="219" cy="130" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="275" cy="30" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="331" cy="30" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="388" cy="30" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="444" cy="30" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="500" cy="30" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="557" cy="30" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="613" cy="30" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="670" cy="30" r="3" fill="#f28e2b"/>
+<text class="chart-line-value" x="676" y="34" fill="#f28e2b" font-size="9" font-weight="bold">2</text>
+</g>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="dependency" data-filter-value="Triton" data-show-hidden="1">
+<title>Filter table: Triton</title>
+<polyline class="chart-filter-hit" points="50,130 106,130 162,130 219,130 275,130 331,130 388,130 444,130 500,130 557,130 613,130 670,130" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,130 106,130 162,130 219,130 275,130 331,130 388,130 444,130 500,130 557,130 613,130 670,130" fill="none" stroke="#e15759" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="130" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="106" cy="130" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="162" cy="130" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="219" cy="130" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="275" cy="130" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="331" cy="130" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="388" cy="130" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="444" cy="130" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="500" cy="130" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="557" cy="130" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="613" cy="130" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="670" cy="130" r="3" fill="#e15759"/>
+<text class="chart-line-value" x="676" y="134" fill="#e15759" font-size="9" font-weight="bold">1</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="dependency" data-filter-value="oneAPI" data-show-hidden="1">
+<title>Filter table: oneAPI</title>
+<rect x="705" y="40" width="12" height="4" fill="#4e79a7" rx="1"/>
+<text x="721" y="45" fill="#333">oneAPI</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="dependency" data-filter-value="oneDNN" data-show-hidden="1">
+<title>Filter table: oneDNN</title>
+<rect x="705" y="56" width="12" height="4" fill="#f28e2b" rx="1"/>
+<text x="721" y="61" fill="#333">oneDNN</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="dependency" data-filter-value="Triton" data-show-hidden="1">
+<title>Filter table: Triton</title>
+<rect x="705" y="72" width="12" height="4" fill="#e15759" rx="1"/>
+<text x="721" y="77" fill="#333">Triton</text>
+</g>
+</svg>
+<svg class="line-chart" data-filter-dim="test_module" data-max-val="37" data-boundaries="[&quot;2025-12-14&quot;, &quot;2025-12-28&quot;, &quot;2026-01-11&quot;, &quot;2026-01-25&quot;, &quot;2026-02-08&quot;, &quot;2026-02-22&quot;, &quot;2026-03-08&quot;, &quot;2026-03-22&quot;, &quot;2026-04-05&quot;, &quot;2026-04-19&quot;, &quot;2026-05-03&quot;, &quot;2026-05-17&quot;]" data-margin-l="50" data-margin-t="30" data-plot-w="620" data-plot-h="200" width="765" height="320" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif;font-size:10px;">
+<text x="382" y="16" text-anchor="middle" font-weight="bold" font-size="12">Open Cases Trend: Test Module</text>
+<line x1="50" y1="230" x2="670" y2="230" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="0" x="44" y="234" text-anchor="end" fill="#999">0</text>
+<line x1="50" y1="180" x2="670" y2="180" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="1" x="44" y="184" text-anchor="end" fill="#999">9</text>
+<line x1="50" y1="130" x2="670" y2="130" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="2" x="44" y="134" text-anchor="end" fill="#999">18</text>
+<line x1="50" y1="80" x2="670" y2="80" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="3" x="44" y="84" text-anchor="end" fill="#999">27</text>
+<line x1="50" y1="30" x2="670" y2="30" stroke="#eee" stroke-width="1"/>
+<text class="chart-y-label" data-grid-index="4" x="44" y="34" text-anchor="end" fill="#999">37</text>
+<text x="50" y="244" text-anchor="end" fill="#666" transform="rotate(-45 50 244)">WW49</text>
+<text x="106" y="244" text-anchor="end" fill="#666" transform="rotate(-45 106 244)">WW51</text>
+<text x="162" y="244" text-anchor="end" fill="#666" transform="rotate(-45 162 244)">WW01</text>
+<text x="219" y="244" text-anchor="end" fill="#666" transform="rotate(-45 219 244)">WW03</text>
+<text x="275" y="244" text-anchor="end" fill="#666" transform="rotate(-45 275 244)">WW05</text>
+<text x="331" y="244" text-anchor="end" fill="#666" transform="rotate(-45 331 244)">WW07</text>
+<text x="388" y="244" text-anchor="end" fill="#666" transform="rotate(-45 388 244)">WW09</text>
+<text x="444" y="244" text-anchor="end" fill="#666" transform="rotate(-45 444 244)">WW11</text>
+<text x="500" y="244" text-anchor="end" fill="#666" transform="rotate(-45 500 244)">WW13</text>
+<text x="557" y="244" text-anchor="end" fill="#666" transform="rotate(-45 557 244)">WW15</text>
+<text x="613" y="244" text-anchor="end" fill="#666" transform="rotate(-45 613 244)">WW17</text>
+<text x="670" y="244" text-anchor="end" fill="#666" transform="rotate(-45 670 244)">WW19</text>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="test_module" data-filter-value="ut" data-show-hidden="1">
+<title>Filter table: ut</title>
+<polyline class="chart-filter-hit" points="50,117 106,112 162,101 219,101 275,79 331,74 388,63 444,58 500,30 557,30 613,30 670,30" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,117 106,112 162,101 219,101 275,79 331,74 388,63 444,58 500,30 557,30 613,30 670,30" fill="none" stroke="#4e79a7" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="117" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="106" cy="112" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="162" cy="101" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="219" cy="101" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="275" cy="79" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="331" cy="74" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="388" cy="63" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="444" cy="58" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="500" cy="30" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="557" cy="30" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="613" cy="30" r="3" fill="#4e79a7"/>
+<circle class="chart-point" cx="670" cy="30" r="3" fill="#4e79a7"/>
+<text class="chart-line-value" x="676" y="34" fill="#4e79a7" font-size="9" font-weight="bold">37</text>
+</g>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="test_module" data-filter-value="e2e" data-show-hidden="1">
+<title>Filter table: e2e</title>
+<polyline class="chart-filter-hit" points="50,230 106,230 162,230 219,230 275,230 331,230 388,225 444,225 500,225 557,225 613,225 670,225" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,230 106,230 162,230 219,230 275,230 331,230 388,225 444,225 500,225 557,225 613,225 670,225" fill="none" stroke="#f28e2b" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="230" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="106" cy="230" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="162" cy="230" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="219" cy="230" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="275" cy="230" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="331" cy="230" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="388" cy="225" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="444" cy="225" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="500" cy="225" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="557" cy="225" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="613" cy="225" r="3" fill="#f28e2b"/>
+<circle class="chart-point" cx="670" cy="225" r="3" fill="#f28e2b"/>
+<text class="chart-line-value" x="676" y="229" fill="#f28e2b" font-size="9" font-weight="bold">1</text>
+</g>
+<g class="chart-filter-target chart-series" role="button" tabindex="0" data-filter-dim="test_module" data-filter-value="build" data-show-hidden="1">
+<title>Filter table: build</title>
+<polyline class="chart-filter-hit" points="50,230 106,225 162,225 219,225 275,225 331,225 388,225 444,225 500,225 557,225 613,225 670,225" fill="none" stroke="#000" stroke-width="12" stroke-linejoin="round"/>
+<polyline class="chart-line-main" points="50,230 106,225 162,225 219,225 275,225 331,225 388,225 444,225 500,225 557,225 613,225 670,225" fill="none" stroke="#e15759" stroke-width="2" stroke-linejoin="round"/>
+<circle class="chart-point" cx="50" cy="230" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="106" cy="225" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="162" cy="225" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="219" cy="225" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="275" cy="225" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="331" cy="225" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="388" cy="225" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="444" cy="225" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="500" cy="225" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="557" cy="225" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="613" cy="225" r="3" fill="#e15759"/>
+<circle class="chart-point" cx="670" cy="225" r="3" fill="#e15759"/>
+<text class="chart-line-value" x="676" y="229" fill="#e15759" font-size="9" font-weight="bold">1</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="test_module" data-filter-value="ut" data-show-hidden="1">
+<title>Filter table: ut</title>
+<rect x="705" y="40" width="12" height="4" fill="#4e79a7" rx="1"/>
+<text x="721" y="45" fill="#333">ut</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="test_module" data-filter-value="e2e" data-show-hidden="1">
+<title>Filter table: e2e</title>
+<rect x="705" y="56" width="12" height="4" fill="#f28e2b" rx="1"/>
+<text x="721" y="61" fill="#333">e2e</text>
+</g>
+<g class="chart-filter-target" role="button" tabindex="0" data-filter-dim="test_module" data-filter-value="build" data-show-hidden="1">
+<title>Filter table: build</title>
+<rect x="705" y="72" width="12" height="4" fill="#e15759" rx="1"/>
+<text x="721" y="77" fill="#333">build</text>
+</g>
+</svg>
+<svg class="bar-chart" data-filter-dim="assignee" data-chart-width="320" data-left-margin="140" data-stale-only="0" width="500" height="400" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif;font-size:11px;">
+<text x="250" y="14" text-anchor="middle" font-weight="bold" font-size="12">Distribution: Assignee (top 15)</text>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="daisyden" data-show-hidden="1">
+<title>Filter table: daisyden</title>
+<text x="136" y="41" text-anchor="end">daisyden</text>
+<rect class="chart-bar-rect" x="140" y="28" width="320" height="18" fill="#4e79a7" rx="2"/>
+<text class="chart-bar-value" x="464" y="41">15</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="LuFinch" data-show-hidden="1">
+<title>Filter table: LuFinch</title>
+<text x="136" y="65" text-anchor="end">LuFinch</text>
+<rect class="chart-bar-rect" x="140" y="52" width="106" height="18" fill="#f28e2b" rx="2"/>
+<text class="chart-bar-value" x="250" y="65">5</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="yucai-intel" data-show-hidden="1">
+<title>Filter table: yucai-intel</title>
+<text x="136" y="89" text-anchor="end">yucai-intel</text>
+<rect class="chart-bar-rect" x="140" y="76" width="106" height="18" fill="#e15759" rx="2"/>
+<text class="chart-bar-value" x="250" y="89">5</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="CuiYifeng" data-show-hidden="1">
+<title>Filter table: CuiYifeng</title>
+<text x="136" y="113" text-anchor="end">CuiYifeng</text>
+<rect class="chart-bar-rect" x="140" y="100" width="106" height="18" fill="#76b7b2" rx="2"/>
+<text class="chart-bar-value" x="250" y="113">5</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="mengfei25" data-show-hidden="1">
+<title>Filter table: mengfei25</title>
+<text x="136" y="137" text-anchor="end">mengfei25</text>
+<rect class="chart-bar-rect" x="140" y="124" width="64" height="18" fill="#59a14f" rx="2"/>
+<text class="chart-bar-value" x="208" y="137">3</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="jenniew" data-show-hidden="1">
+<title>Filter table: jenniew</title>
+<text x="136" y="161" text-anchor="end">jenniew</text>
+<rect class="chart-bar-rect" x="140" y="148" width="64" height="18" fill="#edc948" rx="2"/>
+<text class="chart-bar-value" x="208" y="161">3</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="guangyey" data-show-hidden="1">
+<title>Filter table: guangyey</title>
+<text x="136" y="185" text-anchor="end">guangyey</text>
+<rect class="chart-bar-rect" x="140" y="172" width="64" height="18" fill="#b07aa1" rx="2"/>
+<text class="chart-bar-value" x="208" y="185">3</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="etaf" data-show-hidden="1">
+<title>Filter table: etaf</title>
+<text x="136" y="209" text-anchor="end">etaf</text>
+<rect class="chart-bar-rect" x="140" y="196" width="42" height="18" fill="#ff9da7" rx="2"/>
+<text class="chart-bar-value" x="186" y="209">2</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="jafraustro" data-show-hidden="1">
+<title>Filter table: jafraustro</title>
+<text x="136" y="233" text-anchor="end">jafraustro</text>
+<rect class="chart-bar-rect" x="140" y="220" width="42" height="18" fill="#9c755f" rx="2"/>
+<text class="chart-bar-value" x="186" y="233">2</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="chunhuanMeng" data-show-hidden="1">
+<title>Filter table: chunhuanMeng</title>
+<text x="136" y="257" text-anchor="end">chunhuanMeng</text>
+<rect class="chart-bar-rect" x="140" y="244" width="42" height="18" fill="#bab0ac" rx="2"/>
+<text class="chart-bar-value" x="186" y="257">2</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="Stonepia" data-show-hidden="1">
+<title>Filter table: Stonepia</title>
+<text x="136" y="281" text-anchor="end">Stonepia</text>
+<rect class="chart-bar-rect" x="140" y="268" width="42" height="18" fill="#1f77b4" rx="2"/>
+<text class="chart-bar-value" x="186" y="281">2</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="libohao1201" data-show-hidden="1">
+<title>Filter table: libohao1201</title>
+<text x="136" y="305" text-anchor="end">libohao1201</text>
+<rect class="chart-bar-rect" x="140" y="292" width="21" height="18" fill="#2ca02c" rx="2"/>
+<text class="chart-bar-value" x="165" y="305">1</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="wincent8" data-show-hidden="1">
+<title>Filter table: wincent8</title>
+<text x="136" y="329" text-anchor="end">wincent8</text>
+<rect class="chart-bar-rect" x="140" y="316" width="21" height="18" fill="#d62728" rx="2"/>
+<text class="chart-bar-value" x="165" y="329">1</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="zxd1997066" data-show-hidden="1">
+<title>Filter table: zxd1997066</title>
+<text x="136" y="353" text-anchor="end">zxd1997066</text>
+<rect class="chart-bar-rect" x="140" y="340" width="21" height="18" fill="#9467bd" rx="2"/>
+<text class="chart-bar-value" x="165" y="353">1</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="BBBela" data-show-hidden="1">
+<title>Filter table: BBBela</title>
+<text x="136" y="377" text-anchor="end">BBBela</text>
+<rect class="chart-bar-rect" x="140" y="364" width="21" height="18" fill="#8c564b" rx="2"/>
+<text class="chart-bar-value" x="165" y="377">1</text>
+</g>
+</svg>
+<svg class="bar-chart" data-filter-dim="assignee" data-chart-width="420" data-left-margin="140" data-stale-only="1" width="600" height="208" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif;font-size:11px;">
+<text x="300" y="14" text-anchor="middle" font-weight="bold" font-size="12">Distribution: Assignee — Open Response &gt;1 Week (top 15)</text>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="yucai-intel" data-show-hidden="0">
+<title>Filter table: yucai-intel</title>
+<text x="136" y="41" text-anchor="end">yucai-intel</text>
+<rect class="chart-bar-rect" x="140" y="28" width="420" height="18" fill="#4e79a7" rx="2"/>
+<text class="chart-bar-value" x="564" y="41">4</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="jenniew" data-show-hidden="0">
+<title>Filter table: jenniew</title>
+<text x="136" y="65" text-anchor="end">jenniew</text>
+<rect class="chart-bar-rect" x="140" y="52" width="315" height="18" fill="#f28e2b" rx="2"/>
+<text class="chart-bar-value" x="459" y="65">3</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="daisyden" data-show-hidden="0">
+<title>Filter table: daisyden</title>
+<text x="136" y="89" text-anchor="end">daisyden</text>
+<rect class="chart-bar-rect" x="140" y="76" width="210" height="18" fill="#e15759" rx="2"/>
+<text class="chart-bar-value" x="354" y="89">2</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="jafraustro" data-show-hidden="0">
+<title>Filter table: jafraustro</title>
+<text x="136" y="113" text-anchor="end">jafraustro</text>
+<rect class="chart-bar-rect" x="140" y="100" width="105" height="18" fill="#76b7b2" rx="2"/>
+<text class="chart-bar-value" x="249" y="113">1</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="mengfei25" data-show-hidden="0">
+<title>Filter table: mengfei25</title>
+<text x="136" y="137" text-anchor="end">mengfei25</text>
+<rect class="chart-bar-rect" x="140" y="124" width="105" height="18" fill="#59a14f" rx="2"/>
+<text class="chart-bar-value" x="249" y="137">1</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="LuFinch" data-show-hidden="0">
+<title>Filter table: LuFinch</title>
+<text x="136" y="161" text-anchor="end">LuFinch</text>
+<rect class="chart-bar-rect" x="140" y="148" width="105" height="18" fill="#edc948" rx="2"/>
+<text class="chart-bar-value" x="249" y="161">1</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="assignee" data-filter-value="BBBela" data-show-hidden="0">
+<title>Filter table: BBBela</title>
+<text x="136" y="185" text-anchor="end">BBBela</text>
+<rect class="chart-bar-rect" x="140" y="172" width="105" height="18" fill="#b07aa1" rx="2"/>
+<text class="chart-bar-value" x="249" y="185">1</text>
+</g>
+</svg>
+<svg class="bar-chart" data-filter-dim="ar" data-chart-width="320" data-left-margin="140" data-stale-only="0" width="500" height="112" xmlns="http://www.w3.org/2000/svg" style="font-family:sans-serif;font-size:11px;">
+<text x="250" y="14" text-anchor="middle" font-weight="bold" font-size="12">Distribution: AR</text>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="ar" data-filter-value="Need PR" data-show-hidden="1">
+<title>Filter table: Need PR</title>
+<text x="136" y="41" text-anchor="end">Need PR</text>
+<rect class="chart-bar-rect" x="140" y="28" width="320" height="18" fill="#4e79a7" rx="2"/>
+<text class="chart-bar-value" x="464" y="41">17</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="ar" data-filter-value="Track PR" data-show-hidden="1">
+<title>Filter table: Track PR</title>
+<text x="136" y="65" text-anchor="end">Track PR</text>
+<rect class="chart-bar-rect" x="140" y="52" width="244" height="18" fill="#f28e2b" rx="2"/>
+<text class="chart-bar-value" x="388" y="65">13</text>
+</g>
+<g class="chart-filter-target chart-bar" role="button" tabindex="0" data-filter-dim="ar" data-filter-value="Close/Skip" data-show-hidden="1">
+<title>Filter table: Close/Skip</title>
+<text x="136" y="89" text-anchor="end">Close/Skip</text>
+<rect class="chart-bar-rect" x="140" y="76" width="169" height="18" fill="#e15759" rx="2"/>
+<text class="chart-bar-value" x="313" y="89">9</text>
+</g>
+</svg>
+</div>
+<h2 id="sec-index">Index</h2>
+<ul>
+<li><a data-index-priority="P0" href="#sec-p0">P0 (0 issues)</a></li>
+<li><a data-index-priority="P1" href="#sec-p1">P1 (18 issues)</a></li>
+<li><a data-index-priority="P2" href="#sec-p2">P2 (17 issues)</a></li>
+<li><a data-index-priority="P3" href="#sec-p3">P3 (4 issues)</a></li>
+</ul>
+<h2 id="sec-p1" data-priority-title="P1" data-title-prefix="P1">P1 &mdash; 18 issues</h2>
+<h3 id="sec-p1-flash-attention" data-category-title="Flash Attention" data-title-prefix="Flash Attention">Flash Attention &middot; 2 issues</h3>
+<table class="ar-table" id="tbl-p1-flash-attention">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr class="more-hidden" data-issue="3140" data-priority="P1" data-category="Flash Attention" data-assignee="LuFinch" data-owner_transferred="LuFinch" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Need PR" data-is-dup="0" data-is-stale="0" data-created="2026-03-24" data-search="3140 [upstream_ut]  runtimeerror: flashattentionforwardxpu does not only support dropout &gt; 0.0 yet no action — investigate further"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="3140" id="done-3140"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/3140">#3140</a></td><td>[upstream_ut]  RuntimeError: FlashAttentionForwardXPU does not only support dro…</td><td class="tip-cell" title="Roughly 48 upstream UT variants of SDPA cudagraph fused attention with dropout_p=0.22 fail with RuntimeError from FlashAttentionForwardXPU unsupported dropout handling; this is &gt;6 UT failures, without evidence of crash, build failure, hang, or custom-model impact.">P1</td><td class="tip-cell" title="The error is raised directly by FlashAttentionForwardXPU in fused SDPA/FlashAttention tests, so it matches the Flash Attention category before generic Torch Operations.">Flash Attention</td><td>Need PR</td><td>LuFinch</td><td>LuFinch</td><td>daisyden</td><td></td><td>No action — investigate further</td><td>Either (a) implement dropout support in mha_fwd.cpp / mha_bwd.cpp sycltla kerne…<br><a href="details/3140.md">→ details</a></td><td></td><td>module: ut, skipped, ut_upstream</td><td>2026-03-24</td></tr>
+<tr class="more-hidden" data-issue="3142" data-priority="P1" data-category="Flash Attention" data-assignee="LuFinch" data-owner_transferred="LuFinch" data-dependency="oneAPI" data-milestone="UT Backlog" data-test_module="ut" data-ar="Need PR" data-is-dup="0" data-is-stale="0" data-created="2026-03-24" data-search="3142 [upstream_ut]  runtimeerror: the sycl_ext_oneapi_work_group_scratch_memory feature is not yet available for use with sycl graph extension. no action — investigate further"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="3142" id="done-3142"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/3142">#3142</a></td><td>[upstream_ut]  RuntimeError: The sycl_ext_oneapi_work_group_scratch_memory feat…</td><td class="tip-cell" title="About 24 upstream UT variants of SDPA cudagraph fused attention fail with RuntimeError because sycl_ext_oneapi_work_group_scratch_memory is forbidden in SYCL Graph nodes; this exceeds the &gt;6 UT failure threshold, but is not a process crash/build failure/custom model issue.">P1</td><td class="tip-cell" title="Failures occur in TestSDPACudaOnlyXPU fused_attention_vs_math_ref_grads_cudagraph using the fused FlashAttention/SDPA kernel path, and maintainer comments identify FlashAttention work_group_scratch_memory usage as the cause.">Flash Attention</td><td>Need PR</td><td>LuFinch</td><td>LuFinch</td><td>daisyden</td><td>oneAPI</td><td>No action — investigate further</td><td>External oneAPI compiler dependency — wait for oneAPI 2026.0 / CMPLRLLVM-72057 …<br><a href="details/3142.md">→ details</a></td><td></td><td>dependency component: oneAPI, module: u…</td><td>2026-03-24</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p1-flash-attention">Show 2 more (no open request &gt;1 week)</a>
+<h3 id="sec-p1-inductor" data-category-title="Inductor" data-title-prefix="Inductor">Inductor &middot; 4 issues</h3>
+<table class="ar-table" id="tbl-p1-inductor">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr data-issue="2532" data-priority="P1" data-category="Inductor" data-assignee="yucai-intel" data-owner_transferred="yucai-intel" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Track PR" data-is-dup="0" data-is-stale="1" data-created="2025-12-11" data-search="2532 title: [upstream_ut]  assertionerror: wrong number of dimensions2 for op: torch.ops.aten._convert_weight_to_int4pack.defa track pr intel/torch-xpu-ops#3090 to merge | resolve unresolved review comments on pr intel/torch-xpu-ops#3090 (&gt;1 week) | address ci failures on pr intel/torch-xpu-ops#3090 (&gt;1 week)"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2532" id="done-2532"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2532">#2532</a></td><td>Title: [upstream_ut]  AssertionError: wrong number of dimensions2 for op: torch…</td><td class="tip-cell" title="Eight torch.compile int4_mm upstream UT cases fail with an Inductor assert_size_stride AssertionError for _convert_weight_to_int4pack; &gt;6 UT failures maps to P1, with no evidence of crash, build failure, hang, or custom model impact.">P1</td><td class="tip-cell" title="The stack goes through torch.compile, Dynamo/AOTAutograd, and torch._inductor output_code before failing in generated code metadata checks, so Inductor wins over TorchAO/INT4 by category decision order.">Inductor</td><td>Track PR</td><td>yucai-intel</td><td>yucai-intel</td><td>daisyden</td><td></td><td>Track PR intel/torch-xpu-ops#3090 to merge | Resolve unresolved review comments on PR intel/torch-xpu-ops#3090 (&gt;1 week…</td><td>Align the XPU implementation of _convert_weight_to_int4pack with the CUDA contr…<br><a href="details/2532.md">→ details</a></td><td></td><td>skipped, port_from_skiplist</td><td>2025-12-11</td></tr>
+<tr class="more-hidden" data-issue="2295" data-priority="P1" data-category="Inductor" data-assignee="mengfei25" data-owner_transferred="mengfei25" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Need PR" data-is-dup="0" data-is-stale="0" data-created="2025-11-05" data-search="2295 [upstream_ut][xpu][test]nn/test_embedding.py::testembeddingnndevicetypexpu::test_embedding_bag_device_xpu_int32_int32_float64 meet assertionerror: tensor-likes are not close! no action — investigate further"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2295" id="done-2295"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2295">#2295</a></td><td>[upstream_ut][xpu][test]nn/test_embedding.py::TestEmbeddingNNDeviceTypeXPU::tes…</td><td class="tip-cell" title="High priority due to broad accuracy regression in upstream/stock PyTorch CI: comments enumerate far more than 6 failing XPU UT cases across embedding, reductions, masked reductions, and Inductor multi-kernel GEMM with Tensor-likes not close; there is also one mentioned segfault case, but the dominant tracked issue is CI-only accuracy failures tied to IGC/driver environment mismatch rather than a reproducible product crash.">P1</td><td class="tip-cell" title="Inductor first-match applies because the issue is labeled module: inductor and includes explicit torch Inductor/Triton multi-kernel GEMM failures (test_triton_relu_fused_gemm and test_triton_gemm). Although reductions/embedding ops are also affected, Inductor outranks generic Torch Operations in the category order.">Inductor</td><td>Need PR</td><td>mengfei25</td><td>mengfei25</td><td>wincent8</td><td></td><td>No action — investigate further</td><td>Identify the IGC/oneAPI version delta between CI image and nightly build; align…<br><a href="details/2295.md">→ details</a></td><td></td><td>module: inductor, skipped, ut_upstream</td><td>2025-11-05</td></tr>
+<tr class="more-hidden" data-issue="2554" data-priority="P1" data-category="Inductor" data-assignee="etaf" data-owner_transferred="daisyden" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Track PR" data-is-dup="0" data-is-stale="0" data-created="2025-12-12" data-search="2554 [upstream_ut]  assertionerror: assertionerror not raised track pr pytorch/pytorch#181822 to merge"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2554" id="done-2554"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2554">#2554</a></td><td>[upstream_ut]  AssertionError: AssertionError not raised</td><td class="tip-cell" title="Three upstream Inductor UTs in test/inductor/test_cuda_repro.py fail under torch.compile/Triton; the original trace shows InductorError from Triton PassManager::run failed, and later comments show continued CI accuracy failures (5.3% mismatched elements) after re-enabling attempts. This is a regression/accuracy failure in the compiled path, which is P1; it is not P0 because there is no crash, build failure, &gt;5% perf regression, or custom model impact.">P1</td><td class="tip-cell" title="The failures occur in test.inductor CUDA repro tests via torch._dynamo, torch._inductor compile_fx/codecache/async_compile, and Triton intel compiler make_ttgir; torch.compile/Triton codegen failures map to Inductor before Torch Operations.">Inductor</td><td>Track PR</td><td>etaf</td><td>daisyden</td><td>daisyden</td><td></td><td>Track PR pytorch/pytorch#181822 to merge</td><td>Wait for / pull in the fix from intel-xpu-backend-for-triton#5654 (TTGIR pass),…<br><a href="details/2554.md">→ details</a></td><td></td><td>module: inductor, skipped</td><td>2025-12-12</td></tr>
+<tr class="more-hidden" data-issue="2997" data-priority="P1" data-category="Inductor" data-assignee="daisyden" data-owner_transferred="daisyden" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Close/Skip" data-is-dup="0" data-is-stale="0" data-created="2026-03-06" data-search="2997 assertionerror of test_linear_and_cel_max_autotune track pr pytorch/pytorch#181822 to merge | verify fix from merged pr pytorch/pytorch#181822 and close"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2997" id="done-2997"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2997">#2997</a></td><td>AssertionError of test_linear_and_cel_max_autotune</td><td class="tip-cell" title="Accuracy regression in a compiled UT: InplacePaddingTest.test_linear_and_cel_max_autotune produces nan loss and nan gradients for the compiled output while the reference XPU eager output is finite. Benchmark accuracy regressions and accuracy regressions are P1; comments also identify a fix PR and ask to verify the community fix.">P1</td><td class="tip-cell" title="The failure is on the torch.compile/Inductor path: test/inductor/test_inplace_padding.py runs max_autotune, the actual result has grad_fn=&lt;CompiledFunctionBackward&gt;, labels include module: inductor, and the discussion links PyTorch Inductor fix PRs.">Inductor</td><td>Close/Skip</td><td>daisyden</td><td>daisyden</td><td>daisyden</td><td></td><td>Track PR pytorch/pytorch#181822 to merge | Verify fix from merged PR pytorch/pytorch#181822 and close</td><td>Bisect: disable inplace-padding (config.inplace_padding=False) and disable oneD…<br><a href="details/2997.md">→ details</a></td><td></td><td>module: inductor, ut_upstream</td><td>2026-03-06</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p1-inductor">Show 3 more (no open request &gt;1 week)</a>
+<h3 id="sec-p1-others" data-category-title="Others" data-title-prefix="Others">Others &middot; 1 issues</h3>
+<table class="ar-table" id="tbl-p1-others">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr class="more-hidden" data-issue="2024" data-priority="P1" data-category="Others" data-assignee="daisyden" data-owner_transferred="daisyden" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Track PR" data-is-dup="0" data-is-stale="0" data-created="2025-09-09" data-search="2024 assertionerror: torch not compiled with cuda enabled track pr intel/torch-xpu-ops#3510 to merge"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2024" id="done-2024"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2024">#2024</a></td><td>AssertionError: Torch not compiled with CUDA enabled</td><td class="tip-cell" title="The original issue lists seven XPU unit-test failures raising &#x27;Torch not compiled with CUDA enabled&#x27;, exceeding the &gt;6 UT failure threshold for P1. Later comments show most have passed or are covered by PR #3510, but the priority is based on the reported multi-test failure scope rather than a crash or build failure.">P1</td><td class="tip-cell" title="Failures come from upstream PyTorch test bodies hard-coding device=&#x27;cuda&#x27;/.cuda()/torch.cuda.synchronize() while being reused by the XPU test harness, not from an XPU kernel implementation; upstream test-harness/porting bugs are categorized as Others despite involving pooling/foreach/layernorm/SDPA test names.">Others</td><td>Track PR</td><td>daisyden</td><td>daisyden</td><td>mengfei25</td><td></td><td>Track PR intel/torch-xpu-ops#3510 to merge</td><td>Submit upstream PRs replacing hardcoded device=&#x27;cuda&#x27; with the parameterized de…<br><a href="details/2024.md">→ details</a></td><td></td><td>module: ut, skipped</td><td>2025-09-09</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p1-others">Show 1 more (no open request &gt;1 week)</a>
+<h3 id="sec-p1-sparse" data-category-title="Sparse" data-title-prefix="Sparse">Sparse &middot; 3 issues</h3>
+<table class="ar-table" id="tbl-p1-sparse">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr data-issue="2214" data-priority="P1" data-category="Sparse" data-assignee="jafraustro" data-owner_transferred="jenniew" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Need PR" data-is-dup="0" data-is-stale="1" data-created="2025-10-24" data-search="2214 test/test_sparse.py::testsparseanyxpu::test_gradcheck_mm expected error message not match no action — investigate further | address comment ar from chuanqi129 (&gt;1 week): @wincent8 remove hardcoded skips in test files (use dynamic skip-by-issue) | address comment ar from daisyden (&gt;1 week): confirm/dedupe with #2283 (jenniew should triage)"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2214" id="done-2214"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2214">#2214</a></td><td>test/test_sparse.py::TestSparseAnyXPU::test_gradcheck_mm expected error message…</td><td class="tip-cell" title="The issue lists 20 TestSparseAnyXPU gradcheck_mm UT cases failing due to expected-error-message mismatch, exceeding the &gt;6 unit-test-failure threshold; it is not a crash but still a broad skipped UT failure cluster.">P1</td><td class="tip-cell" title="The failures are in test_sparse.py sparse mm/gradcheck cases for SparseBSC/BSR/CSC layouts, and the raised error comes from sparse compressed tensor layout handling, so Sparse applies before generic Torch Operations.">Sparse</td><td>Need PR</td><td>jafraustro</td><td>jenniew</td><td>wincent8</td><td></td><td>No action — investigate further | Address comment AR from chuanqi129 (&gt;1 week): @wincent8 remove hardcoded skips in tes…</td><td>Update the assertRaisesRegex pattern in upstream test_sparse.py to also accept …<br><a href="details/2214.md">→ details</a></td><td></td><td>skipped, ut_upstream</td><td>2025-10-24</td></tr>
+<tr data-issue="2229" data-priority="P1" data-category="Sparse" data-assignee="jenniew" data-owner_transferred="jenniew" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Track PR" data-is-dup="0" data-is-stale="1" data-created="2025-10-28" data-search="2229 test/test_sparse_csr.py::testsparsecompressedcpu::test_invalid_input meet message not match track pr intel/torch-xpu-ops#3073 to merge | address ci failures on pr intel/torch-xpu-ops#3073 (&gt;1 week)"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2229" id="done-2229"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2229">#2229</a></td><td>test/test_sparse_csr.py::TestSparseCompressedCPU::test_invalid_input meet messa…</td><td class="tip-cell" title="The issue lists 12 active TestSparseCompressedCPU invalid-input UT failures from assertRaisesRegex error-message mismatches; this exceeds the &gt;6 unit-test-failure threshold even though the underlying behavior is an error-message/fallback mismatch rather than a crash.">P1</td><td class="tip-cell" title="All failing cases are sparse compressed tensor tests for CSR/CSC/BSR/BSC, and maintainer analysis points to missing XPU aten::_validate_compressed_sparse_indices support and sparse compressed index validation fallback.">Sparse</td><td>Track PR</td><td>jenniew</td><td>jenniew</td><td>wincent8</td><td></td><td>Track PR intel/torch-xpu-ops#3073 to merge | Address CI failures on PR intel/torch-xpu-ops#3073 (&gt;1 week)</td><td>Implement aten::_validate_compressed_sparse_indices for the XPU backend in torc…<br><a href="details/2229.md">→ details</a></td><td></td><td>skipped</td><td>2025-10-28</td></tr>
+<tr data-issue="2283" data-priority="P1" data-category="Sparse" data-assignee="jenniew" data-owner_transferred="jenniew" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Track PR" data-is-dup="0" data-is-stale="1" data-created="2025-11-04" data-search="2283 [upstream_ut] sparse._sampled_addmm is not supported track pr intel/torch-xpu-ops#3018 to merge | address ci failures on pr intel/torch-xpu-ops#3018 (&gt;1 week)"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2283" id="done-2283"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2283">#2283</a></td><td>[upstream_ut] sparse._sampled_addmm is not supported</td><td class="tip-cell" title="P1 because the issue lists more than 6 upstream unit-test failures: 21 sparse CSR sampled_addmm/gradcheck cases fail, with repeated NotImplementedError for aten::sparse_sampled_addmm on the SparseCsrXPU backend. This is not a crash, build failure, performance regression, or custom model impact, so it does not meet P0.">P1</td><td class="tip-cell" title="Sparse because the failing tests are test_sparse_xpu.py and test_sparse_csr_xpu.py, the backend in the error is SparseCsrXPU, and the missing operator is aten::sparse_sampled_addmm / sparse._sampled_addmm on CSR sparse tensors. Sparse is earlier than generic Torch Operations in the category order.">Sparse</td><td>Track PR</td><td>jenniew</td><td>jenniew</td><td>daisyden</td><td></td><td>Track PR intel/torch-xpu-ops#3018 to merge | Address CI failures on PR intel/torch-xpu-ops#3018 (&gt;1 week)</td><td>Either register a CPU fallback for aten::sparse_sampled_addmm on SparseCsrXPU (…<br><a href="details/2283.md">→ details</a></td><td></td><td>skipped, ut_upstream</td><td>2025-11-04</td></tr>
+</tbody></table>
+<h3 id="sec-p1-torch-ops---eltwise" data-category-title="Torch Ops - eltwise" data-title-prefix="Torch Ops - eltwise">Torch Ops - eltwise &middot; 2 issues</h3>
+<table class="ar-table" id="tbl-p1-torch-ops---eltwise">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr data-issue="2287" data-priority="P1" data-category="Torch Ops - eltwise" data-assignee="yucai-intel" data-owner_transferred="yucai-intel" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Track PR" data-is-dup="0" data-is-stale="1" data-created="2025-11-04" data-search="2287 [upstream_ut] test_python_ref issues track pr pytorch/pytorch#178734 to merge | address ci failures on pr pytorch/pytorch#178734 (&gt;1 week) | address comment ar from tye1: pytorch/pytorch#178734 has a lint issue — yucai-intel to fix"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2287" id="done-2287"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2287">#2287</a></td><td>[upstream_ut] test_python_ref issues</td><td class="tip-cell" title="High priority because the retest comment lists 8 upstream UT failures for test_python_ref__refs_logspace_tensor_overload across bfloat16, complex, float, int8, and uint8 dtypes, exceeding the &gt;6 UT failure threshold; failure is RuntimeError &#x27;no _refs support for aten.copy.default&#x27;, not a crash or build failure.">P1</td><td class="tip-cell" title="Torch Operations applies because the failure is in an ATen/_refs operator path: torch._refs.linspace/logspace calls aten.copy.default under TorchRefsMode. The specific missing op is copy.default, an elementwise/copy operation, so the required Torch Operations subcategory is Torch Ops - eltwise.">Torch Ops - eltwise</td><td>Track PR</td><td>yucai-intel</td><td>yucai-intel</td><td>daisyden</td><td></td><td>Track PR pytorch/pytorch#178734 to merge | Address CI failures on PR pytorch/pytorch#178734 (&gt;1 week) | Address comment…</td><td>Skip in test/xpu/skip_list_common.py for test_python_ref__refs_logspace_tensor_…<br><a href="details/2287.md">→ details</a></td><td></td><td>module: ut, ut_upstream</td><td>2025-11-04</td></tr>
+<tr class="more-hidden" data-issue="2376" data-priority="P1" data-category="Torch Ops - eltwise" data-assignee="daisyden" data-owner_transferred="CuiYifeng, mengfei25" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Close/Skip" data-is-dup="0" data-is-stale="0" data-created="2025-11-19" data-search="2376 [bug skip]: notimplementederror: &quot;logaddexp_xpu&quot; not implemented for &#x27;complex&#x27; verify fix from merged pr intel/torch-xpu-ops#2807 and close, check_case_avaliablity | enable complex logaddexp test cases upstream in pytorch/pytorch and unskip in torch-xpu-ops skip lists"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2376" id="done-2376"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2376">#2376</a></td><td>[Bug Skip]: NotImplementedError: &quot;logaddexp_xpu&quot; not implemented for &#x27;Complex&#x27;</td><td class="tip-cell" title="The issue lists far more than six skipped/failing op UT cases across logaddexp complex dtypes, all due to NotImplementedError for complex XPU support, so it matches the &gt;6 UT failures P1 rule rather than a minor enhancement.">P1</td><td class="tip-cell" title="logaddexp/logaddexp2 are elementwise binary ufuncs; the failure is missing complex dtype implementation/dispatch for the XPU operator and comments confirm the kernel/test enablement work.">Torch Ops - eltwise</td><td>Close/Skip</td><td>daisyden</td><td>CuiYifeng, mengfei25</td><td>mengfei25</td><td></td><td>Verify fix from merged PR intel/torch-xpu-ops#2807 and close, check_case_avaliablity | Enable complex logaddexp test ca…</td><td>Extend LogAddExpKernels.cpp dispatch to AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES_…<br><a href="details/2376.md">→ details</a></td><td></td><td>module: ut, skipped</td><td>2025-11-19</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p1-torch-ops---eltwise">Show 1 more (no open request &gt;1 week)</a>
+<h3 id="sec-p1-torch-ops---gemm" data-category-title="Torch Ops - gemm" data-title-prefix="Torch Ops - gemm">Torch Ops - gemm &middot; 4 issues</h3>
+<table class="ar-table" id="tbl-p1-torch-ops---gemm">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr data-issue="2436" data-priority="P1" data-category="Torch Ops - gemm" data-assignee="daisyden" data-owner_transferred="daisyden" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Need PR" data-is-dup="0" data-is-stale="1" data-created="2025-11-29" data-search="2436 [upstream_ut]  attributeerror: &#x27;nonetype&#x27; object has no attribute &#x27;clone&#x27; no action — investigate further | address comment ar from daisyden (&gt;1 week): re-check case design per cuiyifeng&#x27;s request"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2436" id="done-2436"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2436">#2436</a></td><td>[upstream_ut]  AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;clone&#x27;</td><td class="tip-cell" title="The issue lists many expanded-weights UT cases (&gt;6) across Conv1d/Conv2d/Conv3d/Linear/LayerNorm failing with AttributeError: &#x27;NoneType&#x27; object has no attribute &#x27;clone&#x27;. Even though comments say it matches CUDA/CPU issue pytorch/pytorch#97395 and is random/order-dependent, the tracked scope is far above 6 UT failures, which maps to P1.">P1</td><td class="tip-cell" title="Most listed failures are Conv and Linear expanded-weights cases, with stack in test_expanded_weights_xpu.py cloning input.grad after module backward; by first matching component behavior this is tied to neural-network GEMM/convolution/linear op tests, so Torch Ops - gemm is the best subcategory despite upstream test-design root cause.">Torch Ops - gemm</td><td>Need PR</td><td>daisyden</td><td>daisyden</td><td>daisyden</td><td></td><td>No action — investigate further | Address comment AR from daisyden (&gt;1 week): re-check case design per CuiYifeng&#x27;s requ…</td><td>Keep cases in skip list as &#x27;random/community&#x27;; track upstream pytorch/pytorch#9…<br><a href="details/2436.md">→ details</a></td><td></td><td>skipped, dependency component: communit…</td><td>2025-11-29</td></tr>
+<tr data-issue="2769" data-priority="P1" data-category="Torch Ops - gemm" data-assignee="mengfei25" data-owner_transferred="mengfei25" data-dependency="oneDNN" data-milestone="PT2.12" data-test_module="ut" data-ar="Need PR" data-is-dup="0" data-is-stale="1" data-created="2026-01-26" data-search="2769 [onednn] new failed test cases with 3.11 compared with 3.10 address comment ar from chuanqi129 (&gt;1 week): verify whether onednn 3.11.1 fixes the conv regression | no action — investigate further"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2769" id="done-2769"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2769">#2769</a></td><td>[oneDNN] New failed test cases with 3.11 compared with 3.10</td><td class="tip-cell" title="oneDNN v3.11 causes 245 previously passing UT cases to fail versus v3.10.2, far exceeding the &gt;6 UT threshold and explicitly representing a dependency regression, without evidence of crash/build failure.">P1</td><td class="tip-cell" title="Maintainer debugging says the failures are Conv/ConvBackwardWeight primitive related; convolution is a GEMM-core ATen operation backed by oneDNN, so it maps to Torch Ops - gemm.">Torch Ops - gemm</td><td>Need PR</td><td>mengfei25</td><td>mengfei25</td><td>mengfei25</td><td>oneDNN</td><td>Address comment AR from chuanqi129 (&gt;1 week): verify whether oneDNN 3.11.1 fixes the conv regression | No action — inve…</td><td>File a oneDNN upstream issue with a minimal conv repro; pin oneDNN to v3.10.2 i…<br><a href="details/2769.md">→ details</a></td><td></td><td>hw: PVC, dependency component: oneDNN, …</td><td>2026-01-26</td></tr>
+<tr class="more-hidden" data-issue="2253" data-priority="P1" data-category="Torch Ops - gemm" data-assignee="daisyden" data-owner_transferred="daisyden" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Close/Skip" data-is-dup="0" data-is-stale="0" data-created="2025-10-31" data-search="2253 the supported dtypes are not align with cuda label not_target and close, check_case_avaliablity"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2253" id="done-2253"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2253">#2253</a></td><td>the supported dtypes are not align with cuda</td><td class="tip-cell" title="The issue lists far more than six upstream unit-test failures in TestCommonXPU for dtype and noncontiguous/multiple-device coverage; several have since passed or are duplicate-tracked, but the open issue scope is still a broad UT failure set rather than a crash, build failure, benchmark, or custom-model blocker.">P1</td><td class="tip-cell" title="Failures are ATen operator support-dtype mismatches for addmm/addmv/baddbmm/mm/mv, conv/linear/einsum/histogram variants; by first-match taxonomy this is Torch Operations, and the dominant affected ops are GEMM/matmul/convolution/linear paths so the subcategory is gemm.">Torch Ops - gemm</td><td>Close/Skip</td><td>daisyden</td><td>daisyden</td><td>daisyden</td><td></td><td>label not_target and close, check_case_avaliablity</td><td>Either expand XPU op registrations to cover the same dtype set as CUDA (e.g. ad…<br><a href="details/2253.md">→ details</a></td><td></td><td>duplicate, skipped, ut_upstream</td><td>2025-10-31</td></tr>
+<tr class="more-hidden" data-issue="2439" data-priority="P1" data-category="Torch Ops - gemm" data-assignee="libohao1201" data-owner_transferred="libohao1201" data-dependency="oneDNN" data-milestone="UT Backlog" data-test_module="ut" data-ar="Track PR" data-is-dup="0" data-is-stale="0" data-created="2025-12-01" data-search="2439 [onednn] testdecompxpu.test_quick_addmv_xpu_float64 got fail accuracy result pr pytorch/pytorch#174590 closed unmerged; reassess fix path | retriage_prs"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2439" id="done-2439"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2439">#2439</a></td><td>[oneDNN] TestDecompXPU.test_quick_addmv_xpu_float64 got fail accuracy result</td><td class="tip-cell" title="Accuracy regression after upgrading oneDNN v3.9 to v3.10: test_quick_addmv_xpu_float64 reports Tensor-likes are not close with abs diff 9.080859637577987e-07 over 1e-07 tolerance. User priority rules classify accuracy regression as P1.">P1</td><td class="tip-cell" title="The failing op is addmv.default in TestDecompXPU, a matrix-vector/GEMM-family ATen operation backed by oneDNN matmul; Torch Operations applies, with gemm subcategory for matrix multiply/linear/GEMM-core linalg paths.">Torch Ops - gemm</td><td>Track PR</td><td>libohao1201</td><td>libohao1201</td><td>mengfei25</td><td>oneDNN</td><td>PR pytorch/pytorch#174590 closed unmerged; reassess fix path | RETRIAGE_PRS</td><td>Pick up upstream PR pytorch/pytorch#174590 once merged (raises decomp tolerance…<br><a href="details/2439.md">→ details</a></td><td></td><td>dependency component: oneDNN, module: ut</td><td>2025-12-01</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p1-torch-ops---gemm">Show 2 more (no open request &gt;1 week)</a>
+<h3 id="sec-p1-torch-ops---others" data-category-title="Torch Ops - others" data-title-prefix="Torch Ops - others">Torch Ops - others &middot; 1 issues</h3>
+<table class="ar-table" id="tbl-p1-torch-ops---others">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr class="more-hidden" data-issue="2615" data-priority="P1" data-category="Torch Ops - others" data-assignee="CuiYifeng" data-owner_transferred="CuiYifeng" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Close/Skip" data-is-dup="0" data-is-stale="0" data-created="2025-12-22" data-search="2615 [bug skip]: new failures runtimeerror: unsupported dtype half / runtimeerror: unsupported dtype torch.float16 label not_target and close (for the test_comprehensive_fft_*_xpu_float16 and #2708-tracked subset) | verify fix from merged pr intel/torch-xpu-ops#2637 and close | track pr intel/torch-xpu-ops#2996 to merge | resolve unresolved review comments on pr intel/torch-xpu-ops#2996"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2615" id="done-2615"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2615">#2615</a></td><td>[Bug Skip]: New failures RuntimeError: Unsupported dtype Half / RuntimeError: U…</td><td class="tip-cell" title="The issue originally covered a large set of FFT half/complex-half upstream UT failures with RuntimeError unsupported dtype Half and remaining not_power_of_two_error cases; despite many cases now passing or being tracked by #2708, the tracked scope is &gt;6 UT failures/feature-gap tests, so P1 is appropriate.">P1</td><td class="tip-cell" title="All failing and tracked cases are torch.fft/_refs FFT spectral operator tests for Half/Complex32 on XPU; FFT is an ATen operator family and maps to Torch Ops - others under the required subcategory list.">Torch Ops - others</td><td>Close/Skip</td><td>CuiYifeng</td><td>CuiYifeng</td><td>kaileiyx</td><td></td><td>label not_target and close (for the test_comprehensive_fft_*_xpu_float16 and #2708-tracked subset) | Verify fix from me…</td><td>Land pytorch/pytorch#171231 and skip/redirect the remaining test_fft_half_and_c…<br><a href="details/2615.md">→ details</a></td><td></td><td>module: ut, skipped</td><td>2025-12-22</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p1-torch-ops---others">Show 1 more (no open request &gt;1 week)</a>
+<h3 id="sec-p1-torch-runtime" data-category-title="Torch Runtime" data-title-prefix="Torch Runtime">Torch Runtime &middot; 1 issues</h3>
+<table class="ar-table" id="tbl-p1-torch-runtime">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr class="more-hidden" data-issue="2531" data-priority="P1" data-category="Torch Runtime" data-assignee="daisyden" data-owner_transferred="guangyey" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Track PR" data-is-dup="0" data-is-stale="0" data-created="2025-12-11" data-search="2531 [upstream_ut]  assertionerror: torch not compiled with cuda enabled check_case_avaliablity | track pr intel/torch-xpu-ops#3510 to merge | address comment ar from guangyey: confirm xpu support for tunable / cufft_plan_cache / cudasyncguard / miopen / quantize_per_tensor"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2531" id="done-2531"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2531">#2531</a></td><td>[upstream_ut]  AssertionError: Torch not compiled with CUDA enabled</td><td class="tip-cell" title="The issue tracks more than six upstream UT failures caused by CUDA-only APIs or missing XPU runtime/framework support (CudaSyncGuard, torch.cuda.tunable, cufft_plan_cache, quantize_per_tensor); &gt;6 UT failures maps to P1 despite several cases later being marked CUDA-only or fixed.">P1</td><td class="tip-cell" title="Representative failure is CudaSyncGuard calling torch.cuda.get_sync_debug_mode in an XPU test and comments confirm missing XPU runtime/framework APIs such as sync-debug guard and CUDA-specific backend features, making Torch Runtime the owning bucket rather than a single operator.">Torch Runtime</td><td>Track PR</td><td>daisyden</td><td>guangyey</td><td>daisyden</td><td></td><td>check_case_avaliablity | Track PR intel/torch-xpu-ops#3510 to merge | Address comment AR from guangyey: confirm XPU sup…</td><td>Port each test in third_party/torch-xpu-ops/test/xpu/ to substitute xpu for cud…<br><a href="details/2531.md">→ details</a></td><td></td><td>skipped, port_from_skiplist</td><td>2025-12-11</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p1-torch-runtime">Show 1 more (no open request &gt;1 week)</a>
+<h2 id="sec-p2" data-priority-title="P2" data-title-prefix="P2">P2 &mdash; 17 issues</h2>
+<h3 id="sec-p2-distributed" data-category-title="Distributed" data-title-prefix="Distributed">Distributed &middot; 1 issues</h3>
+<table class="ar-table" id="tbl-p2-distributed">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr class="more-hidden" data-issue="2958" data-priority="P2" data-category="Distributed" data-assignee="daisyden" data-owner_transferred="daisyden" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Need PR" data-is-dup="0" data-is-stale="0" data-created="2026-03-02" data-search="2958 assertionerror of test_dtensor_basic_compile submit upstream pr from daisyden/missing_test to remove skipifxpu on test_dtensor_basic_export and close this issue | file separate upstream issue for test-ordering / dtensorspec flatten regression from pytorch/pytorch#178115"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2958" id="done-2958"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2958">#2958</a></td><td>AssertionError of test_dtensor_basic_compile</td><td class="tip-cell" title="Two related UT expectation mismatches are reported for test_dtensor_basic_compile/test_dtensor_basic_export assertExpectedInline output, and comments say the tests pass on main with remaining ordering/cache pollution not XPU-specific. This is a small UT/test-sync issue, not a crash, hang, broad suite failure, or custom model blocker.">P2</td><td class="tip-cell" title="The failing tests are in test/distributed/tensor/test_dtensor_compile.py and compare DTensor from_local/to_local graph text; DTensor/distributed tensor matches the Distributed bucket first, overriding the inductor label and compiled-autograd context.">Distributed</td><td>Need PR</td><td>daisyden</td><td>daisyden</td><td>daisyden</td><td></td><td>Submit upstream PR from daisyden/missing_test to remove skipIfXpu on test_dtensor_basic_export and close this issue | F…</td><td>Re-run on current main to confirm; if still failing, regenerate the expected in…<br><a href="details/2958.md">→ details</a></td><td></td><td>module: inductor, ut_upstream</td><td>2026-03-02</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p2-distributed">Show 1 more (no open request &gt;1 week)</a>
+<h3 id="sec-p2-flash-attention" data-category-title="Flash Attention" data-title-prefix="Flash Attention">Flash Attention &middot; 5 issues</h3>
+<table class="ar-table" id="tbl-p2-flash-attention">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr data-issue="2015" data-priority="P2" data-category="Flash Attention" data-assignee="yucai-intel" data-owner_transferred="yucai-intel" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Track PR" data-is-dup="0" data-is-stale="1" data-created="2025-09-04" data-search="2015 inf is returned by nn.transformerencoderlayer check_case_avaliablity | track pr intel/torch-xpu-ops#2336 to merge | resolve unresolved review comments on pr intel/torch-xpu-ops#2336 (&gt;1 week) | address comment ar from tye1: get pr #2336 merged"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2015" id="done-2015"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2015">#2015</a></td><td>inf is returned by nn.TransformerEncoderLayer</td><td class="tip-cell" title="The issue reports a small set of TransformerEncoderLayer unit-test accuracy failures (float16/float64 remaining, with float32 and other cases later passing) producing inf/nan or assertion mismatches. This is functional correctness for 1-6 UT cases, with no crash, hang, build failure, &gt;6 failures, benchmark regression, or custom model impact, so P2.">P2</td><td class="tip-cell" title="TransformerEncoderLayer exercises the attention/native layer norm fast path, and the category rules place TransformerEncoderLayer attention/SDPA/MultiheadAttention paths in Flash Attention before generic Torch Operations; comments also point to enabling the XPU device path for the TransformerEncoderLayer tests.">Flash Attention</td><td>Track PR</td><td>yucai-intel</td><td>yucai-intel</td><td>daisyden</td><td></td><td>check_case_avaliablity | Track PR intel/torch-xpu-ops#2336 to merge | Resolve unresolved review comments on PR intel/to…</td><td>Land/track pytorch/pytorch#168234 to add xpu device coverage in test_nn.py Tran…<br><a href="details/2015.md">→ details</a></td><td></td><td>skipped</td><td>2025-09-04</td></tr>
+<tr data-issue="2698" data-priority="P2" data-category="Flash Attention" data-assignee="daisyden, LuFinch" data-owner_transferred="LuFinch" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Track PR" data-is-dup="0" data-is-stale="1" data-created="2026-01-06" data-search="2698 title: [upstream_ut]  runtimeerror: flashattentionforwardxpu only support headdim 64,96,128,192 track pr pytorch/pytorch#180646 to merge | address ci failures on pr pytorch/pytorch#180646 (&gt;1 week)"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2698" id="done-2698"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2698">#2698</a></td><td>Title: [upstream_ut]  RuntimeError: FlashAttentionForwardXPU only support headd…</td><td class="tip-cell" title="Three upstream UT cases fail with RuntimeError because FlashAttentionForwardXPU rejects unsupported head dimensions; this is a 1-6 test/feature-gap correctness issue, with no crash, hang, build failure, performance regression, or custom model impact.">P2</td><td class="tip-cell" title="The failure is inside aten._scaled_dot_product_flash_attention / FlashAttentionForwardXPU and maintainer diagnosis says the SYCLTLA flash-attention API only supports head_dim 64,96,128,192; Flash Attention takes precedence over the inductor label.">Flash Attention</td><td>Track PR</td><td>daisyden, LuFinch</td><td>LuFinch</td><td>daisyden</td><td></td><td>Track PR pytorch/pytorch#180646 to merge | Address CI failures on PR pytorch/pytorch#180646 (&gt;1 week)</td><td>In mha_fwd.cpp, instead of TORCH_CHECK(false, ...), return a status indicating …<br><a href="details/2698.md">→ details</a></td><td></td><td>module: inductor, skipped, ut_upstream</td><td>2026-01-06</td></tr>
+<tr class="more-hidden" data-issue="2270" data-priority="P2" data-category="Flash Attention" data-assignee="LuFinch" data-owner_transferred="LuFinch" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Close/Skip" data-is-dup="0" data-is-stale="0" data-created="2025-11-03" data-search="2270 backend compatibility error in test/xpu/test_decomp.py verify fix from merged pr intel/torch-xpu-ops#2341 and close | label not_target and close"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2270" id="done-2270"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2270">#2270</a></td><td>Backend Compatibility Error in test/xpu/test_decomp.py</td><td class="tip-cell" title="P2 because this is a single op_ut failure, test_comprehensive_torch_ops_aten__flash_attention_forward_xpu_float16, raising NotImplementedError during decomp cross-reference. There is no evidence of crash/hang/build failure, accuracy regression, performance regression, or more than 6 failing UT cases.">P2</td><td class="tip-cell" title="Flash Attention because the failing operator and test are aten::_flash_attention_forward / test_comprehensive_torch_ops_aten__flash_attention_forward_xpu_float16; comments state the missing _flash_attention_forward kernel falls back to CPU where the op has no CPU implementation. Flash Attention matches before generic Torch Operations.">Flash Attention</td><td>Close/Skip</td><td>LuFinch</td><td>LuFinch</td><td>libohao1201</td><td></td><td>Verify fix from merged PR intel/torch-xpu-ops#2341 and close | label not_target and close</td><td>Add the test to skip_list for test_decomp_xpu (decomp cross-ref doesn&#x27;t make se…<br><a href="details/2270.md">→ details</a></td><td></td><td>module: ut, skipped</td><td>2025-11-03</td></tr>
+<tr class="more-hidden" data-issue="2285" data-priority="P2" data-category="Flash Attention" data-assignee="daisyden" data-owner_transferred="chunhuanMeng, daisyden" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Need PR" data-is-dup="1" data-is-stale="0" data-created="2025-11-04" data-search="2285 support efficient attention check_case_avaliablity | no action — investigate further"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2285" id="done-2285"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2285">#2285</a></td><td>Support efficient attention</td><td class="tip-cell" title="Medium priority feature gap/correctness issue: the request is to support SDPBackend.EFFICIENT_ATTENTION and aten._efficient_attention_forward, with multiple OpInfo/meta/fake tensor UT failures from NotImplementedError, but no crash, build failure, regression evidence, or customer/custom-model impact remains after unrelated sparse/linalg cases were marked passing.">P2</td><td class="tip-cell" title="Flash Attention first-match applies because the failing API is SDPBackend.EFFICIENT_ATTENTION / aten::_efficient_attention_forward, which the taxonomy explicitly maps to Flash Attention before generic Torch Operations.">Flash Attention</td><td>Need PR</td><td>daisyden</td><td>chunhuanMeng, daisyden</td><td>daisyden</td><td></td><td>check_case_avaliablity | No action — investigate further</td><td>Implement and register aten::_efficient_attention_forward / _backward for XPU i…<br><a href="details/2285.md">→ details</a></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2853">#2853</a></td><td>skipped</td><td>2025-11-04</td></tr>
+<tr class="more-hidden" data-issue="2853" data-priority="P2" data-category="Flash Attention" data-assignee="LuFinch" data-owner_transferred="LuFinch" data-dependency="" data-milestone="PT2.13" data-test_module="ut" data-ar="Track PR" data-is-dup="1" data-is-stale="0" data-created="2026-02-05" data-search="2853 [upstream_ut] torch.ops.aten._flash_attention_forward lack of support for xpu. track pr intel/torch-xpu-ops#3404 to merge"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2853" id="done-2853"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2853">#2853</a></td><td>[upstream_ut] torch.ops.aten._flash_attention_forward lack of support for XPU.</td><td class="tip-cell" title="The issue reports a missing XPU implementation for aten::_flash_attention_forward causing OpInfo/schema/meta UT failures with NotImplementedError. This is a feature gap / correctness failure in a small number of upstream UT cases, with no crash, build failure, &gt;6 UT batch, benchmark, or custom model evidence, so P2 is appropriate rather than P3 because tests currently fail.">P2</td><td class="tip-cell" title="The failing op is explicitly aten::_flash_attention_forward and the issue says PyTorch dispatches to CPU where only CUDA exists. Per category priority order, _flash_attention/SDPA/efficient attention issues are Flash Attention before generic Torch Operations.">Flash Attention</td><td>Track PR</td><td>LuFinch</td><td>LuFinch</td><td>BBBela</td><td></td><td>Track PR intel/torch-xpu-ops#3404 to merge</td><td>Either (a) register an XPU kernel for _flash_attention_forward in torch-xpu-ops…<br><a href="details/2853.md">→ details</a></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2285">#2285</a></td><td>skipped</td><td>2026-02-05</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p2-flash-attention">Show 3 more (no open request &gt;1 week)</a>
+<h3 id="sec-p2-inductor" data-category-title="Inductor" data-title-prefix="Inductor">Inductor &middot; 3 issues</h3>
+<table class="ar-table" id="tbl-p2-inductor">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr class="more-hidden" data-issue="2800" data-priority="P2" data-category="Inductor" data-assignee="daisyden" data-owner_transferred="guangyey" data-dependency="oneAPI" data-milestone="PT2.14" data-test_module="ut" data-ar="Need PR" data-is-dup="0" data-is-stale="0" data-created="2026-01-30" data-search="2800 attributeerror: &#x27;torch._c._xpudeviceproperties&#x27; object has no attribute &#x27;major&#x27; no action — investigate further"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2800" id="done-2800"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2800">#2800</a></td><td>AttributeError: &#x27;torch._C._XpuDeviceProperties&#x27; object has no attribute &#x27;major&#x27;</td><td class="tip-cell" title="One upstream XPU unit test errors because torch.xpu.get_device_properties(0) lacks the major attribute needed by the scaled-mm FP8 test. It is a small UT/feature-gap failure gated on oneAPI support, not a crash, hang, build failure, broad test-suite breakage, or performance issue.">P2</td><td class="tip-cell" title="The failing test is TestFP8MatmulXPU.test_scaled_mm_vs_emulated from test_scaled_matmul_cuda.py and is labeled module: inductor; it exercises the Inductor/scaled-mm FP8 test path, so Inductor wins before runtime device-property considerations.">Inductor</td><td>Need PR</td><td>daisyden</td><td>guangyey</td><td>daisyden</td><td>oneAPI</td><td>No action — investigate further</td><td>Wait for oneAPI 2026.1 (CMPLRLLVM-72166) to expose arch major/minor via SYCL de…<br><a href="details/2800.md">→ details</a></td><td></td><td>dependency component: oneAPI, module: i…</td><td>2026-01-30</td></tr>
+<tr class="more-hidden" data-issue="2888" data-priority="P2" data-category="Inductor" data-assignee="Stonepia" data-owner_transferred="Stonepia" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Need PR" data-is-dup="0" data-is-stale="0" data-created="2026-02-13" data-search="2888 torch._inductor.exc.inductorerror: assertionerror: conversions between float8_e5m2 and float8_e4m3fn is not supported! no action — investigate further"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2888" id="done-2888"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2888">#2888</a></td><td>torch._inductor.exc.InductorError: AssertionError: Conversions between float8_e…</td><td class="tip-cell" title="A single upstream Inductor unit test, test/inductor/test_fp8.py::TestFP8TypesXPU.test_bad_cast_xpu, errors during codegen for fp8_e5m2 &lt;-&gt; fp8_e4m3fn conversion. This is a functional/test failure in the 1-6 UT range, not a crash/build failure or broad regression.">P2</td><td class="tip-cell" title="The stack is torch._inductor.scheduler/codegen with a torch._inductor.exc.InductorError and Triton codegen assertion for fp8 conversion, so Inductor matches before TorchAO even though fp8 is mentioned.">Inductor</td><td>Need PR</td><td>Stonepia</td><td>Stonepia</td><td>daisyden</td><td></td><td>No action — investigate further</td><td>Either (a) upstream patch in `torch/_inductor/codegen/triton.py` to relax the g…<br><a href="details/2888.md">→ details</a></td><td></td><td>module: inductor, ut_upstream</td><td>2026-02-13</td></tr>
+<tr class="more-hidden" data-issue="3006" data-priority="P2" data-category="Inductor" data-assignee="CuiYifeng" data-owner_transferred="CuiYifeng" data-dependency="" data-milestone="PT2.13" data-test_module="e2e" data-ar="Need PR" data-is-dup="0" data-is-stale="0" data-created="2026-03-07" data-search="3006 assertionerror: &#x27;.to(tl.float16)&#x27; unexpectedly found in &#x27;# aot id no action — investigate further"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="3006" id="done-3006"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/3006">#3006</a></td><td>AssertionError: &#x27;.to(tl.float16)&#x27; unexpectedly found in &#x27;# AOT ID</td><td class="tip-cell" title="Single upstream UT failure: test/inductor/test_cuda_repro.py::CudaReproTests::test_float16_reduction_with_int_output fails an assertion because generated Triton code for aten.argmax contains an unexpected &#x27;.to(tl.float16)&#x27;. No crash, hang, build failure, &gt;6 UT failures, or benchmark/customer impact is shown, so this fits P2 for 1-6 UT/correctness failure.">P2</td><td class="tip-cell" title="The failure is in torch.compile/Inductor Triton codegen: issue label is module: inductor, the failing test is under test/inductor, and the generated XPU Triton kernel triton_per_fused_argmax_0 incorrectly casts argmax indices before storing int64.">Inductor</td><td>Need PR</td><td>CuiYifeng</td><td>CuiYifeng</td><td>daisyden</td><td></td><td>No action — investigate further</td><td>Upstream Inductor fix in torch/_inductor/codegen/triton.py (max_with_index/argm…<br><a href="details/3006.md">→ details</a></td><td></td><td>module: inductor, ut_upstream</td><td>2026-03-07</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p2-inductor">Show 3 more (no open request &gt;1 week)</a>
+<h3 id="sec-p2-others" data-category-title="Others" data-title-prefix="Others">Others &middot; 1 issues</h3>
+<table class="ar-table" id="tbl-p2-others">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr class="more-hidden" data-issue="2783" data-priority="P2" data-category="Others" data-assignee="daisyden" data-owner_transferred="daisyden" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Need PR" data-is-dup="0" data-is-stale="0" data-created="2026-01-28" data-search="2783 [bug skip]: key &quot;xpu&quot; is missing from dict &quot;driver&quot; in test_svd open upstream pr to pytorch/pytorch from branch daisyden/missing_test (adds &#x27;xpu&#x27; entry to svd drivers dict in test/test_linalg.py) | no action — investigate further"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2783" id="done-2783"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2783">#2783</a></td><td>[Bug Skip]: Key &quot;xpu&quot; is missing from dict &quot;driver&quot; in test_svd</td><td class="tip-cell" title="Four op_ut test_linalg SVD cases fail with KeyError &#x27;xpu&#x27; from the test driver dictionary, with no crash, build break, hang, accuracy regression, or broad suite impact; this is a small UT failure set (1-6 cases).">P2</td><td class="tip-cell" title="Root cause is an upstream test-harness/decorator driver dict missing an &#x27;xpu&#x27; entry for test_svd, not an SVD kernel/runtime failure, so it falls into the test-infrastructure catch-all.">Others</td><td>Need PR</td><td>daisyden</td><td>daisyden</td><td>CuiYifeng</td><td></td><td>Open upstream PR to pytorch/pytorch from branch daisyden/missing_test (adds &#x27;xpu&#x27; entry to SVD drivers dict in test/tes…</td><td>Upstream patch in pytorch/test/test_linalg.py: add an &#x27;xpu&#x27; entry to the SVD dr…<br><a href="details/2783.md">→ details</a></td><td></td><td>module: ut, skipped</td><td>2026-01-28</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p2-others">Show 1 more (no open request &gt;1 week)</a>
+<h3 id="sec-p2-sparse" data-category-title="Sparse" data-title-prefix="Sparse">Sparse &middot; 1 issues</h3>
+<table class="ar-table" id="tbl-p2-sparse">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr class="more-hidden" data-issue="3165" data-priority="P2" data-category="Sparse" data-assignee="jafraustro" data-owner_transferred="jafraustro" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Need PR" data-is-dup="0" data-is-stale="0" data-created="2026-03-24" data-search="3165 test_sparse_csr_xpu.py::testsparsecompressedtritonkernelsxpu::test_triton_bsr_softmax meet runtimeerror: ze_result_error_invalid_kernel_name no action — investigate further"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="3165" id="done-3165"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/3165">#3165</a></td><td>test_sparse_csr_xpu.py::TestSparseCompressedTritonKernelsXPU::test_triton_bsr_s…</td><td class="tip-cell" title="Three skipped upstream UT cases for test_triton_bsr_softmax_xpu_{bf16,f16,f32} fail at runtime with ZE_RESULT_ERROR_INVALID_KERNEL_NAME; scope is 1-6 UT failures and no evidence of crash/segfault, build failure, accuracy regression, hang, or custom-model impact.">P2</td><td class="tip-cell" title="The failing API is torch.sparse._triton_ops.bsr_softmax on BSR sparse tensors; although the underlying dependency is Triton-XPU kernel-name loading, the tested component is sparse compressed tensor softmax, so Sparse wins over generic runtime/other buckets.">Sparse</td><td>Need PR</td><td>jafraustro</td><td>jafraustro</td><td>CuiYifeng</td><td></td><td>No action — investigate further</td><td>File a Triton-XPU backend bug with the failing BSR softmax kernel and the ZE_RE…<br><a href="details/3165.md">→ details</a></td><td></td><td>skipped, ut_upstream</td><td>2026-03-24</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p2-sparse">Show 1 more (no open request &gt;1 week)</a>
+<h3 id="sec-p2-torch-ops---eltwise" data-category-title="Torch Ops - eltwise" data-title-prefix="Torch Ops - eltwise">Torch Ops - eltwise &middot; 1 issues</h3>
+<table class="ar-table" id="tbl-p2-torch-ops---eltwise">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr class="more-hidden" data-issue="2720" data-priority="P2" data-category="Torch Ops - eltwise" data-assignee="zxd1997066, CuiYifeng" data-owner_transferred="wincent8 | CuiYifeng" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Close/Skip" data-is-dup="0" data-is-stale="0" data-created="2026-01-08" data-search="2720 [upstream_ut] runtimeerror: false internal assert failed at &quot;/pytorch/aten/src/aten/native/dispatchstub.cpp&quot;:275 close the fixed issue | verify fix from merged pr intel/torch-xpu-ops#3248 and close"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2720" id="done-2720"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2720">#2720</a></td><td>[upstream_ut] RuntimeError: false INTERNAL ASSERT FAILED at &quot;/pytorch/aten/src/…</td><td class="tip-cell" title="A single upstream UT, TestBinaryUfuncsXPU.test_ldexp_xpu, fails with an internal assert from DispatchStub because the XPU ldexp kernel is missing; despite the INTERNAL ASSERT wording, the impact is a one-test missing operator implementation/feature gap, not a process crash or build failure.">P2</td><td class="tip-cell" title="torch.ldexp is a binary elementwise ufunc with a missing XPU dispatch stub registration, so it falls under Torch Operations with the elementwise subcategory Torch Ops - eltwise.">Torch Ops - eltwise</td><td>Close/Skip</td><td>zxd1997066, CuiYifeng</td><td>wincent8 | CuiYifeng</td><td>wincent8</td><td></td><td>Close the fixed issue | Verify fix from merged PR intel/torch-xpu-ops#3248 and close</td><td>Add an XPU kernel registration for ldexp_stub in torch-xpu-ops: implement at th…<br><a href="details/2720.md">→ details</a></td><td></td><td>skipped</td><td>2026-01-08</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p2-torch-ops---eltwise">Show 1 more (no open request &gt;1 week)</a>
+<h3 id="sec-p2-torch-ops---gemm" data-category-title="Torch Ops - gemm" data-title-prefix="Torch Ops - gemm">Torch Ops - gemm &middot; 1 issues</h3>
+<table class="ar-table" id="tbl-p2-torch-ops---gemm">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr class="more-hidden" data-issue="2541" data-priority="P2" data-category="Torch Ops - gemm" data-assignee="yucai-intel" data-owner_transferred="daisyden | yucai-intel" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Close/Skip" data-is-dup="0" data-is-stale="0" data-created="2025-12-11" data-search="2541 title: [upstream_ut]  runtimeerror: could not construct a memory descriptor using strides close the fixed issue | track pr pytorch/pytorch#176875 to merge"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2541" id="done-2541"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2541">#2541</a></td><td>Title: [upstream_ut]  RuntimeError: could not construct a memory descriptor usi…</td><td class="tip-cell" title="Single upstream UT failure in test_einsum_random_xpu_float64 with a RuntimeError from torch.einsum; no crash, hang, build failure, regression evidence, benchmark, or custom-model impact. This fits the 1-6 UT/correctness bucket.">P2</td><td class="tip-cell" title="Failure occurs in torch.einsum&#x27;s matmul/bmm path and the diagnosis points to oneDNN matmul rejecting non-contiguous/zero-stride memory descriptors, so it is a GEMM-core ATen operator issue.">Torch Ops - gemm</td><td>Close/Skip</td><td>yucai-intel</td><td>daisyden | yucai-intel</td><td>daisyden</td><td></td><td>Close the fixed issue | Track PR pytorch/pytorch#176875 to merge</td><td>Land/cherry-pick upstream pytorch/pytorch#176875 which makes einsum contiguous …<br><a href="details/2541.md">→ details</a></td><td></td><td>skipped, port_from_skiplist</td><td>2025-12-11</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p2-torch-ops---gemm">Show 1 more (no open request &gt;1 week)</a>
+<h3 id="sec-p2-torch-ops---others" data-category-title="Torch Ops - others" data-title-prefix="Torch Ops - others">Torch Ops - others &middot; 1 issues</h3>
+<table class="ar-table" id="tbl-p2-torch-ops---others">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr data-issue="2412" data-priority="P2" data-category="Torch Ops - others" data-assignee="yucai-intel, BBBela" data-owner_transferred="BBBela" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Track PR" data-is-dup="0" data-is-stale="1" data-created="2025-11-26" data-search="2412 some nestedtensor missing xpu support track pr intel/torch-xpu-ops#2483 to merge | address ci failures on pr intel/torch-xpu-ops#2483 (&gt;1 week) | resolve unresolved review comments on pr intel/torch-xpu-ops#2483 (&gt;1 week)"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2412" id="done-2412"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2412">#2412</a></td><td>Some NestedTensor missing XPU support</td><td class="tip-cell" title="NestedTensor XPU support is missing for nested+dense add/mul and related CUDA-only branches, causing functional/unit-test failures; the issue is a feature gap with no evidence of crash, hang, regression, build break, custom model, or &gt;6 separately listed failing cases in the issue body.">P2</td><td class="tip-cell" title="Root cause is missing XPU support in ATen NestedTensor operator implementation files such as NestedTensorBinaryOps.cpp, NestedTensorBackward.cpp, NestedTensorMatmul.cpp, and NestedTensorFactories.cpp; NestedTensor operator support maps to Torch Operations others.">Torch Ops - others</td><td>Track PR</td><td>yucai-intel, BBBela</td><td>BBBela</td><td>daisyden</td><td></td><td>Track PR intel/torch-xpu-ops#2483 to merge | Address CI failures on PR intel/torch-xpu-ops#2483 (&gt;1 week) | Resolve unr…</td><td>Add XPU support to the four nested-tensor files in pytorch/pytorch upstream by …<br><a href="details/2412.md">→ details</a></td><td></td><td>module: ut</td><td>2025-11-26</td></tr>
+</tbody></table>
+<h3 id="sec-p2-torch-runtime" data-category-title="Torch Runtime" data-title-prefix="Torch Runtime">Torch Runtime &middot; 2 issues</h3>
+<table class="ar-table" id="tbl-p2-torch-runtime">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr class="more-hidden" data-issue="1969" data-priority="P2" data-category="Torch Runtime" data-assignee="guangyey, laifenxiawucha, Copilot" data-owner_transferred="guangyey" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Need PR" data-is-dup="0" data-is-stale="0" data-created="2025-08-27" data-search="1969 torch._dynamo.exc.internaltorchdynamoerror: typeerror: cannot create weak reference to &#x27;torch.event&#x27; object no action — investigate further"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="1969" id="done-1969"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/1969">#1969</a></td><td>torch._dynamo.exc.InternalTorchDynamoError: TypeError: cannot create weak refer…</td><td class="tip-cell" title="Single migrated UT failure (test_gpu_event_across_graph_break) raises an InternalTorchDynamoError from TypeError when Dynamo tries to weakref an XPU torch.Event. It is not a crash, hang, build failure, broad UT failure set, regression, or performance/customer-model issue, so it fits the 1-6 UT/correctness bucket.">P2</td><td class="tip-cell" title="Root cause is XPU Event Python type/runtime support for weak references in torch/csrc/xpu/Event.cpp; although surfaced through Dynamo tracing, the failing component is torch.Event/stream-event runtime behavior, so Torch Runtime wins by root cause.">Torch Runtime</td><td>Need PR</td><td>guangyey, laifenxiawucha…</td><td>guangyey</td><td>shangerxin</td><td></td><td>No action — investigate further</td><td>Upstream-pytorch fix: add weakref support to the generic torch.Event class (def…<br><a href="details/1969.md">→ details</a></td><td></td><td>module: ut, agent:active</td><td>2025-08-27</td></tr>
+<tr class="more-hidden" data-issue="3084" data-priority="P2" data-category="Torch Runtime" data-assignee="CuiYifeng" data-owner_transferred="CuiYifeng" data-dependency="" data-milestone="PT2.13" data-test_module="ut" data-ar="Need PR" data-is-dup="0" data-is-stale="0" data-created="2026-03-19" data-search="3084 torch.library.register_autocast does not support xpu no action — investigate further"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="3084" id="done-3084"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/3084">#3084</a></td><td>torch.library.register_autocast does not support xpu</td><td class="tip-cell" title="Five custom-op autocast UTs are blocked because register_autocast rejects device_type=&#x27;xpu&#x27;. This is a small set of 1-6 UT failures and an XPU feature gap, with no crash, hang, regression, or performance impact, so P2 applies.">P2</td><td class="tip-cell" title="The failing API is torch.library.register_autocast and AutocastXPU dispatch-key/device-type support, which is framework runtime/dispatch plumbing for XPU rather than a specific ATen operator kernel; therefore Torch Runtime is the owning bucket.">Torch Runtime</td><td>Need PR</td><td>CuiYifeng</td><td>CuiYifeng</td><td>daisyden</td><td></td><td>No action — investigate further</td><td>Upstream PR to pytorch/pytorch: in torch/library.py register_autocast, accept a…<br><a href="details/3084.md">→ details</a></td><td></td><td>module: ut</td><td>2026-03-19</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p2-torch-runtime">Show 2 more (no open request &gt;1 week)</a>
+<h3 id="sec-p2-torchao" data-category-title="TorchAO" data-title-prefix="TorchAO">TorchAO &middot; 1 issues</h3>
+<table class="ar-table" id="tbl-p2-torchao">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr class="more-hidden" data-issue="2578" data-priority="P2" data-category="TorchAO" data-assignee="Stonepia" data-owner_transferred="Stonepia" data-dependency="" data-milestone="UT Backlog" data-test_module="build" data-ar="Need PR" data-is-dup="0" data-is-stale="0" data-created="2025-12-16" data-search="2578 [torchao][ut] test/quantization/test_quant_api.py assertionerror: sqnr -2.90625 is too low check_case_avaliablity | no action — investigate further"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2578" id="done-2578"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2578">#2578</a></td><td>[TorchAO][UT] test/quantization/test_quant_api.py AssertionError: SQNR -2.90625…</td><td class="tip-cell" title="Single upstream TorchAO UT failure in test_quant_api.py::TestQuantFlow::test_workflow_e2e_numerics_config0: quantized Int4WeightOnlyConfig output has SQNR -2.90625 below the 16.5 threshold. This is a numerical correctness/accuracy failure in a test, with no crash, build failure, hang, &gt;6 failures, or custom model evidence, so it fits P2.">P2</td><td class="tip-cell" title="Issue uses torchao quantize_ with Int4WeightOnlyConfig, TensorCoreTiledLayout, tinygemm, and int4 weight-only quantization; the failing path is TorchAO quantization rather than distributed, attention, inductor, sparse, or runtime.">TorchAO</td><td>Need PR</td><td>Stonepia</td><td>Stonepia</td><td>zxd1997066</td><td></td><td>check_case_avaliablity | No action — investigate further</td><td>Audit LinearInt4.cpp packing convention (inner_k_tiles=8 TensorCoreTiledLayout)…<br><a href="details/2578.md">→ details</a></td><td></td><td>module: ao, ut_upstream</td><td>2025-12-16</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p2-torchao">Show 1 more (no open request &gt;1 week)</a>
+<h2 id="sec-p3" data-priority-title="P3" data-title-prefix="P3">P3 &mdash; 4 issues</h2>
+<h3 id="sec-p3-flash-attention" data-category-title="Flash Attention" data-title-prefix="Flash Attention">Flash Attention &middot; 2 issues</h3>
+<table class="ar-table" id="tbl-p3-flash-attention">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr class="more-hidden" data-issue="3136" data-priority="P3" data-category="Flash Attention" data-assignee="daisyden" data-owner_transferred="daisyden" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Close/Skip" data-is-dup="0" data-is-stale="0" data-created="2026-03-24" data-search="3136 [upstream_ut]  assertionerror: false is not true in test_transformers label not_target and close | track pr intel/torch-xpu-ops#3510 to merge"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="3136" id="done-3136"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/3136">#3136</a></td><td>[upstream_ut]  AssertionError: False is not true in test_transformers</td><td class="tip-cell" title="Three/four transformer SDPA fastpath priority UTs fail, but comments state XPU does not support the cuDNN comparison path and the nn fastpath is deprecated/not target; skips were added, making this a non-target test-maintenance issue rather than a correctness regression.">P3</td><td class="tip-cell" title="The failing tests are MultiheadAttention fastpath and fused SDP priority-order cases in test_transformers_xpu.py, directly matching SDPA/attention rather than general ops or runtime.">Flash Attention</td><td>Close/Skip</td><td>daisyden</td><td>daisyden</td><td>daisyden</td><td></td><td>label not_target and close | Track PR intel/torch-xpu-ops#3510 to merge</td><td>Keep the skip entries added by PR #3510 in test/xpu/skip_list_common.py. For te…<br><a href="details/3136.md">→ details</a></td><td></td><td>module: ut, skipped, ut_upstream, not_t…</td><td>2026-03-24</td></tr>
+<tr class="more-hidden" data-issue="3137" data-priority="P3" data-category="Flash Attention" data-assignee="daisyden" data-owner_transferred="daisyden" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Close/Skip" data-is-dup="0" data-is-stale="0" data-created="2026-03-24" data-search="3137 [upstream_ut]  runtimeerror: expected scalar type half but found float label not_target and close"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="3137" id="done-3137"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/3137">#3137</a></td><td>[upstream_ut]  RuntimeError: expected scalar type Half but found Float</td><td class="tip-cell" title="Four TransformerEncoder autocast fastpath UTs fail with a Half/Float dtype RuntimeError, but the owner says the fastpath is deprecated and these cases are not target; skips already landed, so this is validation housekeeping rather than an active functional blocker.">P3</td><td class="tip-cell" title="Failure occurs in torch._transformer_encoder_layer_fwd / TransformerEncoder fastpath under autocast, tied to fused transformer/SDPA backend behavior; Flash Attention is the first matching component category.">Flash Attention</td><td>Close/Skip</td><td>daisyden</td><td>daisyden</td><td>daisyden</td><td></td><td>label not_target and close</td><td>No code fix needed in torch-xpu-ops: keep the skip entries from PR #3510 in tes…<br><a href="details/3137.md">→ details</a></td><td></td><td>module: ut, skipped, ut_upstream, rando…</td><td>2026-03-24</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p3-flash-attention">Show 2 more (no open request &gt;1 week)</a>
+<h3 id="sec-p3-inductor" data-category-title="Inductor" data-title-prefix="Inductor">Inductor &middot; 1 issues</h3>
+<table class="ar-table" id="tbl-p3-inductor">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr class="more-hidden" data-issue="2329" data-priority="P3" data-category="Inductor" data-assignee="etaf" data-owner_transferred="etaf" data-dependency="Triton" data-milestone="UT Backlog" data-test_module="ut" data-ar="Need PR" data-is-dup="0" data-is-stale="0" data-created="2025-11-11" data-search="2329 [upstream_ut] feature missing: get_device_tflops and get_drams_gbps retriage_prs"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2329" id="done-2329"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2329">#2329</a></td><td>[upstream_ut] feature missing: get_device_tflops and get_drams_gbps</td><td class="tip-cell" title="Feature gap for one upstream Inductor scheduler UT: get_device_tflops/get_dram_gbps are missing for XPU after the earlier SPIR-V error was fixed. This is enablement work rather than a crash, regression, benchmark failure, or broad UT outage.">P3</td><td class="tip-cell" title="The missing APIs are torch._inductor.utils helpers used by test/inductor/test_inductor_scheduler.py flop-counter scheduling logic, so the failing component is Inductor/Triton scheduling.">Inductor</td><td>Need PR</td><td>etaf</td><td>etaf</td><td>daisyden</td><td>Triton</td><td>RETRIAGE_PRS</td><td>Implement XPU branches in torch/_inductor/utils.py:get_device_tflops/get_dram_g…<br><a href="details/2329.md">→ details</a></td><td></td><td>duplicate, dependency component: Triton…</td><td>2025-11-11</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p3-inductor">Show 1 more (no open request &gt;1 week)</a>
+<h3 id="sec-p3-torch-ops---reduction" data-category-title="Torch Ops - reduction" data-title-prefix="Torch Ops - reduction">Torch Ops - reduction &middot; 1 issues</h3>
+<table class="ar-table" id="tbl-p3-torch-ops---reduction">
+<thead><tr><th class="done-col">Done</th><th>Issue</th><th>Title</th><th>Priority</th><th>Category</th><th>AR</th><th>Owner</th><th>Owner Transferred</th><th>Reporter</th><th>Dependency</th><th>action_TBD</th><th>Fix Approach</th><th>Duplicates</th><th>Labels</th><th>Created</th></tr></thead>
+<tbody>
+<tr class="more-hidden" data-issue="2512" data-priority="P3" data-category="Torch Ops - reduction" data-assignee="chunhuanMeng" data-owner_transferred="chunhuanMeng" data-dependency="" data-milestone="UT Backlog" data-test_module="ut" data-ar="Track PR" data-is-dup="0" data-is-stale="0" data-created="2025-12-10" data-search="2512 [upstream_ut]  runtimeerror: _histc_xpu does not have a deterministic implementation, but you set &#x27;torch.use_deter check_case_avaliablity | track pr intel/torch-xpu-ops#3333 to merge | address ci failures on pr intel/torch-xpu-ops#3333"><td class="done-col"><input type="checkbox" class="ar-done" data-issue="2512" id="done-2512"></td><td><a href="https://github.com/intel/torch-xpu-ops/issues/2512">#2512</a></td><td>[upstream_ut]  RuntimeError: _histc_xpu does not have a deterministic implement…</td><td class="tip-cell" title="Single upstream UT failure caused by a deterministic-alert message mismatch for histc; the op already raises the non-deterministic RuntimeError and PR #3333 exists to align the expected string. This is a minor validation/message issue, not an accuracy regression or broad test failure.">P3</td><td class="tip-cell" title="The affected path is _histc_xpu/test_nondeterministic_alert_histc_xpu_float32. Histogram is a dimension-reducing/statistical operator, so first matching canonical bucket is Torch Operations with reduction subcategory.">Torch Ops - reduction</td><td>Track PR</td><td>chunhuanMeng</td><td>chunhuanMeng</td><td>libohao1201</td><td></td><td>check_case_avaliablity | Track PR intel/torch-xpu-ops#3333 to merge | Address CI failures on PR intel/torch-xpu-ops#3333</td><td>Align XPU alert message with CUDA: change SummaryOps.cpp:45 to globalContext().…<br><a href="details/2512.md">→ details</a></td><td></td><td>skipped</td><td>2025-12-10</td></tr>
+</tbody></table>
+<a href="#" class="more-link" data-table="tbl-p3-torch-ops---reduction">Show 1 more (no open request &gt;1 week)</a>
+
+<h2 id="sec-tips">Tips: Classification Rules</h2>
+<div class="tips-section">
+<h3>Priority</h3>
+<ul>
+<li><b>P0</b> — Crash / segfault / build failure / &gt;5% perf regression / custom model blocker</li>
+<li><b>P1</b> — UT &gt;6 failures or regression / accuracy regression / hang</li>
+<li><b>P2</b> — Benchmark issue / 1-6 UT failures / feature gap / correctness issue</li>
+<li><b>P3</b> — Enhancement / minor issue / docs / nice-to-have</li>
+</ul>
+<h3>Category (first-match priority)</h3>
+<ol>
+<li>Distributed</li>
+<li>Flash Attention</li>
+<li>Inductor</li>
+<li>TorchAO</li>
+<li>Sparse</li>
+<li>Torch Ops — gemm / eltwise / reduction / others</li>
+<li>Torch Runtime</li>
+<li>Others</li>
+</ol>
+<h3>Open Request (&gt;1 week)</h3>
+<p>The <code>action_TBD</code> field is generated by analyzing related issue and PR
+comments, status, and activity. When a pending action item (e.g., waiting for
+reply, waiting for PR review, waiting for upstream fix) has been open for more
+than one week, it is tagged with <code>(&gt;1 week)</code>. Issues with at least one
+such tag are shown by default as they need attention; other issues are hidden
+behind the "Show hidden issues" checkbox.</p>
+</div>
+
+</div>
+<script>
+// ---- Done checkbox persistence ----
+const STORAGE_KEY_PREFIX = 'bug_scrub_done_';
+function loadDoneState() {
+  document.querySelectorAll('input.ar-done').forEach(cb => {
+    const id = cb.dataset.issue;
+    if (!id) return;
+    if (localStorage.getItem(STORAGE_KEY_PREFIX + id) === '1') {
+      cb.checked = true;
+      cb.closest('tr').classList.add('done');
+    }
+  });
+}
+function onDoneToggle(e) {
+  const cb = e.target;
+  const id = cb.dataset.issue;
+  if (!id) return;
+  const tr = cb.closest('tr');
+  if (cb.checked) {
+    localStorage.setItem(STORAGE_KEY_PREFIX + id, '1');
+    tr.classList.add('done');
+  } else {
+    localStorage.removeItem(STORAGE_KEY_PREFIX + id);
+    tr.classList.remove('done');
+  }
+}
+
+// ---- "More" toggle ----
+document.addEventListener('click', e => {
+  const link = e.target.closest('.more-link');
+  if (!link) return;
+  e.preventDefault();
+  const tableId = link.dataset.table;
+  const table = document.getElementById(tableId);
+  if (!table) return;
+  const expanded = link.classList.toggle('expanded');
+  table.querySelectorAll('tr.more-hidden, tr.more-shown').forEach(tr => {
+    if (expanded) {
+      tr.classList.remove('more-hidden');
+      tr.classList.add('more-shown');
+    } else {
+      tr.classList.remove('more-shown');
+      tr.classList.add('more-hidden');
+    }
+  });
+  link.textContent = expanded
+    ? link.textContent.replace('Show', 'Hide')
+    : link.textContent.replace('Hide', 'Show');
+});
+
+// ---- Filter infrastructure ----
+const NONE_TOKEN = '(none)';
+const MULTI_VALUE_DIMS = new Set(['assignee', 'owner_transferred']);
+const MULTI_SPLIT_RE = /[,;|]/;
+
+const FILTER_DIMS = ['ar', 'assignee', 'priority', 'category', 'milestone', 'dependency', 'test_module'];
+const FILTER_LABELS = {
+  ar: 'AR', assignee: 'Assignee', priority: 'Priority', category: 'Category',
+  milestone: 'Milestone', dependency: 'Dependency', test_module: 'Test Module'
+};
+const SELECTED = Object.fromEntries(FILTER_DIMS.map(d => [d, new Set()]));
+
+function tokensFor(dim, raw) {
+  const r = (raw || '').trim();
+  if (!r) return [NONE_TOKEN];
+  if (MULTI_VALUE_DIMS.has(dim)) {
+    const out = r.split(MULTI_SPLIT_RE).map(s => s.trim()).filter(Boolean);
+    return out.length ? Array.from(new Set(out)) : [NONE_TOKEN];
+  }
+  return [r];
+}
+
+function collectValues(dim) {
+  const counts = new Map();
+  const sourceDims = (dim === 'assignee') ? ['assignee', 'owner_transferred'] : [dim];
+  document.querySelectorAll('table.ar-table tbody tr[data-issue]').forEach(tr => {
+    const tokenSet = new Set();
+    for (const sd of sourceDims) {
+      for (const tok of tokensFor(sd, tr.dataset[sd] || tr.dataset[sd.replace('_', '-')])) tokenSet.add(tok);
+    }
+    if (sourceDims.length > 1 && tokenSet.size > 1) tokenSet.delete(NONE_TOKEN);
+    for (const tok of tokenSet) counts.set(tok, (counts.get(tok) || 0) + 1);
+  });
+  return Array.from(counts.entries()).sort((a, b) => {
+    if (a[0] === NONE_TOKEN) return 1;
+    if (b[0] === NONE_TOKEN) return -1;
+    return a[0].localeCompare(b[0], undefined, {numeric: true});
+  });
+}
+
+function buildMultiSelect(dim, items) {
+  const dd = document.createElement('div');
+  dd.className = 'ms-dd'; dd.dataset.dim = dim;
+  dd.dataset.totalOptions = String(items.length);
+
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'ms-dd-btn'; btn.textContent = '(all)';
+  dd.appendChild(btn);
+
+  const panel = document.createElement('div');
+  panel.className = 'ms-dd-panel';
+  const search = document.createElement('input');
+  search.type = 'text'; search.className = 'ms-dd-search'; search.placeholder = 'filter...';
+  panel.appendChild(search);
+
+  const list = document.createElement('div');
+  list.className = 'ms-dd-list';
+  panel.appendChild(list);
+
+  for (const [tok, count] of items) {
+    const label = document.createElement('label');
+    label.className = 'ms-dd-item' + (tok === NONE_TOKEN ? ' none-opt' : '');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.value = tok; cb.checked = true;
+    SELECTED[dim].add(tok);
+    cb.addEventListener('change', () => {
+      if (cb.checked) SELECTED[dim].add(tok); else SELECTED[dim].delete(tok);
+      updateButtonLabel(dd, dim); applyFilters();
+    });
+    const txt = document.createElement('span');
+    txt.className = 'label'; txt.textContent = tok; txt.title = tok;
+    const cnt = document.createElement('span');
+    cnt.className = 'count'; cnt.textContent = count;
+    label.appendChild(cb); label.appendChild(txt); label.appendChild(cnt);
+    list.appendChild(label);
+  }
+
+  search.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    list.querySelectorAll('.ms-dd-item').forEach(it => {
+      it.style.display = (!q || it.querySelector('.label').textContent.toLowerCase().includes(q)) ? '' : 'none';
+    });
+  });
+
+  const actions = document.createElement('div');
+  actions.className = 'ms-dd-actions';
+  const allBtn = document.createElement('button'); allBtn.type = 'button'; allBtn.textContent = 'All';
+  allBtn.addEventListener('click', () => {
+    for (const [tok] of items) SELECTED[dim].add(tok);
+    list.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = true);
+    updateButtonLabel(dd, dim); applyFilters();
+  });
+  const noneBtn = document.createElement('button'); noneBtn.type = 'button'; noneBtn.textContent = 'None';
+  noneBtn.addEventListener('click', () => {
+    SELECTED[dim].clear();
+    list.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = false);
+    updateButtonLabel(dd, dim); applyFilters();
+  });
+  const closeBtn = document.createElement('button'); closeBtn.type = 'button'; closeBtn.textContent = 'Close';
+  closeBtn.addEventListener('click', () => dd.classList.remove('open'));
+  actions.appendChild(allBtn); actions.appendChild(noneBtn); actions.appendChild(closeBtn);
+  panel.appendChild(actions);
+  dd.appendChild(panel);
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const wasOpen = dd.classList.contains('open');
+    document.querySelectorAll('.ms-dd.open').forEach(d => d.classList.remove('open'));
+    if (!wasOpen) dd.classList.add('open');
+  });
+  panel.addEventListener('click', e => e.stopPropagation());
+  updateButtonLabel(dd, dim);
+  return dd;
+}
+
+function updateButtonLabel(dd, dim) {
+  const btn = dd.querySelector('.ms-dd-btn');
+  const sel = SELECTED[dim];
+  const total = parseInt(dd.dataset.totalOptions || '0', 10);
+  if (sel.size === 0) { btn.textContent = '(none)'; btn.title = ''; }
+  else if (sel.size === total) { btn.textContent = '(all)'; btn.title = ''; }
+  else if (sel.size === 1) { const v = Array.from(sel)[0]; btn.textContent = v; btn.title = v; }
+  else { btn.textContent = sel.size + ' of ' + total; btn.title = Array.from(sel).join(', '); }
+}
+
+function rowMatchesAllFiltersExcept(tr, skipDim) {
+  const showHidden = document.getElementById('filter-show-hidden').checked;
+  const isMoreRow = tr.classList.contains('more-hidden') || tr.classList.contains('more-shown');
+  if (isMoreRow && !showHidden) return false;
+  for (const dim of FILTER_DIMS) {
+    if (dim === skipDim) continue;
+    if (!rowMatchesDim(tr, dim, SELECTED[dim])) return false;
+  }
+  const search = (document.getElementById('filter-search').value || '').trim().toLowerCase();
+  if (search && !(tr.dataset.search || '').includes(search)) return false;
+  if (document.getElementById('filter-hide-done').checked && tr.classList.contains('done')) return false;
+  if (showDupsOnly && tr.dataset.isDup !== '1') return false;
+  const dateVal = document.getElementById('filter-date').value;
+  if (dateVal) {
+    const created = tr.dataset.created || '';
+    if (created && created < dateVal) return false;
+  }
+  return true;
+}
+
+function updateFacetCounts() {
+  const allRows = Array.from(document.querySelectorAll('table.ar-table tbody tr[data-issue]'));
+  for (const dim of FILTER_DIMS) {
+    const dd = document.getElementById('filter-' + dim);
+    if (!dd) continue;
+    const counts = new Map();
+    for (const tr of allRows) {
+      if (!rowMatchesAllFiltersExcept(tr, dim)) continue;
+      for (const v of rowValuesForDim(tr, dim)) counts.set(v, (counts.get(v) || 0) + 1);
+    }
+    dd.querySelectorAll('.ms-dd-item').forEach(item => {
+      const cb = item.querySelector('input[type=checkbox]');
+      const count = counts.get(cb.value) || 0;
+      item.querySelector('.count').textContent = String(count);
+      item.classList.toggle('zero-count', count === 0);
+    });
+  }
+}
+
+function setSingleFilter(dim, value, showHiddenRows = true) {
+  const dd = document.getElementById('filter-' + dim);
+  if (!dd) return;
+  SELECTED[dim].clear();
+  SELECTED[dim].add(value);
+  dd.querySelectorAll('input[type=checkbox]').forEach(cb => { cb.checked = (cb.value === value); });
+  updateButtonLabel(dd, dim);
+  const showHidden = document.getElementById('filter-show-hidden');
+  if (showHidden) showHidden.checked = showHiddenRows;
+  applyFilters();
+  const firstVisible = document.querySelector('table.ar-table tbody tr[data-issue]:not(.hidden)');
+  if (firstVisible) firstVisible.scrollIntoView({behavior: 'smooth', block: 'center'});
+}
+
+function initChartFilters() {
+  document.querySelectorAll('.chart-filter-target').forEach(target => {
+    const applyChartFilter = () => setSingleFilter(
+      target.dataset.filterDim,
+      target.dataset.filterValue,
+      target.dataset.showHidden !== '0'
+    );
+    target.addEventListener('click', applyChartFilter);
+    target.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        applyChartFilter();
+      }
+    });
+  });
+}
+
+function visibleIssueRows() {
+  return Array.from(document.querySelectorAll('table.ar-table tbody tr[data-issue]:not(.hidden):not(.more-hidden)'));
+}
+
+function rowValuesForDim(tr, dim) {
+  const sourceDims = (dim === 'assignee') ? ['assignee', 'owner_transferred'] : [dim];
+  const vals = new Set();
+  for (const sd of sourceDims) {
+    const key = sd.replace('_', '-');
+    const raw = tr.dataset[sd] || tr.dataset[key] || '';
+    for (const t of tokensFor(sd, raw)) vals.add(t);
+  }
+  if (sourceDims.length > 1 && vals.size > 1) vals.delete(NONE_TOKEN);
+  return vals;
+}
+
+function countVisibleRowsByDim(rows, dim, extraFilter) {
+  const counts = new Map();
+  for (const tr of rows) {
+    if (extraFilter && !extraFilter(tr)) continue;
+    for (const v of rowValuesForDim(tr, dim)) counts.set(v, (counts.get(v) || 0) + 1);
+  }
+  return counts;
+}
+
+function updateVisibleCounts(rows) {
+  const priorityCounts = countVisibleRowsByDim(rows, 'priority');
+  document.querySelectorAll('[data-summary-priority]').forEach(card => {
+    const priority = card.dataset.summaryPriority;
+    const num = card.querySelector('.sc-num');
+    if (num) {
+      const total = num.dataset.total || '0';
+      num.textContent = String(priorityCounts.get(priority) || 0) + '/' + total;
+    }
+  });
+  document.querySelectorAll('[data-index-priority]').forEach(link => {
+    const priority = link.dataset.indexPriority;
+    link.textContent = priority + ' (' + (priorityCounts.get(priority) || 0) + ' issues)';
+  });
+  document.querySelectorAll('table.ar-table').forEach(table => {
+    const rowsInTable = table.querySelectorAll('tbody tr[data-issue]:not(.hidden):not(.more-hidden)').length;
+    const h3 = table.previousElementSibling;
+    if (h3 && h3.dataset.titlePrefix) {
+      h3.innerHTML = h3.dataset.titlePrefix + ' &middot; ' + rowsInTable + ' issues';
+    }
+  });
+  document.querySelectorAll('[data-priority-title]').forEach(h2 => {
+    const priority = h2.dataset.priorityTitle;
+    h2.innerHTML = h2.dataset.titlePrefix + ' &mdash; ' + (priorityCounts.get(priority) || 0) + ' issues';
+  });
+}
+
+function updateBarCharts(rows) {
+  document.querySelectorAll('svg.bar-chart[data-filter-dim]').forEach(svg => {
+    const dim = svg.dataset.filterDim;
+    if (!dim) return;
+    const staleOnly = svg.dataset.staleOnly === '1';
+    const counts = countVisibleRowsByDim(rows, dim, staleOnly ? tr => tr.dataset.isStale === '1' : null);
+    const bars = Array.from(svg.querySelectorAll('.chart-bar'));
+    const maxVal = Math.max(1, ...bars.map(g => counts.get(g.dataset.filterValue) || 0));
+    const chartW = Number(svg.dataset.chartWidth || 1);
+    const left = Number(svg.dataset.leftMargin || 0);
+    for (const g of bars) {
+      const val = counts.get(g.dataset.filterValue) || 0;
+      const w = Math.round(val / maxVal * chartW);
+      const rect = g.querySelector('.chart-bar-rect');
+      const text = g.querySelector('.chart-bar-value');
+      if (rect) rect.setAttribute('width', String(w));
+      if (text) {
+        text.textContent = String(val);
+        text.setAttribute('x', String(left + w + 4));
+      }
+      g.classList.toggle('filtered-zero', val === 0);
+    }
+  });
+}
+
+function updateLineCharts(rows) {
+  document.querySelectorAll('svg.line-chart[data-filter-dim]').forEach(svg => {
+    const dim = svg.dataset.filterDim;
+    if (!dim) return;
+    const boundaries = JSON.parse(svg.dataset.boundaries || '[]');
+    if (!boundaries.length) return;
+    const marginL = Number(svg.dataset.marginL || 0);
+    const marginT = Number(svg.dataset.marginT || 0);
+    const plotW = Number(svg.dataset.plotW || 1);
+    const plotH = Number(svg.dataset.plotH || 1);
+    const seriesGroups = Array.from(svg.querySelectorAll('.chart-series'));
+    const series = new Map();
+    let maxVal = 1;
+    for (const g of seriesGroups) {
+      const value = g.dataset.filterValue;
+      const vals = boundaries.map(boundary => rows.filter(tr => {
+        const created = tr.dataset.created || '';
+        return created && created <= boundary && rowValuesForDim(tr, dim).has(value);
+      }).length);
+      series.set(g, vals);
+      maxVal = Math.max(maxVal, ...vals);
+    }
+    svg.querySelectorAll('.chart-y-label').forEach(label => {
+      const idx = Number(label.dataset.gridIndex || 0);
+      label.textContent = String(Math.floor(idx / 4 * maxVal));
+    });
+    for (const [g, vals] of series.entries()) {
+      const points = vals.map((v, i) => {
+        const x = marginL + Math.round(i / Math.max(boundaries.length - 1, 1) * plotW);
+        const y = marginT + plotH - Math.round(v / maxVal * plotH);
+        return [x, y];
+      });
+      const pointText = points.map(([x, y]) => x + ',' + y).join(' ');
+      g.querySelectorAll('polyline').forEach(p => p.setAttribute('points', pointText));
+      g.querySelectorAll('.chart-point').forEach((circle, i) => {
+        const [x, y] = points[i];
+        circle.setAttribute('cx', String(x));
+        circle.setAttribute('cy', String(y));
+      });
+      const valText = g.querySelector('.chart-line-value');
+      if (valText && points.length) {
+        const [x, y] = points[points.length - 1];
+        valText.textContent = String(vals[vals.length - 1] || 0);
+        valText.setAttribute('x', String(x + 6));
+        valText.setAttribute('y', String(y + 4));
+      }
+      g.classList.toggle('filtered-zero', (vals[vals.length - 1] || 0) === 0);
+    }
+  });
+}
+
+function updateDynamicReportState() {
+  const rows = visibleIssueRows();
+  updateVisibleCounts(rows);
+  updateBarCharts(rows);
+  updateLineCharts(rows);
+}
+
+function rowMatchesDim(tr, dim, selectedSet) {
+  if (selectedSet.size === 0) return false;
+  const sourceDims = (dim === 'assignee') ? ['assignee', 'owner_transferred'] : [dim];
+  const rowTokens = new Set();
+  for (const sd of sourceDims) {
+    const key = sd.replace('_', '-');  // data attributes use dashes
+    const raw = tr.dataset[sd] || tr.dataset[key] || '';
+    for (const t of tokensFor(sd, raw)) rowTokens.add(t);
+  }
+  if (sourceDims.length > 1 && rowTokens.size > 1) rowTokens.delete(NONE_TOKEN);
+  for (const t of rowTokens) { if (selectedSet.has(t)) return true; }
+  return false;
+}
+
+// ---- Duplicate filter state ----
+let showDupsOnly = false;
+
+function buildFilterBar() {
+  const bar = document.createElement('div');
+  bar.className = 'filter-bar';
+
+  // Multi-select dropdowns
+  for (const dim of FILTER_DIMS) {
+    const wrap = document.createElement('label');
+    wrap.textContent = FILTER_LABELS[dim];
+    const dd = buildMultiSelect(dim, collectValues(dim));
+    dd.id = 'filter-' + dim;
+    wrap.appendChild(dd);
+    bar.appendChild(wrap);
+  }
+
+  // Free-text search
+  const searchWrap = document.createElement('label');
+  searchWrap.textContent = 'Search';
+  const search = document.createElement('input');
+  search.type = 'text'; search.id = 'filter-search';
+  search.placeholder = 'title / action_TBD';
+  search.addEventListener('input', applyFilters);
+  searchWrap.appendChild(search);
+  bar.appendChild(searchWrap);
+
+  // Date filter
+  const dateWrap = document.createElement('label');
+  dateWrap.textContent = 'Created after';
+  const dateInput = document.createElement('input');
+  dateInput.type = 'date'; dateInput.id = 'filter-date';
+  dateInput.addEventListener('change', applyFilters);
+  dateWrap.appendChild(dateInput);
+  bar.appendChild(dateWrap);
+
+  // Duplicate filter button
+  const dupBtn = document.createElement('button');
+  dupBtn.id = 'filter-dup-btn';
+  dupBtn.textContent = 'Duplicates only';
+  dupBtn.addEventListener('click', () => {
+    showDupsOnly = !showDupsOnly;
+    dupBtn.classList.toggle('active', showDupsOnly);
+    applyFilters();
+  });
+  bar.appendChild(dupBtn);
+
+  // Hide done toggle
+  const hideWrap = document.createElement('label');
+  hideWrap.style.flexDirection = 'row'; hideWrap.style.alignItems = 'center'; hideWrap.style.gap = '4px';
+  const hideCb = document.createElement('input');
+  hideCb.type = 'checkbox'; hideCb.id = 'filter-hide-done';
+  hideCb.addEventListener('change', applyFilters);
+  hideWrap.appendChild(hideCb);
+  hideWrap.appendChild(document.createTextNode('Hide Done'));
+  bar.appendChild(hideWrap);
+
+  // Show hidden issues (issues without open request >1 week)
+  const showAllWrap = document.createElement('label');
+  showAllWrap.style.flexDirection = 'row'; showAllWrap.style.alignItems = 'center'; showAllWrap.style.gap = '4px';
+  const showAllCb = document.createElement('input');
+  showAllCb.type = 'checkbox'; showAllCb.id = 'filter-show-hidden';
+  showAllCb.addEventListener('change', applyFilters);
+  showAllWrap.appendChild(showAllCb);
+  showAllWrap.appendChild(document.createTextNode('Show hidden issues'));
+  bar.appendChild(showAllWrap);
+
+  // Reset
+  const reset = document.createElement('button');
+  reset.textContent = 'Reset filters';
+  reset.addEventListener('click', () => {
+    for (const dim of FILTER_DIMS) {
+      const dd = document.getElementById('filter-' + dim);
+      SELECTED[dim].clear();
+      dd.querySelectorAll('input[type=checkbox]').forEach(cb => { cb.checked = true; SELECTED[dim].add(cb.value); });
+      updateButtonLabel(dd, dim);
+    }
+    document.getElementById('filter-search').value = '';
+    document.getElementById('filter-date').value = '';
+    document.getElementById('filter-hide-done').checked = false;
+    document.getElementById('filter-show-hidden').checked = false;
+    showDupsOnly = false;
+    document.getElementById('filter-dup-btn').classList.remove('active');
+    applyFilters();
+  });
+  bar.appendChild(reset);
+
+  // Export done
+  const exp = document.createElement('button');
+  exp.textContent = 'Export Done IDs';
+  exp.addEventListener('click', () => {
+    const ids = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k.startsWith(STORAGE_KEY_PREFIX) && localStorage.getItem(k) === '1')
+        ids.push(k.slice(STORAGE_KEY_PREFIX.length));
+    }
+    ids.sort((a, b) => Number(a) - Number(b));
+    navigator.clipboard.writeText(ids.join(',')).then(
+      () => alert('Copied ' + ids.length + ' done issue IDs'),
+      () => prompt('Done IDs:', ids.join(','))
+    );
+  });
+  bar.appendChild(exp);
+
+  // Stats
+  const stats = document.createElement('span');
+  stats.className = 'stats'; stats.id = 'filter-stats';
+  bar.appendChild(stats);
+
+  document.body.insertBefore(bar, document.body.firstChild);
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.ms-dd.open').forEach(d => d.classList.remove('open'));
+  });
+}
+
+function applyFilters() {
+  const search = (document.getElementById('filter-search').value || '').trim().toLowerCase();
+  const hideDone = document.getElementById('filter-hide-done').checked;
+  const showHidden = document.getElementById('filter-show-hidden').checked;
+  const dateVal = document.getElementById('filter-date').value;
+  let total = 0, visible = 0;
+
+  document.querySelectorAll('table.ar-table tbody tr[data-issue]').forEach(tr => {
+    const isMoreRow = tr.classList.contains('more-hidden') || tr.classList.contains('more-shown');
+    if (isMoreRow && !showHidden) {
+      tr.classList.remove('more-shown');
+      tr.classList.add('more-hidden');
+      tr.classList.remove('hidden');
+      return;
+    }
+    if (isMoreRow && showHidden) {
+      tr.classList.remove('more-hidden');
+      tr.classList.add('more-shown');
+    }
+    total++;
+    let show = true;
+    for (const dim of FILTER_DIMS) {
+      if (!rowMatchesDim(tr, dim, SELECTED[dim])) { show = false; break; }
+    }
+    if (show && search) {
+      show = (tr.dataset.search || '').includes(search);
+    }
+    if (show && hideDone && tr.classList.contains('done')) show = false;
+    if (show && showDupsOnly && tr.dataset.isDup !== '1') show = false;
+    if (show && dateVal) {
+      const created = tr.dataset.created || '';
+      if (created && created < dateVal) show = false;
+    }
+    tr.classList.toggle('hidden', !show);
+    if (show) visible++;
+  });
+
+  document.querySelectorAll('.more-link').forEach(link => {
+    link.style.display = showHidden ? 'none' : '';
+  });
+
+  document.getElementById('filter-stats').textContent = visible + ' / ' + total + ' rows';
+  hideEmptySections();
+  updateFacetCounts();
+  updateDynamicReportState();
+}
+
+function hideEmptySections() {
+  document.querySelectorAll('table.ar-table').forEach(table => {
+    const visibleRows = table.querySelectorAll('tbody tr[data-issue]:not(.hidden):not(.more-hidden)').length;
+
+    const h3 = table.previousElementSibling;
+    const moreLink = table.nextElementSibling;
+    if (visibleRows === 0) {
+      table.classList.add('section-hidden');
+      if (h3 && h3.tagName === 'H3') h3.classList.add('section-hidden');
+      if (moreLink && moreLink.classList.contains('more-link')) moreLink.classList.add('section-hidden');
+    } else {
+      table.classList.remove('section-hidden');
+      if (h3 && h3.tagName === 'H3') h3.classList.remove('section-hidden');
+      if (moreLink && moreLink.classList.contains('more-link')) moreLink.classList.remove('section-hidden');
+    }
+  });
+
+  // Hide h2 sections if all their h3 subsections are hidden
+  document.querySelectorAll('h2[id^="sec-p"], h2[id="sec-other"]').forEach(h2 => {
+    let sib = h2.nextElementSibling;
+    let anyVisible = false;
+    while (sib && sib.tagName !== 'H2') {
+      if (sib.tagName === 'TABLE' && sib.classList.contains('ar-table') && !sib.classList.contains('section-hidden')) {
+        anyVisible = true; break;
+      }
+      sib = sib.nextElementSibling;
+    }
+    h2.classList.toggle('section-hidden', !anyVisible);
+  });
+}
+
+// ---- Init ----
+document.addEventListener('DOMContentLoaded', () => {
+  loadDoneState();
+  document.querySelectorAll('input.ar-done').forEach(cb => cb.addEventListener('change', onDoneToggle));
+  buildFilterBar();
+  initChartFilters();
+  applyFilters();
+  initTooltips();
+});
+
+// ---- Custom tooltip for full reason text ----
+function initTooltips() {
+  const popup = document.createElement('div');
+  popup.className = 'tip-popup';
+  document.body.appendChild(popup);
+
+  document.addEventListener('mouseover', e => {
+    const cell = e.target.closest('.tip-cell[title]');
+    if (!cell || !cell.title) { popup.classList.remove('visible'); return; }
+    popup.textContent = cell.title;
+    popup.classList.add('visible');
+    const rect = cell.getBoundingClientRect();
+    let left = rect.left;
+    let top = rect.bottom + 4;
+    if (left + 500 > window.innerWidth) left = window.innerWidth - 510;
+    if (top + 200 > window.innerHeight) top = rect.top - popup.offsetHeight - 4;
+    popup.style.left = Math.max(0, left) + 'px';
+    popup.style.top = top + 'px';
+  });
+  document.addEventListener('mouseout', e => {
+    if (e.target.closest('.tip-cell')) popup.classList.remove('visible');
+  });
+}
+</script>
+</body>
+</html>
