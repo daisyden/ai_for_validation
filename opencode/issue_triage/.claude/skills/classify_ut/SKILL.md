@@ -25,16 +25,28 @@ Known sheets:
 ## Inputs
 
 - Target workbook: the `.xlsx` file provided by the user
+- Source checkout for existence checks: use the user-provided path via `PYTORCH_SRC`; if none is
+  provided, use `$HOME/upstream/pytorch`. Do not hard-code private checkout paths in commands or
+  reusable logic.
+- XPU test checkout: `$PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu`, where `PYTORCH_SRC` is the
+  source checkout above.
 - Reference workbook (optional):
-  `/home/daisyden/opencode/ai_for_validation/opencode/issue_triage/result/torch_xpu_ops_issues.xlsx`
+  `${ISSUE_TRIAGE_ROOT:-$HOME/opencode/ai_for_validation/opencode/issue_triage}/result/torch_xpu_ops_issues.xlsx`
 - Deep case-existence workflow:
-  `/home/daisyden/opencode/ai_for_validation/opencode/issue_triage/.claude/skills/bug_scrub/analyze_ci_result/check_xpu_case_existence/SKILL.md`
+  `${ISSUE_TRIAGE_ROOT:-$HOME/opencode/ai_for_validation/opencode/issue_triage}/.claude/skills/bug_scrub/analyze_ci_result/check_xpu_case_existence/SKILL.md`
 - Blank `status_xpu` workflow:
-  `/home/daisyden/opencode/ai_for_validation/opencode/issue_triage/.claude/skills/classify_ut/blank/SKILL.md`
+  `${CLASSIFY_UT_ROOT:-$ISSUE_TRIAGE_ROOT/.claude/skills/classify_ut}/blank/SKILL.md`
 - Failed `status_xpu` workflow:
-  `/home/daisyden/opencode/ai_for_validation/opencode/issue_triage/.claude/skills/classify_ut/failed/SKILL.md`
+  `${CLASSIFY_UT_ROOT:-$ISSUE_TRIAGE_ROOT/.claude/skills/classify_ut}/failed/SKILL.md`
 - Skipped/xfail `status_xpu` workflow:
-  `/home/daisyden/opencode/ai_for_validation/opencode/issue_triage/.claude/skills/classify_ut/skipped/SKILL.md`
+  `${CLASSIFY_UT_ROOT:-$ISSUE_TRIAGE_ROOT/.claude/skills/classify_ut}/skipped/SKILL.md`
+
+Recommended environment variables:
+- `ISSUE_TRIAGE_ROOT=${ISSUE_TRIAGE_ROOT:-$HOME/opencode/ai_for_validation/opencode/issue_triage}`
+- `CLASSIFY_UT_ROOT=${CLASSIFY_UT_ROOT:-$ISSUE_TRIAGE_ROOT/.claude/skills/classify_ut}`
+- `PYTORCH_SRC=${PYTORCH_SRC:-$HOME/upstream/pytorch}`
+- `PYTORCH_ENV=${PYTORCH_ENV:-pytorch_opencode_env}`
+- `CONDA_ACTIVATE=${CONDA_ACTIVATE:-$HOME/miniforge3/bin/activate}`
 
 ## Status-specific classification skills
 
@@ -71,14 +83,13 @@ Tracks whether the **original** Reason was blank in the SOURCE workbook (e.g.,
 
 | Label | When to Use |
 |-------|-------------|
-| `To be enabled` | Test should work on XPU but skip/wrapper is stale, or the test exists but isn't in CI. Closed known issues also get this. |
+| `To be enabled` | Base test exists and the functionality should apply to XPU, but the XPU case is not enabled/reported, the skip/wrapper is stale, or CI is missing coverage. Closed known issues also get this. |
 | `Local Passed` | Test was run locally in `pytorch_opencode_env` and PASSED. Requires actual execution evidence saved to a local file. |
 | `Feature gap` | XPU lacks a feature/API needed by the test. Known issue link required if available. |
 | `Failures (xpu broken)` / `Failures (XPU broken)` | Test fails due to an XPU implementation bug. Known issue link required. |
-| `Test Enviroment limitation` | True hardware/process constraint (multi-GPU, slow gate, GCC version). NOT for skips that are stale or fixable. |
-| `Not Appliable` | CUDA-only API with no XPU equivalent. `DetailReason` MUST name the exact API (e.g., `CUDA-specific API: torch.cuda.jiterator`). Never use generic "CUDA-only test" or "No XPU test data" — always identify the specific API or feature that XPU does not support. |
-| `Not applicable` | Test removed/renamed upstream (`DetailReason` = `Community Changes`), OR CPU-only test not relevant to XPU validation (`DetailReason` = `CPU Case`). |
-| `Community Change` | Test previously passed on XPU (`last_status_xpu = passed`) but now skipped/blank due to an upstream PyTorch commit or disabled-test issue. `DetailReason` MUST include the full issue/PR URL (e.g., `https://github.com/pytorch/pytorch/issues/NNNNN`) or guilty commit hash with author and summary. |
+| `Test Enviroment limitation` | True hardware/process constraint (multi-GPU, GCC version). NOT for skips that are stale or fixable. |
+| `Not applicable` | Either (a) a CPU-only test not relevant to XPU validation (`DetailReason` = `CPU Case`), or (b) a CUDA-only behavior whose API/torch op is listed in the **`Not applicable` sheet** of `${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx` (column `Operation/API`). `DetailReason` MUST name the exact API/feature (e.g., `CUDA-specific API: torch.cuda.jiterator`) and cite the matching `Not applicable`-sheet row (`Issue ID`). Never use generic "CUDA-only test" or "No XPU test data" — always identify the specific API or feature that XPU does not support. See the **CUDA-Only Judgement Rule** below. |
+| `Community Change` | The base function/case no longer exists in the source being compared, was renamed/refactored/moved, or the test is disabled by an upstream PyTorch community issue/commit. `DetailReason` MUST include the full issue/PR URL when available, or exact source/commit evidence. Do not require `last_status_xpu = passed`; base-function absence is enough. |
 
 ### `DetailReason` (String)
 
@@ -86,9 +97,12 @@ Must be specific enough to act on. **Every `DetailReason` that references an iss
 use a full URL** (e.g., `https://github.com/pytorch/pytorch/issues/180324`), never a bare
 number like `#180324` or a truncated link. This applies to ALL Reason categories:
 
-- `Community Change`: full issue/PR URL from `message_xpu` or guilty commit info
-- `Failures (xpu broken)`: full issue URL, or `[Issue_TBD]` prefix if none found
-- `Feature gap`: full issue URL when available
+- `Community Change`: full issue/PR URL from `message_xpu`, guilty commit info, or exact source
+  evidence that the base function was removed/renamed/refactored
+- `Failures (xpu broken)`: full issue URL from `intel/torch-xpu-ops` or `pytorch/pytorch`, or
+  `[Issue_TBD]` prefix if none found after searching both repos
+- `Feature gap`: full issue URL from `intel/torch-xpu-ops` or `pytorch/pytorch`, or
+  `[Issue_TBD]` prefix if none found after searching both repos
 - `To be enabled`: full issue URL for closed issues with stale skip decorators
 
 **Where to find issue/PR URLs:**
@@ -105,15 +119,81 @@ number like `#180324` or a truncated link. This applies to ALL Reason categories
 - Writing a commit hash without the PR URL when one exists
 - Writing generic `No XPU test data`, `CUDA-only test`, or `No XPU wrapper` without reading the
   test source and identifying the specific API or feature. Always read the test to determine whether
-  it uses device-agnostic patterns (-> `To be enabled`) or CUDA-specific APIs (-> `Not Appliable`
+  it uses device-agnostic patterns (-> `To be enabled`) or CUDA-specific APIs (-> `Not applicable`
   with exact API named)
 
 Specific content requirements per Reason:
 - Include issue links when known: `https://github.com/intel/torch-xpu-ops/issues/NNNN - description`
-- Include `[Issue_TBD]` when no issue exists after searching
-- Name exact APIs for `Not Appliable`: `CUDA-specific API: torch.cuda.jiterator (jiterator_binary)`
+  or `https://github.com/pytorch/pytorch/issues/NNNN - description`
+- Include `[Issue_TBD]` when no issue exists after searching both repositories
+- Name exact APIs for `Not applicable`: `CUDA-specific API: torch.cuda.jiterator (jiterator_binary)`
 - Name exact evidence for `Local Passed`: `Local verification passed in pytorch_opencode_env; stale failed status`
 - For `Community Change`: include guilty commit hash, author, date, and what the commit changed
+
+## CUDA-Only Judgement Rule (authoritative for `Not applicable`)
+
+The **only** authoritative source for "CUDA-only behavior with no XPU equivalent" is the
+`Not applicable` sheet of the reference workbook:
+
+```
+${ISSUE_TRIAGE_ROOT:-$HOME/opencode/ai_for_validation/opencode/issue_triage}/result/torch_xpu_ops_issues.xlsx
+                                                                                              └─ sheet: "Not applicable"
+```
+
+(Historical note: this sheet was previously misspelled "Not Appliable" and has been renamed.
+All `Not Appliable` logic is collapsed into `Not applicable`.)
+
+### How to use the sheet
+
+1. Open the workbook with `openpyxl` and load sheet `Not applicable`.
+2. The sheet columns are:
+   `Issue ID | Title | Operation/API | Category | Technical Details | Labels | State`.
+3. To judge whether a row's failing/skipped API is CUDA-only, scan the `Operation/API` column
+   for an entry that names the same torch op, ATen op, Python API, or backend feature the test
+   exercises. Match by:
+   - exact op name (e.g., `aten::_cudnn_rnn`, `torch._C._broadcast_coalesced`)
+   - parent module/API (e.g., `torch.cuda.jiterator`, `cuBLAS`, `cuDNN`, `TensorExpr CUDA fuser`)
+   - explicit test-name reference inside the cell (e.g., `test_no_cuda_monkeypatch`)
+4. If a matching row exists -> the behavior IS CUDA-only -> classify `Not applicable`, and in
+   `DetailReason` cite the matching `Issue ID` and the `Operation/API` value verbatim, e.g.
+   `CUDA-specific API: aten::_cudnn_rnn (Not applicable sheet, Issue 2472)`.
+5. **If no matching row exists, the behavior is NOT CUDA-only.** Do not classify `Not applicable`
+   on the CUDA-only branch. Re-route to the correct label:
+   - device-agnostic test that XPU should support -> `To be enabled`
+   - XPU implementation bug -> `Failures (xpu broken)`
+   - missing XPU feature -> `Feature gap`
+   - base function removed/renamed/refactored upstream -> `Community Change`
+   - test is CPU-only (`_cpu` suffix, `requires GPU`, etc.) -> `Not applicable` (CPU branch),
+     `DetailReason = CPU Case`
+6. The CPU branch of `Not applicable` (`DetailReason = CPU Case`) does NOT require a sheet match
+   and is unaffected by this rule.
+
+### Workflow snippet
+
+```python
+import openpyxl, os
+xlsx = os.path.expanduser(
+    os.environ.get("ISSUE_TRIAGE_ROOT", "~/opencode/ai_for_validation/opencode/issue_triage")
+) + "/result/torch_xpu_ops_issues.xlsx"
+wb = openpyxl.load_workbook(xlsx, read_only=True, data_only=True)
+ws = wb["Not applicable"]
+header = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
+op_col = header.index("Operation/API")
+id_col = header.index("Issue ID")
+not_applicable_ops = [(row[id_col].value, row[op_col].value)
+                      for row in ws.iter_rows(min_row=2) if row[op_col].value]
+# Match candidate API against not_applicable_ops; only mark Not applicable on a hit.
+```
+
+### Anti-patterns
+
+- Marking a row `Not applicable` because `name_cuda` contains the substring `cuda`.
+- Marking a row `Not applicable` because the skip message says `Only runs on cuda` without
+  confirming the underlying API is in the sheet (many such gates are SM-capability gates or
+  stale skips -> `To be enabled`).
+- Inventing a new CUDA-only API entry locally instead of adding it to the workbook sheet first.
+  If you genuinely discover a new CUDA-only API, add a row to the `Not applicable` sheet
+  (see the `create-not-applicable-sheet` skill) before classifying.
 
 ## Deep Analysis Requirements (CRITICAL)
 
@@ -125,9 +205,42 @@ Every blank-Reason row requires:
    this is a regression — prioritize the `Community Change` workflow below.
 2. **Source inspection**: Read the test source to understand what it validates
 3. **Local verification**: Run the test when status is ambiguous (failed/skipped with unclear message)
-4. **Known issue search**: `gh search issues` on `intel/torch-xpu-ops` for relevant keywords
+4. **Known issue search**: `gh search issues` on both `intel/torch-xpu-ops` and
+   `pytorch/pytorch` for relevant keywords
 5. **Issue state check**: `gh issue view` for any referenced issue to confirm OPEN/CLOSED
 6. **Evidence recording**: Save local run output to files; record in `DetailReason`
+
+### Case Existence Rule (source-of-truth order)
+
+Use this rule before deciding that a blank-status case is `To be enabled`, `Not applicable`, or
+`Community Change`:
+
+1. Use the configured source checkout (`PYTORCH_SRC`, default `$HOME/upstream/pytorch`) as the
+   source of truth. Update it first, including `$PYTORCH_SRC/third_party/torch-xpu-ops` when present.
+2. Determine the **base function** in `testfile_cuda`: the function name actually defined in the
+   PyTorch test source that most closely generates the workbook case. For generated/parameterized
+   cases, this is the decorated function before device, dtype, OpInfo, and parameter suffixes are
+   appended.
+3. If the base function is not present in `$PYTORCH_SRC/<testfile_cuda>`, classify
+   `Community Change`. This includes refactors where old CUDA/CPU-specific generated names were
+   replaced by a different base function signature, e.g. old MinifierTests
+   `test_after_dynamo_cpu_*` / `test_after_dynamo_cuda_*` cases replaced by
+   `test_after_dynamo_*(self, device)`.
+4. If the base function exists, check whether the XPU case exists. The expected generated XPU case
+   name is normally `name_cuda` with `_cuda` replaced by `_xpu`; also account for decorators,
+   `instantiate_device_type_tests(..., allow_xpu=True)`, OpInfo/device/dtype filters, and class
+   instantiation.
+5. For Non-Inductor rows, always check both direct PyTorch tests and
+   `$PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu/**` including subfolders such as `dynamo`, `nn`,
+   `functorch`, `extended`, `profiler`, `quantization`, and `distributed`. Do not stop at the root
+   `test/xpu` directory.
+6. If the base exists and the XPU case exists or should be generated but is blank/missing from the
+   workbook, classify `To be enabled` unless source/issue evidence proves an XPU implementation
+   failure, feature gap, CPU-only case, or exact CUDA-only API.
+7. If the base exists but no XPU case is generated, classify according to why: missing XPU
+   registration/coverage for supported functionality is `To be enabled`; exact CUDA-only API is
+   `Not applicable`/`Not applicable`; XPU bug is `Failures (xpu broken)`; missing feature is
+   `Feature gap`.
 
 ### When `last_status_xpu = passed` but `status_xpu` is skipped or blank (Community Change detection)
 
@@ -140,7 +253,7 @@ This is a **regression from community changes**, not an XPU issue.
 1. Identify the test file from `testfile_cuda` (e.g., `test/inductor/test_foo.py`).
 2. Use `git log` to find recent commits that touched the test file or the specific test method:
    ```bash
-   cd /home/daisyden/opencode/classify/pytorch
+   cd "$PYTORCH_SRC"
    git log --oneline -20 -- test/inductor/test_foo.py
    ```
 3. For each candidate commit, use `git show` to inspect what changed:
@@ -251,7 +364,7 @@ This applies universally to ALL `Failures (xpu broken)` rows regardless of statu
 ### SM89/SM90 CUDA capability gates
 
 Tests skipped due to `SM90OrLater`, `sm89`, or similar CUDA compute capability checks:
-- These are NOT `Not Appliable` (they test general functionality, not CUDA-specific APIs)
+- These are NOT `Not applicable` (they test general functionality, not CUDA-specific APIs)
 - Classify as `To be enabled` because XPU should support the underlying operation
 - DetailReason: `Skipped due to <SM check> CUDA capability gate; XPU should support this test`
 
@@ -275,20 +388,21 @@ and source code. This prevents stale results from outdated packages or test defi
 ### Step 1: Update PyTorch source and torch-xpu-ops
 
 ```bash
-# Update PyTorch source to main
-cd /home/daisyden/opencode/classify/pytorch
-git fetch origin main && git checkout main && git pull origin main
+# Select and update PyTorch source to main. Use the user's requested checkout if provided.
+export PYTORCH_SRC="${PYTORCH_SRC:-$HOME/upstream/pytorch}"
+cd "$PYTORCH_SRC"
+git fetch origin main && git checkout main && git pull --rebase origin main
 
 # Update torch-xpu-ops submodule to main
 cd third_party/torch-xpu-ops
-git fetch origin main && git checkout main && git pull origin main
+git fetch origin main && git checkout main && git pull --rebase origin main
 cd ../..
 ```
 
 ### Step 2: Install nightly torch and triton-xpu
 
 ```bash
-source ~/miniforge3/bin/activate pytorch_opencode_env
+source "${CONDA_ACTIVATE:-$HOME/miniforge3/bin/activate}" "${PYTORCH_ENV:-pytorch_opencode_env}"
 
 # Install latest nightly torch for XPU
 pip3 install --pre torch --index-url https://download.pytorch.org/whl/nightly/xpu

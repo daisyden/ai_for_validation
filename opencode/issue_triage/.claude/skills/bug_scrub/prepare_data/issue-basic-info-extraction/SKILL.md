@@ -45,7 +45,7 @@ Three sheets:
 2. **Test Cases**: Issue ID, Test Reproducer, Test Type, Test File, Origin Test File, Test Class, Test Case
 3. **E2E Test Cases**: Issue ID, Test Reproducer, Benchmark, Model, Phase, Dtype, AMP, Backend, Test Type, Cudagraph
 
-**Note**: After this step, use `create-not-applicable-sheet` skill (Step 1.3) to add "Not Appliable" sheet.
+**Note**: After this step, use `create-not-applicable-sheet` skill (Step 1.3) to add "Not applicable" sheet.
 
 ## Usage
 ```bash
@@ -94,4 +94,4 @@ Saved to ../../../result/torch_xpu_ops_issues.xlsx
 ```
 
 ## Next Step
-After running this skill, proceed to Phase 1.3: Execute `create-not-applicable-sheet` skill to add "Not Appliable" sheet with wontfix/not_target issues.
+After running this skill, proceed to Phase 1.3: Execute `create-not-applicable-sheet` skill to add "Not applicable" sheet with wontfix/not_target issues.

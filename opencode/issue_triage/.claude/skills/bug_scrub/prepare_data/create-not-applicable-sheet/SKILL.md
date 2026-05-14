@@ -11,7 +11,7 @@ Relative paths from this file location (`bug_scrub/prepare_data/create-not-appli
 
 ## Overview
 
-This skill creates a "Not Appliable" sheet for issues labeled with `wontfix` or `not_target`. Instead of using script-based pattern matching, this skill requires **deep analysis** using the Explore Agent to understand which torch operations or APIs are not being targeted and why.
+This skill creates a "Not applicable" sheet for issues labeled with `wontfix` or `not_target`. Instead of using script-based pattern matching, this skill requires **deep analysis** using the Explore Agent to understand which torch operations or APIs are not being targeted and why.
 
 ## Distinction from Other Skills
 
@@ -102,7 +102,7 @@ For each issue analyzed, populate the Not Applicable sheet with columns:
 
 ### Step 4: Create Sheet in Excel
 
-Manually create "Not Appliable" sheet in the Excel file with the documented findings.
+Manually create "Not applicable" sheet in the Excel file with the documented findings.
 
 ## Usage
 
@@ -125,7 +125,7 @@ gh issue view {issue_number} --repo intel/torch-xpu-ops --json title,body,labels
 
 ### Manual Entry to Excel
 
-After completing deep analysis for all wontfix/not_target issues, manually add entries to "Not Appliable" sheet with:
+After completing deep analysis for all wontfix/not_target issues, manually add entries to "Not applicable" sheet with:
 - Accurate operation/API names from investigation
 - Proper categorization based on technical findings
 - Detailed technical explanations
@@ -146,7 +146,7 @@ Deep analysis ensures accurate documentation of why operations are not targeted,
 
 ## Output
 
-Creates "Not Appliable" sheet in `../../../result/torch_xpu_ops_issues.xlsx` with columns:
+Creates "Not applicable" sheet in `../../../result/torch_xpu_ops_issues.xlsx` with columns:
 - Issue ID
 - Title  
 - Operation/API

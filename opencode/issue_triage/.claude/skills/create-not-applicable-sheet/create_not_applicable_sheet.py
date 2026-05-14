@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Create Not Appliable Sheet
+Create Not applicable Sheet
 Extracts wontfix/not_target issues and creates a summary sheet
 """
 import openpyxl
@@ -10,7 +10,7 @@ def create_not_applicable_sheet(
     excel_path: str = '/home/daisydeng/ai_for_validation/opencode/issue_triage/result/torch_xpu_ops_issues.xlsx',
     output_path: str = None
 ):
-    """Create Not Appliable sheet from issues with wontfix/not_target labels"""
+    """Create Not applicable sheet from issues with wontfix/not_target labels"""
     wb = openpyxl.load_workbook(excel_path)
     ws = wb['Issues']
     
@@ -31,10 +31,10 @@ def create_not_applicable_sheet(
                 'reason': 'wontfix/not_target'
             })
     
-    if 'Not Appliable' in wb.sheetnames:
-        del wb['Not Appliable']
+    if 'Not applicable' in wb.sheetnames:
+        del wb['Not applicable']
     
-    ws_na = wb.create_sheet('Not Appliable')
+    ws_na = wb.create_sheet('Not applicable')
     ws_na.append(['Issue ID', 'Title', 'Torch Ops/API', 'Labels', 'Reason'])
     
     for item in not_appliable:
@@ -84,4 +84,4 @@ if __name__ == '__main__':
         '/home/daisydeng/ai_for_validation/opencode/issue_triage/result/torch_xpu_ops_issues.xlsx'
     
     count = create_not_applicable_sheet(excel_path)
-    print(f'Created "Not Appliable" sheet with {count} entries')
+    print(f'Created "Not applicable" sheet with {count} entries')

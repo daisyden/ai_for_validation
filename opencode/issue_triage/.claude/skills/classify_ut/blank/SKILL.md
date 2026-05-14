@@ -15,12 +15,13 @@ and targeted local runs when needed.
 - Workbook row fields: `testfile_cuda`, `classname_cuda`, `name_cuda`, `testfile_xpu`,
   `classname_xpu`, `name_xpu`, `status_xpu`, `Reason`, `DetailReason`,
   `Reason TBD`.
-- Local PyTorch checkout: `/home/daisyden/opencode/classify/pytorch`.
-- XPU test checkout: `/home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu`.
+- Local PyTorch checkout: use the user-provided source path via `PYTORCH_SRC`; default to
+  `$HOME/upstream/pytorch`. Do not hard-code private checkout paths in reusable logic.
+- XPU test checkout: `$PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu`.
 - Conda environment: `pytorch_opencode_env` with up-to-date nightly torch, triton-xpu, and
   source code (see parent `classify_ut/SKILL.md` Environment Setup).
 - Deep case-existence workflow:
-  `/home/daisyden/opencode/ai_for_validation/opencode/issue_triage/.claude/skills/bug_scrub/analyze_ci_result/check_xpu_case_existence/SKILL.md`.
+  `${ISSUE_TRIAGE_ROOT:-$HOME/opencode/ai_for_validation/opencode/issue_triage}/.claude/skills/bug_scrub/analyze_ci_result/check_xpu_case_existence/SKILL.md`.
 
 ## Required Tools
 
@@ -48,14 +49,21 @@ and targeted local runs when needed.
 - Do not use `release/2.12` for non-distributed rows.
 - For distributed rows only, use release/2.12 and the remote distributed skip-list evidence described
   below.
-- CUDA graph / cudagraph rows are not `Not Appliable` merely because the CUDA name contains `cuda`.
+- CUDA graph / cudagraph rows are not `Not applicable` merely because the CUDA name contains `cuda`.
   XPU graph support exists via `_XPUGraph`, `torch.xpu.XPUGraph`, and `torch.accelerator.Graph`;
   missing/failing coverage is `To be enabled` with an XPU graph DetailReason.
-- `Not Appliable` for CUDA-specific APIs must name the exact API in `DetailReason`, such as
-  `CUDA-specific API: torch.cuda.jiterator` or `CUDA-specific API: cuBLAS`.
-- `Not applicable / Community Changes` is only for tests removed, renamed, or no longer present in
-  the source being compared. If an XPU variant exists after parametrization, do not call it community
-  changes.
+- A row may only be classified `Not applicable` on the CUDA-only branch when the underlying
+  API/torch op is listed in the `Not applicable` sheet of
+  `${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx` (column `Operation/API`). See the
+  **CUDA-Only Judgement Rule** in the parent skill. `DetailReason` must cite the matching
+  `Issue ID` and `Operation/API` from that sheet. Without a sheet match, do NOT use the
+  CUDA-only branch — re-route to `To be enabled`, `Failures (xpu broken)`, `Feature gap`, or
+  `Community Change`.
+- `Not applicable` for CUDA-specific APIs must name the exact API in `DetailReason`, such as
+  `CUDA-specific API: torch.cuda.jiterator (Not applicable sheet, Issue NNNN)`.
+- `Community Change` is used when the base function/case is removed, renamed, refactored, moved, or
+  disabled by an upstream community issue/commit in the source being compared. If an XPU variant
+  exists after parametrization, do not call it community changes.
 - Do not change `Reason TBD` after classification. Mark updated `Reason`, `DetailReason`, and
   `DetailReason` cells blue.
 
@@ -65,7 +73,23 @@ and targeted local runs when needed.
    - `Reason` is blank.
    - `status_xpu` is blank.
    - CUDA metadata identifies the exact test file, class, and method.
-2. Check for Community Change regression:
+2. Check base-function existence and Community Change first:
+   - Use `PYTORCH_SRC` (default `$HOME/upstream/pytorch`) as the source of truth.
+   - Identify the **base function** in `testfile_cuda`: the function actually defined in the source
+     that most closely generates `name_cuda` after decorators, device, dtype, OpInfo, and parameter
+     suffixes are applied.
+   - If that base function is absent, classify `Community Change`. This includes refactors where old
+     generated CPU/CUDA-specific names are replaced by one device-parameterized base function, e.g.
+     MinifierTests old `test_after_dynamo_cpu_*` / `test_after_dynamo_cuda_*` cases replaced by
+     `test_after_dynamo_*(self, device)`.
+   - If the base function exists, derive the expected XPU case by replacing `_cuda` with `_xpu` in
+     `name_cuda`, then verify generation through parametrization, decorators, and source.
+   - For Non-Inductor rows, check both direct PyTorch tests and
+     `$PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu/**` including subfolders.
+   - If the base function exists but no XPU case exists, decide why: missing XPU registration for
+     supported functionality is `To be enabled`; exact CUDA-only API is `Not applicable`;
+     implementation bug is `Failures (xpu broken)`; missing feature is `Feature gap`.
+3. Check for Community Change regression:
    - If `last_status_xpu = passed` (test previously passed but is now blank/not run):
      a. Use `git log --oneline -20 -- <testfile_cuda>` to find recent commits.
      b. Use `git show <commit_hash> -- <testfile_cuda>` to inspect diffs.
@@ -73,24 +97,24 @@ and targeted local runs when needed.
         `instantiate_device_type_tests` altered, file moved.
      d. If guilty commit found: Reason = `Community Change`,
         DetailReason = `Community commit <hash> (<author>, <date>) - <summary>`.
-     e. If no relevant commit, continue to step 3.
-3. Derive missing XPU metadata only as a starting point:
+      e. If no relevant commit, continue to step 4.
+4. Derive missing XPU metadata only as a starting point:
    - `classname_cuda` ending in `CUDA` -> `XPU`.
    - `name_cuda` ending in `_cuda` -> `_xpu`.
    - `testfile_xpu` defaults to `testfile_cuda` when blank.
    Then verify against actual XPU source; do not trust the derived names blindly.
-4. Determine whether the row is distributed:
+5. Determine whether the row is distributed:
    - If `testfile_cuda` is under `test/distributed/`, follow the distributed workflow below.
    - Otherwise follow the non-distributed workflow below.
-5. Write one of the canonical outcomes:
-   - `Reason = Community Change` when `last_status_xpu = passed` and a guilty upstream commit
-     is identified (see step 2).
+6. Write one of the canonical outcomes:
+   - `Reason = Community Change` when the base function/case is absent, renamed/refactored/moved,
+      or a guilty upstream commit/issue is identified.
    - `Reason = To be enabled` for missing XPU registration, existing-but-unreported XPU cases,
      explicit XPU skips needing enablement, or missing XPU coverage for supported functionality.
-   - `Reason = Not Appliable` for CUDA-only APIs or backend-specific features that cannot apply to
+   - `Reason = Not applicable` for CUDA-only APIs or backend-specific features that cannot apply to
      XPU. `DetailReason` must name the exact API/feature.
-   - `Reason = Not applicable`, `DetailReason = Community Changes` only when source comparison proves
-     the CUDA test was removed/renamed or no longer exists.
+   - `Reason = Community Change` when source comparison proves the CUDA/base test was
+      removed/renamed/refactored or no longer exists.
 
 ## Distributed Blank-Status Workflow
 
@@ -124,7 +148,8 @@ Distributed XPU tests usually do not use `*_xpu.py` wrappers. They run upstream 
 
 ## Non-Distributed Blank-Status Workflow
 
-1. Read the local base test under `test/` and confirm the CUDA class/method still exists.
+1. Read the local base test under `test/` and confirm the base function still exists in
+   `PYTORCH_SRC`. If not, classify `Community Change` before checking XPU wrappers.
 2. If `testfile_xpu` is the same as `testfile_cuda`, or the row points to a direct PyTorch test
    folder such as `test/dynamo/` or `test/inductor/`, analyze that direct PyTorch test file first:
    - Read the class and method body.
@@ -133,11 +158,11 @@ Distributed XPU tests usually do not use `*_xpu.py` wrappers. They run upstream 
      decorators, or other arguments.
    - Run a narrow collection command when source inspection is not enough, for example:
      ```bash
-     source ~/miniforge3/bin/activate pytorch_opencode_env && \
+     source "${CONDA_ACTIVATE:-$HOME/miniforge3/bin/activate}" "${PYTORCH_ENV:-pytorch_opencode_env}" && \
      python -m pytest --collect-only -q dynamo/test_modules.py -k test_assign_does_not_exist
      ```
-   - If collection reports zero tests and source inspection shows the method/case is absent, classify
-     as `Not applicable / Community Changes`, not `XPU test file missing`.
+    - If collection reports zero tests and source inspection shows the method/case is absent, classify
+      as `Community Change`, not `XPU test file missing`.
    - If the case is collected or the direct source generates it for XPU, classify from the direct
      PyTorch source evidence. Do not require a `torch-xpu-ops/test/xpu` wrapper.
 3. Enumerate all plausible XPU locations before declaring a wrapper/direct XPU file missing:
@@ -159,9 +184,9 @@ Distributed XPU tests usually do not use `*_xpu.py` wrappers. They run upstream 
    exact test or a narrow collect command in `pytorch_opencode_env`.
 8. If no XPU source generates the case but the base test exists and the feature applies to XPU,
    classify `To be enabled` with a DetailReason naming the missing file/class/import/instantiation.
-9. If local source proves the CUDA test no longer exists or has been renamed, classify
-   `Not applicable / Community Changes` with the exact source evidence.
-10. If source proves the test is CUDA-only, classify `Not Appliable` and name the exact API.
+9. If local source proves the CUDA/base test no longer exists or has been renamed/refactored,
+    classify `Community Change` with the exact source evidence.
+10. If source proves the test is CUDA-only, classify `Not applicable` and name the exact API.
 
 ### Rows with No XPU Test Data
 
@@ -172,7 +197,7 @@ use generic reasons like "No XPU test data" or "CUDA-only test". Instead:
 2. **Check if the test uses device-agnostic patterns** (`GPU_TYPE`, `instantiate_device_type_tests`,
    parametrized devices). If so, the test SHOULD run on XPU -> `To be enabled`.
 3. **Check if the test uses CUDA-specific APIs** (`torch.cuda.jiterator`, cuBLAS, TensorExpr CUDA
-   fuser, CUDA-only decorators like `@onlyCUDA`). If so -> `Not Appliable` with the exact API named.
+   fuser, CUDA-only decorators like `@onlyCUDA`). If so -> `Not applicable` with the exact API named.
 4. **Check if the test file is in the XPU CI test list** (torch-xpu-ops test runner). If not,
    explain that the file is not included in the XPU CI runner.
 5. `DetailReason` MUST always name the specific API or feature tested and WHY XPU does or does not
@@ -197,15 +222,15 @@ These are examples, not substitutes for analysis. Re-check source before applyin
   - DetailReason: `XPU graph coverage missing` or a similarly specific XPU graph gap.
   - DetailReason should mention that XPU graph APIs exist and identify the missing XPU test coverage.
 - Jiterator blank-status rows:
-  - Reason: `Not Appliable`.
+  - Reason: `Not applicable`.
   - DetailReason: `CUDA-specific API: torch.cuda.jiterator`.
   - DetailReason should mention the concrete `torch.cuda.jiterator` APIs used.
 - cuBLAS deterministic blank-status rows:
-  - Reason: `Not Appliable`.
+  - Reason: `Not applicable`.
   - DetailReason: `CUDA-specific API: cuBLAS`.
   - DetailReason should mention the cuBLAS determinism behavior and any `@onlyCUDA` evidence.
 - TensorExpr CUDA fuser rows:
-  - Reason: `Not Appliable`.
+  - Reason: `Not applicable`.
   - DetailReason: `CUDA-specific API: TensorExpr CUDA fuser`.
 - Existing XPU wrapper/direct file with generated XPU test but no XPU workbook result:
   - Reason: `To be enabled`.
@@ -215,19 +240,18 @@ These are examples, not substitutes for analysis. Re-check source before applyin
   - If the exact case is collected or generated from `pytorch/test`, classify using that direct
     source evidence. Do not require a `third_party/torch-xpu-ops/test/xpu` wrapper.
   - If the file exists but the exact method/case is absent and targeted collection runs zero tests,
-    classify `Not applicable / Community Changes` with the source and collection evidence.
+    classify `Community Change` with the source and collection evidence.
   - Example: `test/dynamo/test_modules.py` exists, but `OptimizedModuleTest.test_assign_does_not_exist`
     was absent from local source, absent from `origin/release/2.12`, and `pytest --collect-only -k
     assign_does_not_exist` collected zero tests; this is not `XPU test file missing`.
-- Local base test missing or method removed for a non-distributed row:
-  - Reason: `Not applicable`.
-  - DetailReason: `Community Changes`.
-  - DetailReason should name the local source evidence and state that non-distributed release/2.12 was
-    not used.
+- Local base test missing or method removed/refactored for a non-distributed row:
+  - Reason: `Community Change`.
+  - DetailReason should name the source evidence, e.g. `Base function not found in upstream
+    <testfile>; function removed, renamed, or refactored`.
 
 ## Output Rules
 
-- `Reason`: use canonical workbook labels: `To be enabled`, `Not Appliable`, `Not applicable`,
+- `Reason`: use canonical workbook labels: `To be enabled`, `Not applicable`, `Not applicable`,
   or `Community Change`.
 - `DetailReason`: be specific enough to act on. Always use full issue/PR URLs
   (e.g., `https://github.com/pytorch/pytorch/issues/NNNNN`), never bare numbers like `#NNNNN`.

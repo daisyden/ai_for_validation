@@ -24,8 +24,9 @@ semantic analysis of `message_xpu`, linked issues, local source, and targeted lo
 - Do not classify by message pattern alone. The message points to evidence; it is not the conclusion.
 - Always check linked issue state (OPEN vs CLOSED) before classifying.
 - If `message_xpu` is empty or nondiagnostic, run the test locally.
-- Local runs must use `pytorch_opencode_env` with up-to-date nightly torch, triton-xpu, and
-  source code (see parent `classify_ut/SKILL.md` Environment Setup).
+- Local runs must use `pytorch_opencode_env` with up-to-date nightly torch, triton-xpu, and the
+  configured source checkout (`PYTORCH_SRC`, default `$HOME/upstream/pytorch`; see parent
+  `classify_ut/SKILL.md` Environment Setup).
 - Do not change `Reason TBD` after classification.
 - Mark updated cells blue.
 
@@ -42,7 +43,7 @@ If `last_status_xpu = passed` (test previously passed on XPU but is now skipped)
 
 1. This is likely a regression from an upstream commit. Check git log first:
    ```bash
-   cd /home/daisyden/opencode/classify/pytorch
+   cd "$PYTORCH_SRC"
    git log --oneline -20 -- <testfile_cuda>
    ```
 2. For candidate commits, inspect the diff:
@@ -82,7 +83,7 @@ always extract and include the full URL in `DetailReason`.**
 | `test is slow; run with PYTORCH_TEST_WITH_SLOW` | Slow test gate | Run with `PYTORCH_TEST_WITH_SLOW=1` |
 | `Requires at least N GPUs` | Hardware requirement | `Test Enviroment limitation` |
 | `not-support-multithread` | XPU feature gap | `Feature gap` + #3098 |
-| `Only runs on cuda` | CUDA-only gate | Analyze what API is CUDA-only |
+| `Only runs on cuda` | CUDA-only gate | Apply **CUDA-Only Judgement Rule** (parent skill): look up the API in the `Not applicable` sheet of `${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx`. Match -> `Not applicable` with Issue ID cited. No match -> `To be enabled` (often a stale gate or SM-capability check). |
 | `Skipped!` (generic) | Various mechanisms | Read source to find skip dict/decorator |
 | `Fails with Triton update` | Unconditional `unittest.skip` | `Test Enviroment limitation` (all backends) |
 | `Fails under GCC 13` | Compiler version | `Test Enviroment limitation` |
@@ -130,6 +131,7 @@ When `message_xpu` is just `Skipped!` with no explanation:
 3. **Search for known issues**:
    ```bash
    gh search issues "<test_name> xpu" --repo=intel/torch-xpu-ops --limit=5
+   gh search issues "<test_name> xpu" --repo=pytorch/pytorch --limit=5
    ```
 
 4. **Try running without the skip**:
@@ -139,13 +141,14 @@ When `message_xpu` is just `Skipped!` with no explanation:
 
 5. **Classify based on results**:
    - Base test passes -> `To be enabled` (skip is stale)
-    - Base test fails with known issue -> `Failures (xpu broken)` + issue link in DetailReason
-    - Base test fails without known issue -> `Failures (xpu broken)` + `[Issue_TBD]` prefix in DetailReason
+   - Base test fails with known issue -> `Failures (xpu broken)` + issue link in DetailReason
+   - Base test fails without known issue after searching both repos -> `Failures (xpu broken)` +
+     `[Issue_TBD]` prefix in DetailReason
 
 ### Step 6: Handle Slow Tests
 
 ```bash
-source ~/miniforge3/bin/activate pytorch_opencode_env && \
+source "${CONDA_ACTIVATE:-$HOME/miniforge3/bin/activate}" "${PYTORCH_ENV:-pytorch_opencode_env}" && \
 PYTORCH_TEST_WITH_SLOW=1 python test/inductor/<file>.py -k "<test_name>" -v
 ```
 

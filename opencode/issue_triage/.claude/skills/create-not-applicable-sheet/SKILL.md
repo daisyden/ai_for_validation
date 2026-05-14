@@ -1,7 +1,7 @@
-# Create Not Appliable Sheet
+# Create Not applicable Sheet
 
 ## Overview
-This skill creates a "Not Appliable" sheet in `torch_xpu_ops_issues.xlsx` that lists all issues tagged with `wontfix` or `not_target` labels, extracting the torch ops or APIs mentioned in each issue.
+This skill creates a "Not applicable" sheet in `torch_xpu_ops_issues.xlsx` that lists all issues tagged with `wontfix` or `not_target` labels, extracting the torch ops or APIs mentioned in each issue.
 
 ## Workflow
 1. Load issues from `torch_xpu_ops_issues.xlsx` (Issues sheet)
@@ -11,7 +11,7 @@ This skill creates a "Not Appliable" sheet in `torch_xpu_ops_issues.xlsx` that l
    - `torch.xxx` - PyTorch API references
    - `operator 'aten::xxx'` - quoted ATen operators
    - Specific keywords (TypedStorage, SDPA, etc.)
-4. Create/update "Not Appliable" sheet with extracted data
+4. Create/update "Not applicable" sheet with extracted data
 
 ## Usage
 ```bash
@@ -23,7 +23,7 @@ python3 create_not_applicable_sheet.py
 - `/home/daisydeng/ai_for_validation/opencode/issue_triage/result/torch_xpu_ops_issues.xlsx` (Issues sheet)
 
 ## Output
-- Adds/updates "Not Appliable" sheet with columns:
+- Adds/updates "Not applicable" sheet with columns:
   - Issue ID
   - Title
   - Torch Ops/API
@@ -39,7 +39,7 @@ def create_not_applicable_sheet(
     excel_path: str = '/home/daisydeng/ai_for_validation/opencode/issue_triage/result/torch_xpu_ops_issues.xlsx',
     output_path: str = None
 ):
-    """Create Not Appliable sheet from issues with wontfix/not_target labels"""
+    """Create Not applicable sheet from issues with wontfix/not_target labels"""
     wb = openpyxl.load_workbook(excel_path)
     ws = wb['Issues']
     
@@ -61,11 +61,11 @@ def create_not_applicable_sheet(
                 'reason': 'wontfix/not_target'
             })
     
-    # Create/update Not Appliable sheet
-    if 'Not Appliable' in wb.sheetnames:
-        del wb['Not Appliable']
+    # Create/update Not applicable sheet
+    if 'Not applicable' in wb.sheetnames:
+        del wb['Not applicable']
     
-    ws_na = wb.create_sheet('Not Appliable')
+    ws_na = wb.create_sheet('Not applicable')
     ws_na.append(['Issue ID', 'Title', 'Torch Ops/API', 'Labels', 'Reason'])
     
     for item in not_appliable:

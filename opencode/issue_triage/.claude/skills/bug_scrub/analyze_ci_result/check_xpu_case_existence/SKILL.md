@@ -8,16 +8,21 @@ Deep analysis of PyTorch XPU test case existence by tracing through code executi
 ### Environment
 1. conda environment `pytorch_opencode_env` must be available:
    ```bash
-   source ~/miniforge3/bin/activate pytorch_opencode_env && conda activate pytorch_opencode_env
+   source "${CONDA_ACTIVATE:-$HOME/miniforge3/bin/activate}" "${PYTORCH_ENV:-pytorch_opencode_env}"
    ```
 
 2. Required directory structure:
-   - Main pytorch repo: `/home/daisydeng/pytorch`
-   - XPU tests location: `/home/daisydeng/pytorch/third_party/torch-xpu-ops/test/xpu/`
-   - Base tests location: `/home/daisydeng/pytorch/test/`
+   - Main pytorch repo: `$PYTORCH_SRC`
+   - XPU tests location: `$PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu/`
+   - Base tests location: `$PYTORCH_SRC/test/`
     - Distributed release-branch reference: https://github.com/daisyden/pytorch/tree/release/2.12
 
 3. torch-xpu-ops is stored as third_party submodule at `third_party/torch-xpu-ops`
+
+4. Source checkout selection:
+   - Use the user-provided source path when given.
+   - Otherwise set `PYTORCH_SRC=${PYTORCH_SRC:-$HOME/upstream/pytorch}`.
+   - Do not hard-code private checkout paths in reusable commands.
 
 ### Required Tools
 1. `read` - Read files and directories with line numbers
@@ -61,15 +66,36 @@ Do not stop after a filename or grep hit. Read the class/function body, decorato
 parametrization, wrapper/direct XPU file, and skip-list entry that determines whether the exact
 XPU case is generated, skipped, or absent.
 
+
+### Base-Function-First Rule
+
+Before checking whether an XPU case exists, first identify the **base function** in the upstream
+PyTorch test file. The base function is the function actually defined in source that most closely
+generates the workbook case after decorators, device suffixes, dtype suffixes, OpInfo names, and
+other parameter suffixes are applied.
+
+Decision order:
+1. Check `$PYTORCH_SRC/<testfile_cuda>` for the base function.
+2. If the base function is absent, classify the workbook row as `Community Change`; the test was
+   removed, renamed, moved, or refactored in the compared source.
+3. If the base function exists, derive the expected XPU case by replacing `_cuda` with `_xpu` in
+   `name_cuda`, then verify XPU generation through source, wrappers, parametrization, and collection.
+4. A refactor from old generated names into one device-parameterized base function is also a
+   community change for the old workbook case name. Example: old MinifierTests
+   `test_after_dynamo_cpu_*` / `test_after_dynamo_cuda_*` rows replaced by
+   `test_after_dynamo_*(self, device)`.
+5. For Non-Inductor rows, inspect `$PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu/**` including
+   subfolders before deciding the XPU case is absent.
+
 #### 1.1 Check torch-xpu-ops main location
 ```bash
-ls -la /home/daisydeng/pytorch/third_party/torch-xpu-ops/test/xpu/
+ls -la $PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu/
 ```
 Look for the xpu test file matching the base test name pattern `<base_test>_xpu.py`
 
 #### 1.2 Check base test in pytorch/test
 ```bash
-ls -la /home/daisydeng/pytorch/test/<base_test>.py
+ls -la $PYTORCH_SRC/test/<base_test>.py
 ```
 Verify base test class exists in pytorch/test
 
@@ -97,16 +123,16 @@ Known dictionary files to check:
 ```bash
 # Step 1: Which dictionary does run_distributed.py import?
 grep -n "skip_list_dist\|skip_list_dict_local\|skip_dict" \
-  /home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu/run_distributed.py
+  $PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu/run_distributed.py
 
 # Step 2: Is the upstream test file registered in every active distributed dictionary?
 grep -n "<test_filename>" \
-  /home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu/skip_list_dist.py
+  $PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu/skip_list_dist.py
 
 # Step 3: If present, inspect local dictionary overrides too
-test -f /home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu/skip_list_dict_local.py && \
+test -f $PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu/skip_list_dict_local.py && \
   grep -n "<test_filename>" \
-    /home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu/skip_list_dict_local.py
+    $PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu/skip_list_dict_local.py
 ```
 
 `skip_dict` / local skip-dict structure:
@@ -125,9 +151,9 @@ skip_dict = {
 
 ```bash
 # Step 4: Read active dictionaries in full to see registered files and skipped cases
-cat /home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu/skip_list_dist.py
-test -f /home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu/skip_list_dict_local.py && \
-  cat /home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu/skip_list_dict_local.py
+cat $PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu/skip_list_dist.py
+test -f $PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu/skip_list_dict_local.py && \
+  cat $PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu/skip_list_dict_local.py
 ```
 
 ---
@@ -137,7 +163,7 @@ test -f /home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/
 Some tests exist ONLY in torch-xpu-ops and have NO pytorch/test equivalent.
 
 ```bash
-ls -la /home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu/distributed/
+ls -la $PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu/distributed/
 ```
 
 **Known XPU-only distributed tests (no pytorch/test equivalent):**
@@ -169,7 +195,7 @@ These files do NOT use `XPUPatchForImport` — they are standalone XPU-native te
 
 For tests that might be in extended/nn/functorch/quantization subfolders:
 ```bash
-find /home/daisydeng/pytorch/third_party/torch-xpu-ops/test/xpu/ -name "<test_pattern>*.py"
+find $PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu/ -name "<test_pattern>*.py"
 ```
 
 #### 1.5 **Check daisyden release branch for distributed tests only (CRITICAL)**
@@ -197,7 +223,7 @@ curl -s https://raw.githubusercontent.com/daisyden/pytorch/release/2.12/test/<ba
   grep -n "<test_class_or_method>"
 
 # Option C: Use git to check a specific ref if submodule/remote is configured
-cd ~/pytorch && git show release/2.12:test/<base_test>.py 2>/dev/null | grep -n "<pattern>"
+cd "$PYTORCH_SRC" && git show release/2.12:test/<base_test>.py 2>/dev/null | grep -n "<pattern>"
 ```
 
 **Decision logic with release branch check (distributed tests only):**
@@ -246,7 +272,7 @@ that do not use `XPUPatchForImport`. For those files, inspect the XPU file itsel
 ### Step 2: Understand XPUPatchForImport Behavior
 
 #### 2.1 Read xpu_test_utils.py XPUPatchForImport class
-File: `/home/daisydeng/pytorch/third_party/torch-xpu-ops/test/xpu/xpu_test_utils.py` starting at line 972
+File: `$PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu/xpu_test_utils.py` starting at line 972
 
 Critical finding: `XPUPatchForImport(False)` OVERRIDES decorators during import!
 
@@ -307,7 +333,7 @@ Only if `patch_test_case=True` instantiation is disabled.
 #### 3.1 Find the decorated test function
 ```grep
 pattern: <test_function_name_without_prefix>
-path: /home/daisydeng/pytorch/test
+path: $PYTORCH_SRC/test
 ```
 
 Extract the test function and its decorator:
@@ -327,7 +353,7 @@ Key elements to identify:
 #### 3.3 Find instantiate_device_type_tests call
 ```grep
 pattern: instantiate_device_type_tests.*<TestClassName>
-path: /home/daisydeng/pytorch/test/<base_test>.py
+path: $PYTORCH_SRC/test/<base_test>.py
 ```
 
 Key parameter: `allow_xpu=True` must be present for XPU test generation
@@ -369,7 +395,7 @@ shape_funcs = [op for op in ops_and_refs if isinstance(op, ShapeFuncInfo)]
 #### 4.3 Find OpInfo for the operator
 ```grep
 pattern: BinaryUfuncInfo\('<op_name>'\)|OpInfo\('<op_name>'\)|UnaryUfuncInfo\('<op_name>'\)
-path: /home/daisydeng/pytorch/torch/testing/_internal/
+path: $PYTORCH_SRC/torch/testing/_internal/
 ```
 
 Note: The op_name extraction depends on context:
@@ -386,7 +412,7 @@ skips=...                     # Skip decorators with device_type='xpu'
 ```
 
 #### 4.5 Understand dtype function expansion
-File: `/home/daisydeng/pytorch/torch/testing/_internal/common_dtype.py`
+File: `$PYTORCH_SRC/torch/testing/_internal/common_dtype.py`
 
 Key dtype helpers:
 ```python
@@ -426,8 +452,8 @@ Examples:
 
 #### 6.1 Collect tests to verify parametrization
 ```bash
-source ~/miniforge3/bin/activate pytorch_opencode_env && conda activate pytorch_opencode_env && \
-cd /home/daisydeng/pytorch/third_party/torch-xpu-ops/test/xpu && \
+source "${CONDA_ACTIVATE:-$HOME/miniforge3/bin/activate}" "${PYTORCH_ENV:-pytorch_opencode_env}" && \
+cd "$PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu" && \
 python3 -m pytest <test_file>_xpu.py --collect-only 2>/dev/null | \
 grep "<test_function_name>_<op_name>"
 ```
@@ -465,19 +491,27 @@ List all collected variants to verify which dtypes are available
 - Check if test file uses `XPUPatchForImport(True)`
 - Tests get imported but NOT instantiated when patching is True
 
-**Reason 5: Test renamed or moved in base pytorch/test**
-- Test no longer exists in expected location
-- Search for renaming in git history or similar test names
-- Only classify `Not applicable / Community Changes` when the CUDA test itself no longer exists
-  or was renamed/removed in the PyTorch source being compared. If the CUDA case and XPU case both
-  exist after parametrization (for example `test_Conv1d_pad2_cuda` and `test_Conv1d_pad2_xpu`),
-  it is not a community-change case.
+**Reason 5: Test renamed, moved, removed, or refactored in base pytorch/test**
+- Base function no longer exists in the expected source location, or the workbook case name was
+  replaced by a different base function/signature.
+- Search for renaming/refactoring in source and git history when needed.
+- Classify `Community Change` when the CUDA/base test itself no longer exists, was renamed/removed,
+  or was refactored in the PyTorch source being compared. If the CUDA case and XPU case both exist
+  after parametrization (for example `test_Conv1d_pad2_cuda` and `test_Conv1d_pad2_xpu`), it is not
+  a community-change case.
 
 **Reason 6: CUDA-specific API**
-- If classifying `Not Appliable`, the DetailReason must name the exact API/feature, e.g.
-  `CUDA-specific API: torch.cuda.jiterator`, `CUDA-specific API: cuBLAS`, or
-  `CUDA-specific API: CUDA-only JIT fuser`.
-- Do not classify CUDA graph/cudagraph rows as `Not Appliable` solely due to CUDA naming;
+- Only classify `Not applicable` (CUDA-only branch) when the underlying API/torch op appears in
+  the `Not applicable` sheet of `${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx`
+  (column `Operation/API`). This is the **CUDA-Only Judgement Rule** — it is the single source
+  of truth. See the parent `classify_ut/SKILL.md` for the full rule and lookup snippet.
+- DetailReason must name the exact API/feature AND cite the matching `Issue ID`, e.g.
+  `CUDA-specific API: torch.cuda.jiterator (Not applicable sheet, Issue 2164)`,
+  `CUDA-specific API: cuBLAS (Not applicable sheet, Issue NNNN)`, or
+  `CUDA-specific API: aten::_cudnn_rnn (Not applicable sheet, Issue 2472)`.
+- If no matching `Operation/API` entry exists, the behavior is NOT CUDA-only; re-route to
+  `To be enabled`, `Failures (xpu broken)`, `Feature gap`, or `Community Change`.
+- Do not classify CUDA graph/cudagraph rows as `Not applicable` solely due to CUDA naming;
   XPU graph support exists via `_XPUGraph` and `torch.accelerator.Graph`, so missing/failing
   coverage should generally be `To be enabled / XPU graph coverage missing` after code inspection.
 

@@ -15,12 +15,14 @@ preserved the original workbook.
 - Workbook row fields: `testfile_cuda`, `classname_cuda`, `name_cuda`, `testfile_xpu`,
   `classname_xpu`, `name_xpu`, `status_xpu`, `message_xpu`, `Reason`, `DetailReason`,
   `Reason TBD`.
-- Local PyTorch checkout: `/home/daisyden/opencode/classify/pytorch`.
-- XPU test checkout: `/home/daisyden/opencode/classify/pytorch/third_party/torch-xpu-ops/test/xpu`.
+- Local PyTorch checkout: use the user-provided source path via `PYTORCH_SRC`; default to
+  `$HOME/upstream/pytorch`. Do not hard-code private checkout paths in reusable logic.
+- XPU test checkout: `$PYTORCH_SRC/third_party/torch-xpu-ops/test/xpu`.
 - Conda environment: `pytorch_opencode_env` with up-to-date nightly torch, triton-xpu, and
   source code (see parent `classify_ut/SKILL.md` Environment Setup).
-- GitHub issue source of truth: `intel/torch-xpu-ops` issues first; use PyTorch issues only
-  when the message or local source explicitly references a PyTorch issue.
+- GitHub issue source of truth: search both `intel/torch-xpu-ops` and `pytorch/pytorch` for known
+  issues. Prefer `intel/torch-xpu-ops` for XPU implementation bugs, but do not skip PyTorch issues
+  when source, message, disabled-test infrastructure, or upstream behavior is relevant.
 
 ## Required Tools
 
@@ -46,8 +48,8 @@ preserved the original workbook.
   package directly, run from outside the PyTorch checkout, for example `/tmp/opencode`. When running
   tests, use the correct test root described below.
 - If a matching known issue exists, `DetailReason` must include the issue URL.
-- If no known issue exists after searching `intel/torch-xpu-ops`, `DetailReason` must start with
-  `[Issue_TBD]` and include the concrete error summary.
+- If no known issue exists after searching both `intel/torch-xpu-ops` and `pytorch/pytorch`,
+  `DetailReason` must start with `[Issue_TBD]` and include the concrete error summary.
 - Do not change `Reason TBD` after classification. It records whether the original `Reason` was
   blank before analysis.
 - Mark updated `Reason` and `DetailReason` cells blue; leave unrelated cells alone.
@@ -59,12 +61,12 @@ Run only targeted tests. Never run a whole suite.
 - Inductor or Dynamo tests whose source is in `pytorch/test/` should be run from the PyTorch test
   folder:
   ```bash
-  source ~/miniforge3/bin/activate pytorch_opencode_env && \
+  source "${CONDA_ACTIVATE:-$HOME/miniforge3/bin/activate}" "${PYTORCH_ENV:-pytorch_opencode_env}" && \
   python dynamo/test_dicts.py DictSubclassMethodsTests.test_binop_or
   ```
 - XPU wrapper/direct tests should be run from `third_party/torch-xpu-ops/test/xpu`:
   ```bash
-  source ~/miniforge3/bin/activate pytorch_opencode_env && \
+  source "${CONDA_ACTIVATE:-$HOME/miniforge3/bin/activate}" "${PYTORCH_ENV:-pytorch_opencode_env}" && \
   python test_ops_xpu.py TestCommonXPU.test_dtypes_addmm_xpu
   ```
 - Distributed upstream tests generally run from `pytorch/test/` with the exact upstream file/class
@@ -96,8 +98,9 @@ Run only targeted tests. Never run a whole suite.
    - XPU wrapper/direct file under `third_party/torch-xpu-ops/test/xpu/**` if present.
    - Distributed skip dictionaries and remote release branch only for distributed tests, following
      the parent `classify_ut` rules.
-4. Search `intel/torch-xpu-ops` issues semantically for the concrete failing behavior. Use the
-   method name, operator name, exception type, and meaningful error phrase, not just the file name.
+4. Search both `intel/torch-xpu-ops` and `pytorch/pytorch` issues semantically for the concrete
+   failing behavior. Use the method name, operator name, exception type, and meaningful error phrase,
+   not just the file name.
 5. If `message_xpu` is missing or too generic, run the exact test locally and use that result as
    evidence. If the local run passes, classify as `To be enabled`; if it fails, use the local error
    and continue issue search.
@@ -139,8 +142,10 @@ These are examples, not a substitute for analysis. Re-check source and issue sta
   - Evidence: test name contains `test_cublas_deterministic` and issue/source confirms matmul
     deterministic behavior is tracked for XPU.
   - Known issue: `https://github.com/intel/torch-xpu-ops/issues/2481` when the case matches.
-  - Reason: `Failures (xpu broken)` for failed rows, or `Feature gap` for skipped CUDA-only rows
-    handled by the skipped-case skill.
+  - Reason: `Failures (xpu broken)` for failed rows. For skipped rows whose underlying API is
+    listed in the `Not applicable` sheet of `${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx`
+    (see the **CUDA-Only Judgement Rule** in the parent skill), use `Not applicable` instead;
+    otherwise use `Feature gap` and let the skipped-case skill handle it.
 
 ## Output Rules
 
