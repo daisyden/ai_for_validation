@@ -29,6 +29,11 @@ semantic analysis of `message_xpu`, linked issues, local source, and targeted lo
   `classify_ut/SKILL.md` Environment Setup).
 - Do not change `Reason TBD` after classification.
 - Mark updated cells blue.
+- For every row with `Reason TBD = True`, `DetailReason` MUST start with a confidence prefix
+  `[Confidence: HIGH|MEDIUM|LOW]` per the **Confidence Rubric & Need-Human-Check Rule** in the
+  parent skill. When the rubric resolves to LOW, set `Reason = "Need human check"` and
+  enumerate which axes were checked (sheet match, base function, XPU wrapper, known issue,
+  local run) and why each was inconclusive.
 
 ## Workflow Steps
 
