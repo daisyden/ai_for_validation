@@ -708,152 +708,175 @@ Without this evidence, `Local Passed` is NOT a valid classification.
 
 ## Refinement Rules (Deep Analysis — NOT Pattern Matching)
 
-This section captures **post-initial-classification refinement** rules learned from
-WW18-26 review. A row may have been written with one verdict in the first pass and
-require revision once deeper evidence is examined. All three rules below are
-**deterministic deep analysis** — they require reading upstream source, parsing the
-NA workbook, and querying issue labels. **Never substring-match `message_xpu` alone.**
+After the initial classification pass, every verdict MUST be re-examined through
+a **refinement pass** before the workbook is finalized. The first pass is
+necessarily shallow (per-row, local context only); refinement is where deeper,
+cross-source evidence is gathered.
 
-Apply these passes IN ORDER, after the initial classification pass, before final save.
+**Core principle** — refinement is **deterministic deep analysis**, never substring
+or regex matching against `message_xpu`/`name_cuda`/skip strings alone. Any verdict
+that cannot survive deep analysis MUST be revised or downgraded to
+`Human Investigation`.
 
-### Rule R1 — SDPA / Dynamic-Skip Cross-Backend Check (TEL → Community Change)
+### General Refinement Methodology
 
-**Trigger**: row currently classified `Test Enviroment limitation` AND `message_xpu`
-indicates a dynamic `skipTest(...)` from the test body (not a `@skipIf` decorator
-gated on backend availability).
+For every Reason category (`Community Change`, `Failures (xpu broken)`,
+`Feature gap`, `To be enabled`, `Test Enviroment limitation`, `Local Passed`,
+`Not applicable`, `Need human check`):
 
-**Naive failure mode**: classifying as `Test Enviroment limitation` based purely on
-the skip string ("Will call _fill_mem_eff_dropout_mask with too many threads!",
-"Reference: ...", etc.). This is wrong when **CUDA also skips dynamically at the
-same source line** — that proves the skip is a community-added guard, not an XPU
-environment gap.
+1. **Define the evidence contract** for the category — what concrete artifacts
+   would convince a skeptical reviewer that this Reason is correct? Evidence
+   contracts are listed in **Column Definitions** and **Confidence Rubric**;
+   refinement enforces them. Typical artifacts:
+   - upstream source path with `:LINE` (read the actual code, not the test name)
+   - introducing/guilty PR or commit (`git log -L`, `git blame -L`, `gh pr view`)
+   - issue URL with current OPEN/CLOSED state and label set (`gh issue view`)
+   - cross-backend behavior comparison (CUDA upstream vs XPU wrapper)
+   - local run log path with the test's actual outcome
+   - entry in a curated reference workbook (e.g., NA / Issues sheet)
+2. **List the naive failure modes** for the category — the cheap heuristics that
+   commonly produce wrong verdicts. Examples (illustrative, NOT exhaustive):
+   - matching on the substring `cuda` in `name_cuda`
+   - trusting a skip string without checking whether the upstream backend also
+     skips at the same source line
+   - calling something "missing in XPU" without inspecting the wrapper file
+   - using an issue ID without checking its current labels/state
+3. **Run a deep-analysis procedure** that gathers ALL artifacts in the evidence
+   contract from authoritative sources:
+   - the actual upstream test source under `${PYTORCH_SRC}/test/`
+   - the actual XPU wrapper under
+     `${PYTORCH_SRC}/third_party/torch-xpu-ops/test/xpu/`
+   - live or cached issue data (`gh`, `issues_map.json`)
+   - cross-backend reference workbooks
+     (`${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx`)
+   - local pytest logs under `/tmp/opencode/<workbook>_local_verify/`
+4. **Decide**:
+   - All required artifacts present and consistent → keep the verdict; write
+     them into `DetailReason` so reviewers can verify.
+   - Some artifacts present, but they contradict the verdict → re-route to the
+     Reason whose evidence contract the artifacts actually satisfy.
+   - Required artifacts missing or unobtainable within the refinement budget →
+     downgrade to `Need human check` / `Human Investigation` and record exactly
+     which evidence sources were checked and what was found.
+5. **Document the decision** in `DetailReason` with concrete citations
+   (issue URL, `file.py:LINE`, PR number, log path). Update `Confidence` per
+   the rubric (HIGH iff DetailReason cites issue # / URL / log path /
+   `file.py:NNN`; otherwise MEDIUM).
 
-**Deep-analysis procedure** (deterministic, no LLM):
+The two rules below are **illustrative templates**, not the complete rule set.
+Apply the same methodology to any pattern where shallow evidence may diverge
+from deep evidence.
 
-1. Identify the XPU wrapper that owns the row (e.g., `test_transformers_xpu.py`).
-2. Extract the corresponding upstream test path (strip `_xpu` and resolve to
-   `${PYTORCH_SRC}/test/<name>.py`).
-3. `grep -n "skipTest" <upstream_path>` and locate every dynamic-skip line whose
-   message matches the row's `message_xpu` (after stripping device tokens).
-4. For each match, read ±15 lines of context and determine whether the guard fires
-   for the row's parameter values (e.g., `seq_len_q > 1024`, dtype, SM capability).
-   Compare against the row's `name_cuda` parameter encoding.
-5. If the upstream guard fires for CUDA with the same parameters AND the message is
-   identical → **the community added this skip cross-backend** → reclassify as
-   **Community Change**. DetailReason MUST cite:
-   - upstream file path with `:LINE` (e.g., `test/test_transformers.py:3860`)
-   - introducing PR(s) found via `git log -L <line>,<line>:<file>` or
-     `git blame -L <line>,<line> <file>`
-   - the matching parametrize line if the skip depends on `@parametrize` values
-6. If only XPU skips and CUDA runs → keep `Test Enviroment limitation` OR re-route
-   to `Failures (xpu broken)` / `Feature gap` per the **Dynamic-Skip Rule**.
+### Template R1 — Cross-Backend Dynamic-Skip Check (illustrative)
 
-**Worked precedent (WW18-26)**: 576 mem_eff_attention rows reclassified TEL →
-Community Change. Evidence: upstream `test/test_transformers.py:3860` and `:3978`
-both contain identical `skipTest("Will call _fill_mem_eff_dropout_mask with too
-many threads!")`; parametrize at `:3795` instantiates `seq_len_q=2048` for SM80+
-CUDA, and all TBD rows use `seq_len_q=2048`. Lineage PRs #102038, #103704, #133049.
+**Pattern**: a row's verdict is anchored on a dynamic `skipTest(...)` message,
+and the suspicion is that the skip is an upstream community-added guard rather
+than an XPU-specific environmental gap.
 
-### Rule R2 — Strict NA Evidence Rule (NA → Human Investigation when unsupported)
+**Naive failure mode**: classifying based on the skip string alone (e.g.,
+keeping `Test Enviroment limitation` because the message mentions a hardware
+constraint).
 
-**Trigger**: row currently classified `Not applicable` (any source).
+**Deep-analysis procedure**:
 
-**Naive failure mode**: keeping `Not applicable` because `name_cuda` contains
-`cuda`, or because the test wasn't found in the XPU collection, or because skip
-text says "Only runs on cuda" without a referenced issue. None of these are
-sufficient evidence.
+1. Resolve the XPU wrapper that owns the row (e.g., `test_<name>_xpu.py`) and
+   the corresponding upstream test (`${PYTORCH_SRC}/test/<name>.py`).
+2. Grep the upstream test source for every `skipTest(...)` whose message
+   matches the row's `message_xpu` after stripping device tokens.
+3. Read ±15 lines of context around each match. Determine whether the guard
+   would also fire on CUDA given the row's parametrize values (dtype, shape,
+   capability gate, etc.).
+4. If CUDA upstream skips at the same source line with the same parameters →
+   the community added this skip cross-backend → re-route to **Community
+   Change** and cite `<file>:<line>` plus the introducing PR(s) found via
+   `git blame -L` / `git log -L`.
+5. If only XPU skips and CUDA runs → keep `Test Enviroment limitation` OR
+   re-route to `Failures (xpu broken)` / `Feature gap` per the
+   **Dynamic-Skip Rule** above.
 
-**Authoritative evidence sources** — `Not applicable` requires AT LEAST ONE:
+Apply analogous cross-backend checks for any verdict that hinges on
+"this only happens on XPU" claims.
 
-- **E1**: `message_xpu` contains a documented skip string from a recognized NA
-  family. Allowed families (must match exactly, after stripping device tokens):
-  - `Only runs on cuda` / `requires CUDA` (jiterator, cuDNN-only kernels)
-  - `TypedStorage is deprecated and not available on XPU`
-  - `Efficient or cuDNN Attention was not built for this system`
-  - `CUDA-specific API: <api>` style messages that name a CUDA-only symbol
-  - Any other family pre-listed in the NA workbook (see E2)
-- **E2**: An entry in `${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx`,
-  sheet `Not Appliable` (sic) or `Not applicable`, whose `Test Case` /
-  `Test Name` column matches the row's nodeid (full or stem match) OR whose
-  `Issue ID` is referenced from the row's matched issues.
-- **E3**: A matched issue (from `Issues` sheet of the same workbook, or
-  `gh issue view <repo>#<id>`) whose `Labels` column contains `not_target` OR a
-  `wontfix` variant (`won't fix`, `wontfix`, `wont-fix`, `wont_fix`). Both
-  `intel/torch-xpu-ops` and `pytorch/pytorch` are valid repos.
+### Template R2 — Strict Evidence-Source Audit (illustrative)
 
-**Deep-analysis procedure** (deterministic, no LLM):
+**Pattern**: a Reason category has a small, enumerable set of authoritative
+evidence sources. Naive runs may assign that Reason without checking any of
+them.
 
-1. Load NA workbook once: parse "Not Appliable" / "Not applicable" sheets to a
-   map keyed by normalized nodeid → `{issue_id, justification}`. Cache as
-   `na_entries.json` for reuse.
-2. For each NA row:
-   a. Strip device suffix (`_xpu`, `_cuda`) and parametrize tokens to a canonical
-      nodeid form for matching.
-   b. Check E1: scan `message_xpu` against the allowed-family list above. Record
-      which family matched.
-   c. Check E2: lookup canonical nodeid in NA workbook map.
-   d. Check E3: for each issue in the row's `_match_iids`, fetch labels (cached
-      `issues_map.json` or live `gh issue view`); record any `not_target` /
-      `wontfix` hits.
-3. If ANY of E1/E2/E3 produced evidence → keep `Not applicable`. DetailReason
-   MUST cite the specific evidence (exact skip string OR `NA workbook row #N
-   (Issue #NNNN)` OR `Issue #NNNN label='not_target'`).
-4. If NONE → reclassify as **Human Investigation**. DetailReason MUST state
-   *which* evidence sources were checked and that none matched, e.g.:
-   `[Confidence: MEDIUM] Human Investigation. No NA evidence: message_xpu empty;
-   not in NA workbook 'Not Appliable' sheet; matched issue #2618 has labels
-   ['module: sdpa'] (no not_target/wontfix).`
+**Naive failure mode**: keeping the verdict because the surface text "looks
+like" the category (e.g., a skip string mentions `cuda`, so the row is called
+`Not applicable`).
 
-**Worked precedent (WW18-26)**: 17 of 31 initial NA rows reclassified → Human
-Investigation. They were missing from XPU collection (parametrize variants not
-instantiated) rather than runtime-skipped with documented justification, so no
-E1/E2/E3 evidence existed. The 14 kept-NA rows each cite a specific skip string
-from the E1 allowed-family list.
+**Deep-analysis procedure**:
 
-**Common rejections** (do NOT use these as evidence):
-- `name_cuda` substring contains `cuda` → not evidence.
-- Test absent from XPU wrapper collection → that's a port gap, route to
-  `To be enabled` or Human Investigation, never NA.
-- Skip text "Only runs on cuda" present but no NA-workbook / `not_target`
-  backing → still NA only if message exactly matches the E1 family AND the
-  test exercises a clearly CUDA-only API (jiterator, cuDNN). Generic "cuda"
-  mentions without a CUDA-only API → Human Investigation.
+1. Enumerate the authoritative evidence sources for the category (see
+   **Column Definitions** and any category-specific rules above —
+   **CUDA-Only Judgement Rule**, **Dynamic-Skip Rule**, etc.). Typical sources:
+   - exact-match families in `message_xpu` (documented in the relevant rule)
+   - entries in the NA reference workbook
+     (`${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx`,
+     `Not Appliable` / `Not applicable` sheet)
+   - matched issues with category-determining labels
+     (`not_target`, `wontfix` variants, etc.)
+   - upstream source patterns (decorators, removed methods, renamed APIs)
+2. For each row, check each source explicitly. Record which sources were
+   consulted and what each returned.
+3. Keep the verdict only if at least one authoritative source produced
+   positive evidence. Cite that evidence in `DetailReason`.
+4. If no source produced positive evidence → re-route to `Human Investigation`
+   (or the closest category whose evidence contract IS satisfied) and record
+   the negative results, e.g.:
+   `[Confidence: MEDIUM] Human Investigation. No NA evidence: message_xpu
+   empty; not in NA workbook; matched issue #NNNN has labels [...] (no
+   not_target/wontfix).`
 
-### Rule R3 — `Failures` → `Failures (xpu broken)` Relabel
+Common rejections — never accept these as evidence:
 
-**Trigger**: row classified with bare `Failures` Reason.
+- A device-name substring (`cuda`, `xpu`) appearing somewhere in the row.
+- Test absent from XPU wrapper collection (that's a port gap, not the
+  category's evidence).
+- Skip text that mentions a backend but does not name a specific API or
+  parameter that justifies the category.
+- An issue ID without an up-to-date label/state check.
 
-**Procedure**: rewrite the `Reason` cell to the canonical label
-`Failures (xpu broken)`. No change to `DetailReason` or `Confidence`. This is a
-pure relabel pass — apply across the whole sheet after R1 and R2 so any newly
-created `Failures` verdicts also get normalized.
+### Canonical Label Pass
 
-The canonical label is fixed by the **Column Definitions** table above; the bare
-`Failures` form is reserved for legacy compatibility only and MUST NOT survive
-into a final `.agent.xlsx`.
+After deep-analysis rewrites, run one final normalization pass to enforce the
+canonical Reason labels from **Column Definitions**:
+
+- `Failures` → `Failures (xpu broken)` (or `Failures (XPU broken)`)
+- any other historical/alias label → its canonical form
+
+Pure relabel; `DetailReason` and `Confidence` unchanged.
 
 ### Refinement Pass Order & Re-Verification
 
-Run refinement in this fixed order:
+Order the refinement passes so that broader changes run before narrower ones:
 
-1. **R1 (SDPA / dynamic-skip)** — may convert TEL → Community Change for many
-   rows; do this first because it shrinks the set of rows that downstream rules
-   need to inspect.
-2. **R2 (strict NA evidence)** — may convert NA → Human Investigation; depends
-   only on NA workbook + issue labels, independent of R1's output.
-3. **R3 (Failures relabel)** — last, so it normalizes any `Failures` written by
-   R1 or R2.
+1. **Cross-backend / cross-source checks** (Template R1 and analogues) — may
+   reclassify large clusters; doing them first shrinks the set of rows
+   downstream passes must inspect.
+2. **Evidence-source audits** (Template R2 and analogues) — verify per-row
+   that the kept Reason has at least one authoritative artifact.
+3. **Canonical label pass** — last, so it normalizes labels written by earlier
+   passes as well as the initial classification.
 
-After each rule:
+After each pass:
 
-- Re-fill `Confidence` per the rubric (HIGH iff DetailReason cites
-  issue # / URL / log path / `file.py:NNN`; otherwise MEDIUM).
-- Blue-fill (`ADD8E6`) the changed cells. Preserve `Reason TBD` untouched.
+- Recompute `Confidence` per the rubric for every changed row.
+- Blue-fill (`ADD8E6`) any cell whose value changed. Preserve `Reason TBD`
+  untouched.
 - Read back the workbook and assert: 0 blank `Reason` rows in the
-  TBD-true population, distribution matches in-memory verdict map.
+  `Reason TBD = True` population; in-memory verdict map matches the on-disk
+  workbook.
+- Persist a per-pass diff (row → old verdict, new verdict, cited evidence)
+  under `/tmp/opencode/<workbook>_refine/` so a reviewer can audit every
+  change.
 
-Cache the per-rule diff so a reviewer can audit: which rows changed, from what,
-to what, citing which evidence record.
+Refinement is complete only when every TBD row's `DetailReason` cites concrete
+evidence sufficient to defend its `Reason` against a skeptical reviewer, OR is
+explicitly downgraded to `Need human check` / `Human Investigation` with the
+checked-evidence trail recorded.
 
 ## Notes
 
