@@ -706,6 +706,155 @@ All `Local Passed` classifications require:
 
 Without this evidence, `Local Passed` is NOT a valid classification.
 
+## Refinement Rules (Deep Analysis — NOT Pattern Matching)
+
+This section captures **post-initial-classification refinement** rules learned from
+WW18-26 review. A row may have been written with one verdict in the first pass and
+require revision once deeper evidence is examined. All three rules below are
+**deterministic deep analysis** — they require reading upstream source, parsing the
+NA workbook, and querying issue labels. **Never substring-match `message_xpu` alone.**
+
+Apply these passes IN ORDER, after the initial classification pass, before final save.
+
+### Rule R1 — SDPA / Dynamic-Skip Cross-Backend Check (TEL → Community Change)
+
+**Trigger**: row currently classified `Test Enviroment limitation` AND `message_xpu`
+indicates a dynamic `skipTest(...)` from the test body (not a `@skipIf` decorator
+gated on backend availability).
+
+**Naive failure mode**: classifying as `Test Enviroment limitation` based purely on
+the skip string ("Will call _fill_mem_eff_dropout_mask with too many threads!",
+"Reference: ...", etc.). This is wrong when **CUDA also skips dynamically at the
+same source line** — that proves the skip is a community-added guard, not an XPU
+environment gap.
+
+**Deep-analysis procedure** (deterministic, no LLM):
+
+1. Identify the XPU wrapper that owns the row (e.g., `test_transformers_xpu.py`).
+2. Extract the corresponding upstream test path (strip `_xpu` and resolve to
+   `${PYTORCH_SRC}/test/<name>.py`).
+3. `grep -n "skipTest" <upstream_path>` and locate every dynamic-skip line whose
+   message matches the row's `message_xpu` (after stripping device tokens).
+4. For each match, read ±15 lines of context and determine whether the guard fires
+   for the row's parameter values (e.g., `seq_len_q > 1024`, dtype, SM capability).
+   Compare against the row's `name_cuda` parameter encoding.
+5. If the upstream guard fires for CUDA with the same parameters AND the message is
+   identical → **the community added this skip cross-backend** → reclassify as
+   **Community Change**. DetailReason MUST cite:
+   - upstream file path with `:LINE` (e.g., `test/test_transformers.py:3860`)
+   - introducing PR(s) found via `git log -L <line>,<line>:<file>` or
+     `git blame -L <line>,<line> <file>`
+   - the matching parametrize line if the skip depends on `@parametrize` values
+6. If only XPU skips and CUDA runs → keep `Test Enviroment limitation` OR re-route
+   to `Failures (xpu broken)` / `Feature gap` per the **Dynamic-Skip Rule**.
+
+**Worked precedent (WW18-26)**: 576 mem_eff_attention rows reclassified TEL →
+Community Change. Evidence: upstream `test/test_transformers.py:3860` and `:3978`
+both contain identical `skipTest("Will call _fill_mem_eff_dropout_mask with too
+many threads!")`; parametrize at `:3795` instantiates `seq_len_q=2048` for SM80+
+CUDA, and all TBD rows use `seq_len_q=2048`. Lineage PRs #102038, #103704, #133049.
+
+### Rule R2 — Strict NA Evidence Rule (NA → Human Investigation when unsupported)
+
+**Trigger**: row currently classified `Not applicable` (any source).
+
+**Naive failure mode**: keeping `Not applicable` because `name_cuda` contains
+`cuda`, or because the test wasn't found in the XPU collection, or because skip
+text says "Only runs on cuda" without a referenced issue. None of these are
+sufficient evidence.
+
+**Authoritative evidence sources** — `Not applicable` requires AT LEAST ONE:
+
+- **E1**: `message_xpu` contains a documented skip string from a recognized NA
+  family. Allowed families (must match exactly, after stripping device tokens):
+  - `Only runs on cuda` / `requires CUDA` (jiterator, cuDNN-only kernels)
+  - `TypedStorage is deprecated and not available on XPU`
+  - `Efficient or cuDNN Attention was not built for this system`
+  - `CUDA-specific API: <api>` style messages that name a CUDA-only symbol
+  - Any other family pre-listed in the NA workbook (see E2)
+- **E2**: An entry in `${ISSUE_TRIAGE_ROOT}/result/torch_xpu_ops_issues.xlsx`,
+  sheet `Not Appliable` (sic) or `Not applicable`, whose `Test Case` /
+  `Test Name` column matches the row's nodeid (full or stem match) OR whose
+  `Issue ID` is referenced from the row's matched issues.
+- **E3**: A matched issue (from `Issues` sheet of the same workbook, or
+  `gh issue view <repo>#<id>`) whose `Labels` column contains `not_target` OR a
+  `wontfix` variant (`won't fix`, `wontfix`, `wont-fix`, `wont_fix`). Both
+  `intel/torch-xpu-ops` and `pytorch/pytorch` are valid repos.
+
+**Deep-analysis procedure** (deterministic, no LLM):
+
+1. Load NA workbook once: parse "Not Appliable" / "Not applicable" sheets to a
+   map keyed by normalized nodeid → `{issue_id, justification}`. Cache as
+   `na_entries.json` for reuse.
+2. For each NA row:
+   a. Strip device suffix (`_xpu`, `_cuda`) and parametrize tokens to a canonical
+      nodeid form for matching.
+   b. Check E1: scan `message_xpu` against the allowed-family list above. Record
+      which family matched.
+   c. Check E2: lookup canonical nodeid in NA workbook map.
+   d. Check E3: for each issue in the row's `_match_iids`, fetch labels (cached
+      `issues_map.json` or live `gh issue view`); record any `not_target` /
+      `wontfix` hits.
+3. If ANY of E1/E2/E3 produced evidence → keep `Not applicable`. DetailReason
+   MUST cite the specific evidence (exact skip string OR `NA workbook row #N
+   (Issue #NNNN)` OR `Issue #NNNN label='not_target'`).
+4. If NONE → reclassify as **Human Investigation**. DetailReason MUST state
+   *which* evidence sources were checked and that none matched, e.g.:
+   `[Confidence: MEDIUM] Human Investigation. No NA evidence: message_xpu empty;
+   not in NA workbook 'Not Appliable' sheet; matched issue #2618 has labels
+   ['module: sdpa'] (no not_target/wontfix).`
+
+**Worked precedent (WW18-26)**: 17 of 31 initial NA rows reclassified → Human
+Investigation. They were missing from XPU collection (parametrize variants not
+instantiated) rather than runtime-skipped with documented justification, so no
+E1/E2/E3 evidence existed. The 14 kept-NA rows each cite a specific skip string
+from the E1 allowed-family list.
+
+**Common rejections** (do NOT use these as evidence):
+- `name_cuda` substring contains `cuda` → not evidence.
+- Test absent from XPU wrapper collection → that's a port gap, route to
+  `To be enabled` or Human Investigation, never NA.
+- Skip text "Only runs on cuda" present but no NA-workbook / `not_target`
+  backing → still NA only if message exactly matches the E1 family AND the
+  test exercises a clearly CUDA-only API (jiterator, cuDNN). Generic "cuda"
+  mentions without a CUDA-only API → Human Investigation.
+
+### Rule R3 — `Failures` → `Failures (xpu broken)` Relabel
+
+**Trigger**: row classified with bare `Failures` Reason.
+
+**Procedure**: rewrite the `Reason` cell to the canonical label
+`Failures (xpu broken)`. No change to `DetailReason` or `Confidence`. This is a
+pure relabel pass — apply across the whole sheet after R1 and R2 so any newly
+created `Failures` verdicts also get normalized.
+
+The canonical label is fixed by the **Column Definitions** table above; the bare
+`Failures` form is reserved for legacy compatibility only and MUST NOT survive
+into a final `.agent.xlsx`.
+
+### Refinement Pass Order & Re-Verification
+
+Run refinement in this fixed order:
+
+1. **R1 (SDPA / dynamic-skip)** — may convert TEL → Community Change for many
+   rows; do this first because it shrinks the set of rows that downstream rules
+   need to inspect.
+2. **R2 (strict NA evidence)** — may convert NA → Human Investigation; depends
+   only on NA workbook + issue labels, independent of R1's output.
+3. **R3 (Failures relabel)** — last, so it normalizes any `Failures` written by
+   R1 or R2.
+
+After each rule:
+
+- Re-fill `Confidence` per the rubric (HIGH iff DetailReason cites
+  issue # / URL / log path / `file.py:NNN`; otherwise MEDIUM).
+- Blue-fill (`ADD8E6`) the changed cells. Preserve `Reason TBD` untouched.
+- Read back the workbook and assert: 0 blank `Reason` rows in the
+  TBD-true population, distribution matches in-memory verdict map.
+
+Cache the per-rule diff so a reviewer can audit: which rows changed, from what,
+to what, citing which evidence record.
+
 ## Notes
 
 - Save output as `.agent.xlsx`; do not modify original workbook.
