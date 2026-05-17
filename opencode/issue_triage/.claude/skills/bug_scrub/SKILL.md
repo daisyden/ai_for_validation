@@ -111,12 +111,20 @@ For each Issue/Case:
 
 ### 1.1 Issue Basic Info Extraction
 - **Skill**: `prepare_data/issue-basic-info-extraction/`
-- **Steps**: Fetch open issues from GitHub API → Fetch 5 PyTorchXPU project fields per issue via a single GraphQL request → Parse to Excel
-- **Output**: `result/torch_xpu_ops_issues.xlsx` with four sheets:
+- **Steps**:
+  1. Fetch open issues from GitHub REST API → `data/torch_xpu_ops_issues.json` (skip with `SKIP_PHASE_1_1=1`)
+  2. Fetch 5 PyTorchXPU project fields per issue via a single `gh api graphql` request
+  3. **Script-first** extraction: `parse_test_cases_from_body` (matches `Cases:` blocks etc.) and `parse_e2e_info` (matches structured benchmark commands)
+  4. **LLM fallback**: only consulted for issues the script extractors did not match (prose-only references, embedded scripts, URL-bearing reproducers). Cached by body hash; never overrides a successful script match.
+  5. Build sheets via routing decision tree (UNITTEST → E2E → Others)
+  6. Post-pass: align `Issues.Test Module` to actual placement
+- **Routing**: Each issue is placed in **exactly one** of Test Cases / E2E Test Cases / Others / Not applicable. The `Issues.Test Module` column is rewritten in the final post-pass to equal the sheet the issue is in. See the skill's SKILL.md for the full decision tree, schema, and invariants.
+- **Output**: `result/torch_xpu_ops_issues.xlsx` with five sheets:
   - **Issues** (19 columns): basic info + Type/Module/Test Module/Dependency/Priority + `PyTorchXPU Status` / `PyTorchXPU Estimate` / `PyTorchXPU Depending` / `PyTorchXPU Short Comments` (cols 16–19)
   - **Test Cases**
   - **E2E Test Cases**
-  - **Others**: issues where neither a UT nor an E2E reproducer could be parsed from the body. Columns: ID, Title, Labels, reproduce step, Error Message, Traceback.
+  - **Others**: issues whose body has a reproducer/error but no enumerable test (columns: ID, Title, Labels, reproduce step, Error Message, Traceback). URLs in reproducer are preserved verbatim.
+  - **Not applicable** (owned by Phase 1.3, not by this step)
 - **Priority initialization**: If `PyTorchXPU Priority` is non-blank and matches `P0`/`P1`/`P2`/`P3`, set Excel `Priority` to that value. The other four PyTorchXPU fields are written verbatim (sanitized for Excel illegal chars, truncated to 32767 chars).
 
 ### 1.2 Download CI Result
@@ -126,9 +134,10 @@ For each Issue/Case:
 
 ### 1.3 Create Not Applicable Sheet
 - **Skill**: `prepare_data/create-not-applicable-sheet/`
-- **Steps**: Filter wontfix/not_target labeled issues → Deep analysis of each via Explore Agent
-- **Output**: "Not Applicable" sheet in Excel (Operation/API, Category, Technical Details)
-- **Note**: Uses Explore Agent deep analysis instead of script/pattern matching to identify torch operations/not targeted reasons
+- **Default mode (carry-forward)**: Copy the `Not applicable` sheet verbatim from the latest trusted backup `result/torch_xpu_ops_issues_bk_*.xlsx`. No re-analysis.
+- **Deep-analysis mode**: Used for **new** wontfix/not_target issues only. Spawn one Explore Agent per issue to determine root-cause category (CUDA-specific / hardware / deprecated / etc.) and the operation/API involved. Append the row to the sheet.
+- **Output**: `Not applicable` sheet in Excel with columns Issue ID, Title, Operation/API, Category, Technical Details, Workaround, Labels.
+- **Note**: This skill never touches Issues / Test Cases / E2E Test Cases / Others.
 
 ### 1.4 PyTorch XPU Backend Analysis
 - **Skill**: `prepare_data/pytorch_xpu_backend_analysis/`
@@ -415,6 +424,7 @@ markdown subset supported, and customization points.
 ---
 
 ## Version
+v4.3 - May 17, 2026 - Phase 1.1 reworked to a **script-first, LLM-fallback** pipeline: script extractors (`parse_test_cases_from_body`, `parse_e2e_info`) run first and are authoritative when they match; LLM extraction (parallel sub-agents emitting structured JSON, cached by body hash) is consulted only for issues the scripts could not handle. Added filesystem-verified test paths and a post-pass that aligns `Issues.Test Module` to the actual sheet placement. Routing decision tree (UNITTEST → E2E → Others) now guarantees exactly-one-sheet placement and zero overlap. URLs in reproducers are preserved verbatim. Phase 1.3 split into carry-forward (default) and deep-analysis (new wontfix issues only) modes.
 v4.2 - May 14, 2026 - Phase 1.1 now extracts all 5 PyTorchXPU project fields (Priority, Status, Estimate, Depending, Short Comments) via a single GraphQL request per issue and writes the four non-Priority fields to Issues cols 16-19. Added "Others" sheet listing issues with no parseable UT or E2E test case (columns: ID, Title, Labels, reproduce step, Error Message, Traceback).
 v4.1 - May 13, 2026 - Refined Incremental Mode: Phase 2.3 case-duplication can skip rows with existing duplicate_group_id, and Phase 3.3 completion no longer requires Dependency because not all issues have one.
 v4.0 - May 11, 2026 - Added Incremental Mode: skip rules for Phases 2.4 and 3.3 to avoid re-processing rows that already have completed analysis columns. Phase 4 always re-runs. Preserves existing non-blank values.

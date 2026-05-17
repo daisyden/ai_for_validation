@@ -1,155 +1,245 @@
-# Create Not Applicable Sheet (Manual Deep Analysis)
+# Create Not Applicable Sheet
 
 ## Base Path Reference
 
-Relative paths from this file location (`bug_scrub/prepare_data/create-not-applicable-sheet/`):
+Relative paths from this file location
+(`bug_scrub/prepare_data/create-not-applicable-sheet/`):
+
 ```
-../../../                    → issue_triage root
-../../../result/            → Excel results directory
-```../                      → WORKDIR (SKILL_DIR here)
+../../../                       → issue_triage root
+../../../result/                → Excel results directory
+.                               → WORKDIR (this SKILL_DIR)
 ```
 
 ## Overview
 
-This skill creates a "Not applicable" sheet for issues labeled with `wontfix` or `not_target`. Instead of using script-based pattern matching, this skill requires **deep analysis** using the Explore Agent to understand which torch operations or APIs are not being targeted and why.
+Owns the `Not applicable` sheet of `result/torch_xpu_ops_issues.xlsx`. This
+sheet collects issues that are explicitly out of scope for XPU support
+(typically `wontfix`, `not_target`, deprecated upstream APIs, hardware
+limitations, etc.).
 
-## Distinction from Other Skills
+The sheet is regenerated separately from the other four sheets because
+`generate_excel.py` (the `issue-basic-info-extraction` skill) wipes its own
+output workbook on every run. This skill restores or rebuilds the
+`Not applicable` sheet without touching anything else.
 
-- Uses deep investigation rather than surface pattern matching
-- Focuses on understanding root cause of why feature/operation is not targeted
-- Extracts specific technical information about unsupported operations
+## Two Modes
 
-## Workflow
+| Mode | When | Cost | Quality |
+|---|---|---|---|
+| **Carry-forward** (default in Phase 1.3) | Issues already classified in a prior backup; no new wontfix/not_target issues expected | seconds | reuses prior deep analysis |
+| **Deep analysis** (initial population, or when new wontfix issues appear) | Need to classify a never-seen wontfix/not_target issue | minutes per issue (sub-agent) | high — root-cause level |
 
-### Step 1: Identify Wontfix/Not Target Issues
+Use carry-forward whenever a known-good backup contains the rows you need.
+Use deep analysis only for issues that have no prior classification.
 
-From the Issues sheet in `../../../result/torch_xpu_ops_issues.xlsx`, filter issues with labels containing:
-- `wontfix`
-- `not_target`
+---
 
-### Step 2: For Each Identified Issue, Perform Deep Analysis
+## Mode A — Carry-Forward (Phase 1.3)
 
-Use the Explore Agent to investigate each issue:
+### When
 
-```python
-task(description="not_applicable_deep_analysis",
-     prompt=f"""
-INVESTIGATION: Not Applicable Issue Analysis for Issue #{{issue_number}}
+- Phase 1 is re-running but the set of wontfix/not_target issues has not changed.
+- A prior `result/torch_xpu_ops_issues_bk_*.xlsx` contains a known-good
+  `Not applicable` sheet.
 
-CONTEXT:
-Issue titled: {{issue_title}}
-Issue labels: {{issue_labels}}
-This issue is marked as wontfix or not_target.
+### Procedure
 
-INVESTIGATION SCOPE:
+1. Identify the latest trusted backup:
+   ```
+   result/torch_xpu_ops_issues_bk_before_phase1_rerun_<TIMESTAMP>.xlsx
+   ```
+   (or any other prior file that contains the `Not applicable` sheet you want).
 
-1. TECHNICAL SCOPE ANALYSIS
-   - Identify which torch operation or API is being requested
-   - Determine if this is a CUDA-specific feature
-   - Check if this is a deprecated or removed feature
-   - Verify if this is an upstream PyTorch limitation
-   - Identify if this requires hardware/ISA not available on XPU
+2. Run the carry-forward block (cell-by-cell copy preserves formatting and
+   data types):
 
-2. COMPATIBILITY ASSESSMENT
-   - Check torch-xpu-ops source for similar implementations
-   - Review PyTorch core for relevant code
-   - Verify upstream availability and compatibility
+   ```python
+   from openpyxl import load_workbook
 
-3. ROOT CAUSE CLASSIFICATION
-   Classify the reason for not being targeted:
-   - CUDA-specific implementation (not portable)
-   - Hardware limitation (ISA/features unavailable)
-   - Deprecated/removed feature (PyTorch deprecation)
-   - Upstream decision (not part of PyTorch roadmap)
-   - License restriction
-   - Complexity/nationalization barrier
-   - Third-party dependency unavailable
+   SRC = '../../../result/torch_xpu_ops_issues_bk_<TIMESTAMP>.xlsx'
+   DST = '../../../result/torch_xpu_ops_issues.xlsx'
 
-4. TECHNICAL SPECIFICS
-   Extract specific:
-   - ATen operator names if applicable
-   - PyTorch API function signatures
-   - Configuration parameters or requirements
-   - Known limitations or constraints
+   src = load_workbook(SRC)
+   dst = load_workbook(DST)
 
-SOURCE CODE LOCATIONS TO CHECK:
-- ~/ai_for_validation/opencode/issue_triage/.claude/skills/bug_scrub/prepare_data/pytorch_xpu_backend_analysis/SKILL.md
-- ~/ai_for_validation/pytorch/third_party/torch-xpu-ops/src/ATen/native/
-- ~/ai_for_validation/pytorch/torch/
+   if 'Not applicable' in dst.sheetnames:
+       del dst['Not applicable']
 
-EXPECTED DELIVERABLES:
-For each not_target/wontfix issue, provide:
-1. Operation/API name (specific torch function or aten operator)
-2. Category of reason (CUDA-specific, deprecated, hardware, etc.)
-3. Technical details explaining why it's not targeted
-4. Related torch operations if any workaround exists
-     """,
-     subagent_type="explore")
-```
+   src_ws = src['Not applicable']
+   new_ws = dst.create_sheet('Not applicable')
+   for row in src_ws.iter_rows():
+       for cell in row:
+           new_ws.cell(row=cell.row, column=cell.column, value=cell.value)
 
-### Step 3: Document Findings
+   dst.save(DST)
+   print('Carried forward rows:', new_ws.max_row - 1)
+   ```
 
-For each issue analyzed, populate the Not Applicable sheet with columns:
+3. Verify row count matches the source. No new analysis is performed.
 
-| Column | Description |
-|--------|-------------|
-| Issue ID | GitHub issue number |
-| Title | Original issue title |
-| Operation/API | Specific torch operation or API identified via deep analysis |
-| Category | Classification of why not targeted (CUDA-specific, deprecated, etc.) |
-| Technical Details | Explanation from deep analysis |
-| Labels | Original labels |
+### Why this is the default
 
-### Step 4: Create Sheet in Excel
+Deep analysis of wontfix issues changes rarely. Recomputing it on every
+Phase 1 rerun wastes minutes per issue and risks regressions. Carry-forward
+is deterministic and fast.
 
-Manually create "Not applicable" sheet in the Excel file with the documented findings.
+---
 
-## Usage
+## Mode B — Deep Analysis
 
-### Before Starting
+### When
 
-1. Ensure Phase 1.1 (Issue Basic Info Extraction) is complete
-2. Ensure XPU Backend Analysis (1.4) skill documentation is reviewed
-3. Load PyTorch source environment for deep exploration
+- Initial population (no prior `Not applicable` sheet exists).
+- New issues acquire `wontfix` or `not_target` labels since the last run.
+- A reviewer asks for fresh root-cause classification.
 
-### Execute Deep Analysis
+### Why deep analysis (not regex)
 
-```python
-# For each issue with wontfix/not_target labels:
-# 1. Fetch issue details from GitHub
-gh issue view {issue_number} --repo intel/torch-xpu-ops --json title,body,labels
+The "not applicable" determination requires understanding beyond pattern
+matching:
 
-# 2. Use Explore Agent for deep analysis
-# (See prompts above)
-```
+- **CUDA-specific feature** vs. **upstream-deprecated API** vs. **hardware
+  limitation** all look similar in issue text but have different remediation
+  paths.
+- The same operator may be unavailable for different reasons in different
+  contexts (e.g. missing on Windows but present on Linux).
+- Technical decisions evolve as torch-xpu-ops and PyTorch evolve; only a
+  reasoning agent can correlate the current codebase with the issue.
 
-### Manual Entry to Excel
+### Procedure
 
-After completing deep analysis for all wontfix/not_target issues, manually add entries to "Not applicable" sheet with:
-- Accurate operation/API names from investigation
-- Proper categorization based on technical findings
-- Detailed technical explanations
+For each issue with `wontfix` or `not_target` label and no prior row in the
+`Not applicable` sheet:
 
-## Note on Why Deep Analysis Required
+1. **Fetch full issue context**:
+   ```bash
+   gh issue view <NUM> --repo intel/torch-xpu-ops \
+       --json title,body,labels,comments
+   ```
 
-The "not applicable" determination requires understanding beyond simple pattern matching:
+2. **Spawn a sub-agent for deep analysis** (read-only investigation):
 
-1. **Complex Relationships**: Why an operation isn't targeted often involves multiple technical factors
-2. **Context Dependency**: Same operation might be unavailable for different reasons in different contexts
-3. **Evolution Over Time**: Technical decisions change as torch-xpu-ops and PyTorch evolve
-4. **Interdependencies**: Understanding why something isn't supported often requires tracing through multiple layers
+   ```python
+   task(
+       subagent_type="explore",
+       run_in_background=False,
+       load_skills=[],
+       description=f"NA analysis #{num}",
+       prompt=f"""
+   INVESTIGATION: Not-applicable analysis for intel/torch-xpu-ops issue #{num}.
 
-Deep analysis ensures accurate documentation of why operations are not targeted, which is crucial for:
-- Future planning and prioritization
-- Communication with issue reporters
-- Understanding the scope of XPU limitations
+   CONTEXT:
+     Title:  {title}
+     Labels: {labels}
+     Body excerpt: {body[:2000]}
 
-## Output
+   GOAL:
+     Determine the root-cause category for why this issue is wontfix/not_target,
+     and identify the specific torch operation, API, kernel, or feature involved.
 
-Creates "Not applicable" sheet in `../../../result/torch_xpu_ops_issues.xlsx` with columns:
-- Issue ID
-- Title  
-- Operation/API
-- Category
-- Technical Details
-- Labels
+   INVESTIGATION SCOPE (do all that apply):
+     1. Identify the torch operator / API / kernel referenced in the issue.
+     2. Search torch-xpu-ops source for an existing or stub implementation:
+          third_party/torch-xpu-ops/src/ATen/native/
+          third_party/torch-xpu-ops/src/comm/
+     3. Search PyTorch core for the upstream definition:
+          torch/, aten/src/ATen/native/, aten/src/ATen/native/cuda/
+     4. Check whether the feature is CUDA-only, deprecated upstream, or
+        gated on hardware/ISA unavailable on XPU.
+     5. Note any workarounds or related operators that DO have XPU support.
+
+   ROOT-CAUSE CATEGORIES (pick the one that fits best):
+     - CUDA-specific implementation (not portable to SYCL)
+     - Hardware limitation (ISA/feature unavailable on Intel GPU)
+     - Deprecated/removed feature (upstream PyTorch deprecation)
+     - Upstream-not-on-roadmap (PyTorch core decision)
+     - License restriction
+     - Third-party dependency unavailable
+     - Complexity barrier (not worth implementing for current scope)
+
+   DELIVERABLES (one block per issue):
+     1. Operation/API: <name, e.g. torch.foo / aten::bar / sycl::baz>
+     2. Category: <one of the categories above>
+     3. Technical details: <2-4 sentences citing code paths examined>
+     4. Workaround (optional): <related op that DOES work, or '' >
+   """
+   )
+   ```
+
+3. **Record the result** as one row in the `Not applicable` sheet:
+
+   | Column           | Source                                       |
+   |------------------|----------------------------------------------|
+   | Issue ID         | GitHub issue number                          |
+   | Title            | Original issue title                         |
+   | Operation/API    | From sub-agent deliverable 1                 |
+   | Category         | From sub-agent deliverable 2                 |
+   | Technical Details| From sub-agent deliverable 3                 |
+   | Workaround       | From sub-agent deliverable 4 (optional)      |
+   | Labels           | Original labels (comma-joined)               |
+
+4. **Append, don't overwrite.** Read existing rows first, append new ones at
+   the bottom.
+
+### Output
+
+`../../../result/torch_xpu_ops_issues.xlsx` with `Not applicable` sheet
+containing the columns above.
+
+---
+
+## Invariants
+
+After this skill runs:
+
+1. The `Not applicable` sheet exists in the workbook.
+2. Row count ≥ 1 (header row + any data rows).
+3. No issue in `Not applicable` also appears in `Test Cases`, `E2E Test Cases`,
+   or `Others`. Validate with:
+
+   ```python
+   from openpyxl import load_workbook
+   wb = load_workbook('../../../result/torch_xpu_ops_issues.xlsx')
+   def ids(s):
+       return {r[0] for r in wb[s].iter_rows(min_row=2, values_only=True)
+               if r and r[0] is not None}
+   na = ids('Not applicable')
+   assert not (na & ids('Test Cases')),     na & ids('Test Cases')
+   assert not (na & ids('E2E Test Cases')), na & ids('E2E Test Cases')
+   assert not (na & ids('Others')),         na & ids('Others')
+   ```
+
+4. The Issues sheet's `Test Module` column is rewritten by
+   `issue-basic-info-extraction`'s post-pass; if you want NA-routed issues
+   to display `Test Module = "not_applicable"`, extend that post-pass to read
+   the NA sheet IDs and set the column accordingly.
+
+## Tools
+
+| Tool | Purpose |
+|---|---|
+| `openpyxl`           | Cell-by-cell sheet copy (carry-forward) and read/write |
+| `gh issue view`      | Fetch full issue text for deep analysis |
+| `task(subagent_type="explore", ...)` | Spawn deep-analysis sub-agent |
+
+## Prerequisites
+
+- `result/torch_xpu_ops_issues.xlsx` already populated by
+  `issue-basic-info-extraction` (sheets Issues / Test Cases / E2E Test Cases /
+  Others).
+- For carry-forward: a prior `torch_xpu_ops_issues_bk_*.xlsx` containing a
+  `Not applicable` sheet.
+- For deep analysis: `gh` CLI authenticated; local PyTorch checkout at
+  `$PYTORCH_REPO_ROOT` for code search.
+
+## Notes
+
+- The previous version of this skill recommended deep analysis on every run.
+  In practice this is wasteful: the wontfix set changes rarely. The current
+  default (carry-forward) preserves prior deep analysis without recomputation.
+- Hard-coded issue lists from any prior conversation are NOT part of the
+  contract. The skill must work on whatever wontfix/not_target issues are
+  open at the time it runs.
+- Never edit `Not applicable` from `generate_excel.py`. That script owns
+  Issues / Test Cases / E2E Test Cases / Others only.

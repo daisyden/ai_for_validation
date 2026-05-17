@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PyTorch XPU Backend Analysis — Workflow</title>
+<style>
+  :root {
+    --bg: #fff;
+    --fg: #1a1a2e;
+    --accent: #2c5f8a;
+    --accent-light: #d8e8f4;
+    --border: #d0d7de;
+    --code-bg: #f6f8fa;
+    --table-stripe: #f8fafc;
+    --phase-current: #2c8a2c;
+    --phase-parallel: #5a7fa8;
+    --tag-mandatory: #c42;
+    --tag-optional: #888;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    line-height: 1.6;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+  }
+  h1 { font-size: 1.75rem; margin-bottom: .25rem; }
+  h1 small { font-weight: 400; color: #666; font-size: .85rem; display: block; margin-top: .25rem; }
+  h2 { font-size: 1.3rem; margin-top: 2.5rem; margin-bottom: .75rem; border-bottom: 2px solid var(--accent); padding-bottom: .3rem; }
+  h3 { font-size: 1.05rem; margin-top: 1.5rem; margin-bottom: .5rem; color: var(--accent); }
+  p, li { margin-bottom: .5rem; }
+  ul, ol { padding-left: 1.5rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: .875em;
+    background: var(--code-bg);
+    padding: .15em .35em;
+    border-radius: 3px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1rem;
+    overflow-x: auto;
+    font-size: .85rem;
+    line-height: 1.5;
+    margin: .75rem 0 1rem;
+  }
+  pre code { background: none; padding: 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: .75rem 0 1.25rem;
+    font-size: .9rem;
+  }
+  th, td {
+    text-align: left;
+    padding: .5rem .75rem;
+    border: 1px solid var(--border);
+  }
+  th { background: var(--accent-light); font-weight: 600; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+  /* Pipeline diagram */
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 1rem 0 1.5rem;
+    font-size: .85rem;
+    font-family: monospace;
+  }
+  .pipeline-row {
+    display: flex;
+    align-items: center;
+    padding: .35rem .75rem;
+    border-left: 3px solid var(--border);
+    margin-left: 1rem;
+  }
+  .pipeline-row.current {
+    border-left-color: var(--phase-current);
+    background: #e8f5e8;
+    font-weight: 700;
+  }
+  .pipeline-row .badge {
+    display: inline-block;
+    font-size: .7rem;
+    padding: .1rem .4rem;
+    border-radius: 3px;
+    margin-left: .5rem;
+    color: #fff;
+  }
+  .badge-prereq { background: var(--tag-mandatory); }
+  .badge-parallel { background: var(--phase-parallel); }
+  .badge-this { background: var(--phase-current); }
+
+  /* Flow diagram */
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    align-items: center;
+    margin: 1rem 0;
+  }
+  .flow-step {
+    background: var(--accent-light);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: .5rem .75rem;
+    font-size: .8rem;
+    text-align: center;
+    min-width: 120px;
+  }
+  .flow-arrow { font-size: 1.2rem; color: var(--accent); }
+
+  /* Tag pills */
+  .tag {
+    display: inline-block;
+    font-size: .75rem;
+    padding: .1rem .5rem;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+  .tag-yes { background: #fde2e2; color: var(--tag-mandatory); }
+  .tag-no { background: #eee; color: var(--tag-optional); }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex;
+    height: 24px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: .5rem 0 1rem;
+    font-size: .7rem;
+    color: #fff;
+    font-weight: 600;
+  }
+  .stats-bar span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    padding: 0 .5rem;
+  }
+  .sb-sycl { background: #2c5f8a; }
+  .sb-mkl { background: #5a8a2c; }
+  .sb-dnn { background: #8a5a2c; }
+  .sb-cpu { background: #999; }
+
+  nav { margin-bottom: 2rem; }
+  nav ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: .5rem; }
+  nav li a {
+    display: block;
+    padding: .3rem .6rem;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: .8rem;
+  }
+
+  /* Detailed graph */
+  .graph-container {
+    margin: 1.5rem 0;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fafbfc;
+    padding: 1rem;
+  }
+  .graph-container svg { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+
+<h1>PyTorch XPU Backend Analysis — Workflow
+  <small>Phase 1.4 of the Bug Scrub Pipeline</small>
+</h1>
+
+<nav>
+  <ul>
+    <li><a href="#position">Pipeline Position</a></li>
+    <li><a href="#purpose">Purpose</a></li>
+    <li><a href="#input">Input</a></li>
+    <li><a href="#steps">Workflow Steps</a></li>
+    <li><a href="#graph">Detailed Graph</a></li>
+    <li><a href="#output">Output</a></li>
+    <li><a href="#downstream">Downstream</a></li>
+  </ul>
+</nav>
+
+<hr>
+
+<h2 id="position">Position in Bug Scrub Pipeline</h2>
+<p>This skill is <strong>Phase 1.4</strong> of the bug scrub pipeline. It runs in parallel with Phase 1.2 and 1.3, after Phase 1.1 has completed.</p>
+
+<div class="pipeline">
+  <div class="pipeline-row"><strong>Phase 1 — Prepare Data</strong></div>
+  <div class="pipeline-row">├── 1.1 issue-basic-info-extraction <span class="badge badge-prereq">prerequisite</span></div>
+  <div class="pipeline-row">├── 1.2 download_ci_result <span class="badge badge-parallel">parallel</span></div>
+  <div class="pipeline-row">├── 1.3 create-not-applicable-sheet <span class="badge badge-parallel">parallel</span></div>
+  <div class="pipeline-row current">└── 1.4 pytorch_xpu_backend_analysis <span class="badge badge-this">THIS SKILL</span></div>
+</div>
+
+<hr>
+
+<h2 id="purpose">Purpose</h2>
+<p>Produce a comprehensive technical reference document (<code>SKILL.md</code>) that catalogs:</p>
+<ol>
+  <li><strong>Operator registration</strong> — how the 749 operators in <code>xpu_functions.yaml</code> are declared, code-generated, and dispatched at runtime</li>
+  <li><strong>Dependency library architecture</strong> — which libraries (SYCL, oneMKL, oneDNN, XCCL, SYCLTLA) back which operators, their build flags, and conditional compilation patterns</li>
+  <li><strong>Implementation patterns</strong> — dispatch stub, <code>TORCH_IMPL_FUNC</code>, oneDNN primitive, SYCL kernel functor, and CPU fallback patterns</li>
+</ol>
+<p>This document is consumed downstream by <strong>Phase 3.3 (triage_skills)</strong> as a reference for root cause analysis and dependency classification.</p>
+
+<hr>
+
+<h2 id="input">Input</h2>
+<table>
+  <thead><tr><th>Source</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>pytorch/third_party/torch-xpu-ops</code></td><td>Target repository (source code, YAML specs, CMake configs)</td></tr>
+    <tr><td>PyTorch mainline</td><td>ATen operator infrastructure, dispatcher, torchgen pipeline</td></tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2 id="steps">Workflow Steps</h2>
+
+<div class="flow">
+  <div class="flow-step">Step 1<br>Structure Survey</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">Step 2<br>Dependency Analysis</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">Step 3<br>Registration Mechanism</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">Step 4<br>Pattern Cataloging</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">Step 5<br>Classification</div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">Step 6<br>Anti-Patterns</div>
+</div>
+
+<h3>Step 1 — Codebase Structure Survey</h3>
+<p>Scan the torch-xpu-ops repository layout:</p>
+<ul>
+  <li><code>cmake/</code> — build configuration files (<code>Codegen.cmake</code>, <code>ONEMKL.cmake</code>, <code>SYCL.cmake</code>, etc.)</li>
+  <li><code>src/ATen/native/xpu/</code> — operator implementation files (<code>.cpp</code>)</li>
+  <li><code>src/ATen/native/xpu/sycl/</code> — SYCL kernel implementations (100+ files)</li>
+  <li><code>src/ATen/native/xpu/mkl/</code> — oneMKL wrapper implementations</li>
+  <li><code>yaml/xpu_functions.yaml</code> — operator registry (749 entries)</li>
+</ul>
+
+<h3>Step 2 — Dependency Library Analysis</h3>
+<p>For each dependency library, document build flags, usage scope, and conditional compilation patterns:</p>
+<table>
+  <thead><tr><th>Library</th><th>Build Flag</th><th>Mandatory?</th><th>Operator Families</th></tr></thead>
+  <tbody>
+    <tr><td>SYCL</td><td>Always enabled</td><td><span class="tag tag-yes">YES</span></td><td>All XPU operations</td></tr>
+    <tr><td>oneMKL</td><td><code>USE_ONEMKL_XPU</code></td><td><span class="tag tag-no">No (default ON)</span></td><td>BLAS, LAPACK, FFT</td></tr>
+    <tr><td>oneDNN</td><td><code>USE_DNNL_XPU</code></td><td><span class="tag tag-no">No</span></td><td>Convolution, normalization</td></tr>
+    <tr><td>XCCL</td><td><code>USE_XCCL</code></td><td><span class="tag tag-no">No</span></td><td>Collective communications</td></tr>
+    <tr><td>SYCLTLA</td><td><code>USE_SYCLTLA</code></td><td><span class="tag tag-no">No</span></td><td>Tensor linear algebra extensions</td></tr>
+  </tbody>
+</table>
+<p>Conditional compilation pattern: <code>#if defined(USE_ONEMKL_XPU)</code> → optimized path, <code>#else</code> → CPU fallback.</p>
+
+<h3>Step 3 — Operator Registration Mechanism Analysis</h3>
+<p>Document the four-layer architecture:</p>
+<ol>
+  <li><strong>Specification</strong> — YAML declarations in <code>xpu_functions.yaml</code></li>
+  <li><strong>Code generation</strong> — <code>torchgen</code> pipeline orchestrated by <code>cmake/Codegen.cmake</code></li>
+  <li><strong>Dispatch</strong> — runtime routing via <code>TORCH_LIBRARY_IMPL</code> macros and fallback logic (<code>XPUFallback.template</code>)</li>
+  <li><strong>Implementation</strong> — native SYCL kernels, oneMKL/oneDNN integration, or CPU fallback</li>
+</ol>
+
+<h3>Step 4 — Implementation Pattern Cataloging</h3>
+<p>Identify and document each pattern with code examples:</p>
+<ul>
+  <li><strong>Dispatch stub</strong> (<code>REGISTER_XPU_DISPATCH</code>) — element-wise/reduction ops via <code>TensorIterator</code></li>
+  <li><strong>TORCH_IMPL_FUNC</strong> — standalone XPU implementations (e.g., <code>mm_out_xpu</code>)</li>
+  <li><strong>oneDNN primitive</strong> — convolution/linear via cached primitives</li>
+  <li><strong>SYCL kernel functor</strong> — type-dispatched <code>AT_DISPATCH_*</code> + <code>gpu_kernel</code></li>
+  <li><strong>CPU fallback</strong> — tensor transfer via <code>xpu_fallback_impl</code> with device consistency checks</li>
+</ul>
+
+<h3>Step 5 — Operator Classification &amp; Statistics</h3>
+<p>Operator coverage by implementation path:</p>
+
+<div class="stats-bar">
+  <span class="sb-sycl" style="flex:412">SYCL 412</span>
+  <span class="sb-mkl" style="flex:65">MKL 65</span>
+  <span class="sb-dnn" style="flex:59">DNN 59</span>
+  <span class="sb-cpu" style="flex:213">CPU 213</span>
+</div>
+
+<table>
+  <thead><tr><th>Implementation Path</th><th>Operator Count</th></tr></thead>
+  <tbody>
+    <tr><td>Native SYCL kernels</td><td>412</td></tr>
+    <tr><td>oneMKL integration</td><td>65</td></tr>
+    <tr><td>oneDNN integration</td><td>59</td></tr>
+    <tr><td>CPU fallback</td><td>213</td></tr>
+    <tr><td><strong>Total</strong></td><td><strong>749</strong></td></tr>
+  </tbody>
+</table>
+
+<h3>Step 6 — Anti-Patterns &amp; Best Practices</h3>
+<p>Document common pitfalls:</p>
+<ul>
+  <li>Missing <code>DeviceGuard</code></li>
+  <li>Incomplete type dispatch (<code>AT_DISPATCH_FLOATING_TYPES</code> vs <code>AT_DISPATCH_ALL_TYPES_AND_COMPLEX</code>)</li>
+  <li>Naive host allocation instead of pinned memory</li>
+</ul>
+
+<hr>
+
+<h2 id="graph">Detailed Workflow Graph</h2>
+<p>End-to-end view: external inputs through the 6 analysis steps to the output document and its downstream consumer.</p>
+
+<div class="graph-container">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 920" width="1020" height="920" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,sans-serif" font-size="12">
+  <defs>
+    <marker id="ah" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6Z" fill="#2c5f8a"/></marker>
+    <marker id="ah-dash" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6Z" fill="#999"/></marker>
+    <filter id="shadow"><feDropShadow dx="1" dy="1" stdDeviation="2" flood-opacity=".08"/></filter>
+  </defs>
+
+  <!-- ===== EXTERNAL INPUTS (left column) ===== -->
+  <g filter="url(#shadow)">
+    <rect x="20" y="60" width="180" height="50" rx="8" fill="#f4e8d8" stroke="#8b6f47" stroke-width="1.5"/>
+    <text x="110" y="82" text-anchor="middle" font-weight="600" font-size="11">torch-xpu-ops repo</text>
+    <text x="110" y="97" text-anchor="middle" font-size="10" fill="#666">src/ cmake/ yaml/</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="20" y="140" width="180" height="50" rx="8" fill="#f4e8d8" stroke="#8b6f47" stroke-width="1.5"/>
+    <text x="110" y="162" text-anchor="middle" font-weight="600" font-size="11">PyTorch mainline</text>
+    <text x="110" y="177" text-anchor="middle" font-size="10" fill="#666">ATen / dispatcher / torchgen</text>
+  </g>
+
+  <!-- Arrows from inputs to Step 1 -->
+  <line x1="200" y1="85" x2="280" y2="105" stroke="#2c5f8a" stroke-width="1.5" marker-end="url(#ah)"/>
+  <line x1="200" y1="165" x2="280" y2="135" stroke="#2c5f8a" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <!-- ===== STEP 1 ===== -->
+  <g filter="url(#shadow)">
+    <rect x="280" y="80" width="220" height="80" rx="8" fill="#d8e8f4" stroke="#2c5f8a" stroke-width="1.5"/>
+    <text x="390" y="100" text-anchor="middle" font-weight="700" font-size="12">Step 1 — Structure Survey</text>
+    <text x="300" y="118" font-size="10" fill="#444">• cmake/ config files (6)</text>
+    <text x="300" y="131" font-size="10" fill="#444">• src/ATen/native/xpu/ impls</text>
+    <text x="300" y="144" font-size="10" fill="#444">• sycl/ kernels (100+) • mkl/ wrappers</text>
+  </g>
+
+  <!-- Arrow Step 1 → Step 2 -->
+  <line x1="390" y1="160" x2="390" y2="190" stroke="#2c5f8a" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <!-- ===== STEP 2 ===== -->
+  <g filter="url(#shadow)">
+    <rect x="260" y="190" width="260" height="110" rx="8" fill="#d8e8f4" stroke="#2c5f8a" stroke-width="1.5"/>
+    <text x="390" y="210" text-anchor="middle" font-weight="700" font-size="12">Step 2 — Dependency Library Analysis</text>
+    <text x="280" y="230" font-size="10" fill="#444">SYCL .................. mandatory, all ops</text>
+    <text x="280" y="244" font-size="10" fill="#444">oneMKL (USE_ONEMKL_XPU) BLAS/LAPACK/FFT</text>
+    <text x="280" y="258" font-size="10" fill="#444">oneDNN (USE_DNNL_XPU) .. conv/norm</text>
+    <text x="280" y="272" font-size="10" fill="#444">XCCL ................... collective comms</text>
+    <text x="280" y="286" font-size="10" fill="#444">SYCLTLA ................ tensor LA ext</text>
+  </g>
+
+  <!-- Arrow Step 2 → Step 3 -->
+  <line x1="390" y1="300" x2="390" y2="330" stroke="#2c5f8a" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <!-- ===== STEP 3 ===== -->
+  <g filter="url(#shadow)">
+    <rect x="260" y="330" width="260" height="95" rx="8" fill="#d8e8f4" stroke="#2c5f8a" stroke-width="1.5"/>
+    <text x="390" y="350" text-anchor="middle" font-weight="700" font-size="12">Step 3 — Registration Mechanism</text>
+    <text x="280" y="370" font-size="10" fill="#444">1. YAML spec (xpu_functions.yaml)</text>
+    <text x="280" y="384" font-size="10" fill="#444">2. torchgen codegen (Codegen.cmake)</text>
+    <text x="280" y="398" font-size="10" fill="#444">3. Runtime dispatch (TORCH_LIBRARY_IMPL)</text>
+    <text x="280" y="412" font-size="10" fill="#444">4. Impl layer (SYCL / MKL / DNN / CPU)</text>
+  </g>
+
+  <!-- Arrow Step 3 → Step 4 -->
+  <line x1="390" y1="425" x2="390" y2="455" stroke="#2c5f8a" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <!-- ===== STEP 4 ===== -->
+  <g filter="url(#shadow)">
+    <rect x="260" y="455" width="260" height="100" rx="8" fill="#d8e8f4" stroke="#2c5f8a" stroke-width="1.5"/>
+    <text x="390" y="475" text-anchor="middle" font-weight="700" font-size="12">Step 4 — Pattern Cataloging</text>
+    <text x="280" y="495" font-size="10" fill="#444">• REGISTER_XPU_DISPATCH stubs</text>
+    <text x="280" y="509" font-size="10" fill="#444">• TORCH_IMPL_FUNC direct impls</text>
+    <text x="280" y="523" font-size="10" fill="#444">• oneDNN primitives (cached)</text>
+    <text x="280" y="537" font-size="10" fill="#444">• SYCL functors • CPU fallback</text>
+  </g>
+
+  <!-- Arrow Step 4 → Step 5 -->
+  <line x1="390" y1="555" x2="390" y2="585" stroke="#2c5f8a" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <!-- ===== STEP 5 ===== -->
+  <g filter="url(#shadow)">
+    <rect x="260" y="585" width="260" height="95" rx="8" fill="#d8e8f4" stroke="#2c5f8a" stroke-width="1.5"/>
+    <text x="390" y="605" text-anchor="middle" font-weight="700" font-size="12">Step 5 — Classification &amp; Statistics</text>
+    <!-- mini bar chart -->
+    <rect x="285" y="618" width="164" height="14" rx="2" fill="#2c5f8a"/><!-- SYCL 412 -->
+    <rect x="449" y="618" width="26" height="14" rx="0" fill="#5a8a2c"/><!-- MKL 65 -->
+    <rect x="475" y="618" width="23" height="14" rx="0" fill="#8a5a2c"/><!-- DNN 59 -->
+    <rect x="498" y="618" width="0" height="14" rx="0" fill="#999"/>
+    <text x="365" y="629" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">SYCL 412</text>
+    <text x="497" y="629" text-anchor="end" font-size="8" fill="#fff">65 59</text>
+    <rect x="285" y="636" width="85" height="14" rx="2" fill="#999"/>
+    <text x="327" y="647" text-anchor="middle" font-size="9" fill="#fff" font-weight="600">CPU fallback 213</text>
+    <text x="280" y="668" font-size="10" fill="#444">749 total ops across 8 functional domains</text>
+  </g>
+
+  <!-- Arrow Step 5 → Step 6 -->
+  <line x1="390" y1="680" x2="390" y2="710" stroke="#2c5f8a" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <!-- ===== STEP 6 ===== -->
+  <g filter="url(#shadow)">
+    <rect x="280" y="710" width="220" height="70" rx="8" fill="#d8e8f4" stroke="#2c5f8a" stroke-width="1.5"/>
+    <text x="390" y="730" text-anchor="middle" font-weight="700" font-size="12">Step 6 — Anti-Patterns</text>
+    <text x="300" y="748" font-size="10" fill="#444">• Missing DeviceGuard</text>
+    <text x="300" y="762" font-size="10" fill="#444">• Incomplete type dispatch • Naive alloc</text>
+  </g>
+
+  <!-- Arrow Step 6 → Output -->
+  <line x1="390" y1="780" x2="390" y2="810" stroke="#2c5f8a" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <!-- ===== OUTPUT ===== -->
+  <g filter="url(#shadow)">
+    <rect x="290" y="810" width="200" height="50" rx="8" fill="#d8f4d8" stroke="#2c8a2c" stroke-width="2"/>
+    <text x="390" y="832" text-anchor="middle" font-weight="700" font-size="12">SKILL.md (~51KB)</text>
+    <text x="390" y="848" text-anchor="middle" font-size="10" fill="#444">12 parts + appendices</text>
+  </g>
+
+  <!-- Arrow Output → Downstream -->
+  <line x1="490" y1="835" x2="580" y2="835" stroke="#999" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#ah-dash)"/>
+
+  <!-- ===== DOWNSTREAM ===== -->
+  <g filter="url(#shadow)">
+    <rect x="580" y="810" width="220" height="50" rx="8" fill="#fff4d8" stroke="#8a7c2c" stroke-width="1.5"/>
+    <text x="690" y="830" text-anchor="middle" font-weight="600" font-size="11">Phase 3.3 — triage_skills</text>
+    <text x="690" y="846" text-anchor="middle" font-size="10" fill="#666">dependency + root cause reference</text>
+  </g>
+
+  <!-- ===== SIDE: Generated Artifacts (right column, from Step 3) ===== -->
+  <line x1="520" y1="377" x2="600" y2="377" stroke="#2c5f8a" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#ah)"/>
+  <g filter="url(#shadow)">
+    <rect x="600" y="340" width="200" height="80" rx="6" fill="#fff4d8" stroke="#8a7c2c" stroke-width="1"/>
+    <text x="700" y="358" text-anchor="middle" font-weight="600" font-size="11">Generated Artifacts</text>
+    <text x="620" y="376" font-size="9" fill="#555">RegisterXPU_0.cpp</text>
+    <text x="620" y="389" font-size="9" fill="#555">RegisterSparseXPU_0.cpp</text>
+    <text x="620" y="402" font-size="9" fill="#555">XPUFunctions.h / _inl.h</text>
+    <text x="620" y="415" font-size="9" fill="#555">c_shim_xpu.h/.cpp (AOTI)</text>
+  </g>
+
+  <!-- ===== SIDE: Fallback detail (right column, from Step 4) ===== -->
+  <line x1="520" y1="505" x2="600" y2="505" stroke="#2c5f8a" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#ah)"/>
+  <g filter="url(#shadow)">
+    <rect x="600" y="465" width="200" height="80" rx="6" fill="#fff4d8" stroke="#8a7c2c" stroke-width="1"/>
+    <text x="700" y="483" text-anchor="middle" font-weight="600" font-size="11">Fallback Control</text>
+    <text x="620" y="501" font-size="9" fill="#555">PYTORCH_ENABLE_XPU_FALLBACK</text>
+    <text x="620" y="514" font-size="9" fill="#555">PYTORCH_DEBUG_XPU_FALLBACK</text>
+    <text x="620" y="527" font-size="9" fill="#555">XPUFallback.template (269 lines)</text>
+    <text x="620" y="540" font-size="9" fill="#555">Hardcoded fallback op list</text>
+  </g>
+
+  <!-- ===== SIDE: Domain breakdown (right column, from Step 5) ===== -->
+  <line x1="520" y1="632" x2="600" y2="632" stroke="#2c5f8a" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#ah)"/>
+  <g filter="url(#shadow)">
+    <rect x="600" y="585" width="200" height="100" rx="6" fill="#fff4d8" stroke="#8a7c2c" stroke-width="1"/>
+    <text x="700" y="603" text-anchor="middle" font-weight="600" font-size="11">Functional Domains</text>
+    <text x="620" y="620" font-size="9" fill="#555">Arithmetic ............ 140</text>
+    <text x="620" y="632" font-size="9" fill="#555">Activations ........... 62</text>
+    <text x="620" y="644" font-size="9" fill="#555">Reductions ............ 48</text>
+    <text x="620" y="656" font-size="9" fill="#555">Linear Algebra ........ 95</text>
+    <text x="620" y="668" font-size="9" fill="#555">Conv+Pool+Norm+Index .. 105</text>
+    <text x="620" y="680" font-size="9" fill="#555">Other ................. 299</text>
+  </g>
+
+  <!-- ===== LEGEND ===== -->
+  <rect x="20" y="15" width="980" height="28" rx="4" fill="#f6f8fa" stroke="#d0d7de"/>
+  <rect x="30" y="21" width="14" height="14" rx="3" fill="#f4e8d8" stroke="#8b6f47"/>
+  <text x="50" y="32" font-size="10">External Input</text>
+  <rect x="140" y="21" width="14" height="14" rx="3" fill="#d8e8f4" stroke="#2c5f8a"/>
+  <text x="160" y="32" font-size="10">Analysis Step</text>
+  <rect x="250" y="21" width="14" height="14" rx="3" fill="#fff4d8" stroke="#8a7c2c"/>
+  <text x="270" y="32" font-size="10">Detail / Artifact</text>
+  <rect x="370" y="21" width="14" height="14" rx="3" fill="#d8f4d8" stroke="#2c8a2c"/>
+  <text x="390" y="32" font-size="10">Output</text>
+  <line x1="450" y1="28" x2="490" y2="28" stroke="#2c5f8a" stroke-width="1.5" marker-end="url(#ah)"/>
+  <text x="496" y="32" font-size="10">Data flow</text>
+  <line x1="560" y1="28" x2="600" y2="28" stroke="#999" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#ah-dash)"/>
+  <text x="606" y="32" font-size="10">Reference / detail</text>
+</svg>
+</div>
+
+<hr>
+
+<h2 id="output">Output</h2>
+<table>
+  <thead><tr><th>Artifact</th><th>Path</th><th>Size</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>SKILL.md</code></td>
+      <td><code>prepare_data/pytorch_xpu_backend_analysis/SKILL.md</code></td>
+      <td>~51KB</td>
+      <td>Comprehensive analysis document (12 parts + appendices)</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2 id="downstream">Downstream Consumers</h2>
+<table>
+  <thead><tr><th>Phase</th><th>Skill</th><th>How It Uses This Document</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>3.3</td>
+      <td><code>triage_skills</code></td>
+      <td>Reference for dependency classification (operator → library mapping) and root cause analysis (implementation path identification)</td>
+    </tr>
+  </tbody>
+</table>
+<p>The connection is shown in the bug scrub workflow diagram as a dashed "reference" arrow from <code>pytorch_xpu_backend_analysis.md</code> to the triage step.</p>
+
+<hr>
+
+<p style="color:#888;font-size:.8rem;">v1.0 — May 9, 2026 — Initial workflow description</p>
+
+</body>
+</html>

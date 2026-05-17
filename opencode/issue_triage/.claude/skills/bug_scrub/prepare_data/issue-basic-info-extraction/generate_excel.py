@@ -471,6 +471,203 @@ def map_origin_test_file(test_file):
         return test_file
     return test_file
 
+# Local checkouts used to verify whether a parsed test path corresponds to a
+# real test file. A case is only routed to the Test Cases sheet when its file
+# resolves to one of these two roots (issues whose path does not resolve fall
+# through to the Others sheet).
+_PYTORCH_REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
+# Walk up to find the pytorch repo root (contains 'test/' and 'third_party/torch-xpu-ops/test/xpu')
+for _ in range(10):
+    if (os.path.isdir(os.path.join(_PYTORCH_REPO_ROOT, 'test')) and
+            os.path.isdir(os.path.join(_PYTORCH_REPO_ROOT, 'third_party', 'torch-xpu-ops', 'test', 'xpu'))):
+        break
+    _PYTORCH_REPO_ROOT = os.path.dirname(_PYTORCH_REPO_ROOT)
+else:
+    _PYTORCH_REPO_ROOT = '/home/daisyden/opencode/bug_scrub'
+
+_PYTORCH_TEST_DIR = os.path.join(_PYTORCH_REPO_ROOT, 'test')
+_XPU_TEST_DIR = os.path.join(_PYTORCH_REPO_ROOT, 'third_party', 'torch-xpu-ops', 'test')
+
+
+def resolve_test_file(test_path):
+    """Map a dotted test path to (test_file_rel, class_suffix, origin_file_rel).
+
+    Returns ("", "", "") when no candidate file exists in either
+    <repo>/test/ or <repo>/third_party/torch-xpu-ops/test/.
+    class_suffix is the dotted tail after the resolved file (may be empty
+    when the path does not include a class component).
+    """
+    if not test_path:
+        return "", "", ""
+    parts = test_path.split('.')
+
+    candidates = []
+    if 'torch-xpu-ops' in parts:
+        try:
+            i = parts.index('torch-xpu-ops')
+            sub = parts[i + 1:]
+            if sub and sub[0] == 'test':
+                rel = sub[1:]
+                for k in range(len(rel), 0, -1):
+                    fp_abs = os.path.join(_XPU_TEST_DIR, *rel[:k]) + '.py'
+                    fp_rel = 'torch-xpu-ops/test/' + '/'.join(rel[:k]) + '.py'
+                    suffix = '.'.join(rel[k:])
+                    candidates.append((fp_abs, fp_rel, suffix, 'xpu'))
+        except ValueError:
+            pass
+
+    if parts and parts[0] == 'test':
+        rel = parts[1:]
+    else:
+        rel = parts
+    for k in range(len(rel), 0, -1):
+        fp_abs = os.path.join(_PYTORCH_TEST_DIR, *rel[:k]) + '.py'
+        fp_rel = 'test/' + '/'.join(rel[:k]) + '.py'
+        suffix = '.'.join(rel[k:])
+        candidates.append((fp_abs, fp_rel, suffix, 'pytorch'))
+
+    for fp_abs, fp_rel, suffix, kind in candidates:
+        if os.path.isfile(fp_abs):
+            origin = map_origin_test_file(fp_rel) if kind == 'xpu' else fp_rel
+            return fp_rel, suffix, origin
+    return "", "", ""
+
+
+_PYTEST_FILE_RE = re.compile(r'pytest[^\n`]*?\b(test[\w/]*\.py)((?:::[\w.]+)*)')
+_STACK_FILE_RE = re.compile(r'File\s+"[^"]*?(test[/\\][\w/\\.]+\.py)"')
+_CLASS_METHOD_RE = re.compile(r'\b([A-Z][A-Za-z0-9_]*)\.(test_\w+)\b')
+_TEST_METHOD_RE = re.compile(r'\b(test_\w+)\b')
+
+
+def _disk_match_rel_file(rel):
+    """Check if a relative test file path (e.g. 'test/foo.py' or 'test_vmap_xpu.py')
+    exists under either pytorch test/ or xpu-ops test/.
+
+    Returns canonical relative path or "".
+    """
+    if not rel:
+        return ""
+    rel = rel.replace('\\', '/').lstrip('./')
+    if rel.startswith('test/'):
+        if os.path.isfile(os.path.join(_PYTORCH_REPO_ROOT, rel)):
+            return rel
+        sub = rel[len('test/'):]
+        for root_rel, root_abs in (('torch-xpu-ops/test/', _XPU_TEST_DIR),):
+            if os.path.isfile(os.path.join(root_abs, sub)):
+                return root_rel + sub
+    basename = os.path.basename(rel)
+    for root_abs, root_rel in ((_PYTORCH_TEST_DIR, 'test/'), (_XPU_TEST_DIR, 'torch-xpu-ops/test/')):
+        for cur, _dirs, files in os.walk(root_abs):
+            if basename in files:
+                full = os.path.join(cur, basename)
+                return root_rel + os.path.relpath(full, root_abs).replace('\\', '/')
+    return ""
+
+
+def best_effort_test_info(body, title):
+    """Best-effort mining of test_file/class/case from issue body+title for
+    issues without a parseable 'Cases:' block (used as label-fallback).
+
+    Returns (test_file_rel, test_class, test_case) where any field may be "".
+    """
+    body = body or ''
+    title = title or ''
+    test_file = ''
+    test_class = ''
+    test_case = ''
+
+    for m in _PYTEST_FILE_RE.finditer(body):
+        rel = _disk_match_rel_file(m.group(1))
+        if rel:
+            test_file = rel
+            tail = m.group(2)
+            if tail:
+                segs = [s for s in tail.split('::') if s]
+                if len(segs) >= 2:
+                    test_class, test_case = segs[0], segs[1]
+                elif len(segs) == 1:
+                    test_case = segs[0]
+            break
+
+    if not test_file:
+        for m in _STACK_FILE_RE.finditer(body):
+            rel = _disk_match_rel_file(m.group(1))
+            if rel:
+                test_file = rel
+                break
+
+    if not test_case:
+        m = _CLASS_METHOD_RE.search(body)
+        if m:
+            test_class = test_class or m.group(1)
+            test_case = m.group(2)
+
+    if not test_case:
+        m = _TEST_METHOD_RE.search(title)
+        if m:
+            test_case = m.group(1)
+
+    return test_file, test_class, test_case
+
+
+import hashlib as _hashlib
+
+_LLM_CACHE_PATH = os.path.join(DATA_DIR, 'llm_extracted.json')
+_LLM_CACHE = None
+
+
+def _load_llm_cache():
+    global _LLM_CACHE
+    if _LLM_CACHE is not None:
+        return _LLM_CACHE
+    try:
+        with open(_LLM_CACHE_PATH) as f:
+            _LLM_CACHE = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        _LLM_CACHE = {}
+    return _LLM_CACHE
+
+
+def get_llm_extraction(issue_id, body):
+    cache = _load_llm_cache()
+    entry = cache.get(str(issue_id))
+    if not entry:
+        return None
+    body_hash = _hashlib.sha256((body or '').encode('utf-8')).hexdigest()[:16]
+    if entry.get('body_hash') and entry['body_hash'] != body_hash:
+        return None
+    return entry
+
+
+def llm_test_cases_for_issue(issue_id, body):
+    """Return disk-verified test_cases list for an issue from the LLM cache.
+
+    Each item: {'test_type', 'test_file', 'origin_test_file', 'test_class', 'test_case'}.
+    Paths that do not resolve under <repo>/test/ or torch-xpu-ops/test/ are dropped.
+    """
+    entry = get_llm_extraction(issue_id, body)
+    if not entry:
+        return []
+    out = []
+    for tc in entry.get('test_cases', []) or []:
+        raw = (tc.get('test_file') or '').strip().replace('\\', '/')
+        cls = (tc.get('test_class') or '').strip()
+        case = (tc.get('test_method') or '').strip()
+        if not raw or not case:
+            continue
+        rel = _disk_match_rel_file(raw)
+        if not rel:
+            continue
+        out.append({
+            'test_type': 'ut',
+            'test_file': rel,
+            'origin_test_file': map_origin_test_file(rel) if rel.startswith('torch-xpu-ops/') else rel,
+            'test_class': cls,
+            'test_case': case,
+        })
+    return out
+
+
 def parse_test_cases_from_body(body):
     cases = []
 
@@ -517,42 +714,17 @@ def parse_test_cases_from_body(body):
                 continue
 
             if 'torch-xpu-ops' in test_path:
-                path_parts = test_path.split('.')
-                try:
-                    txpo_idx = path_parts.index('torch-xpu-ops')
-                    rel_parts = path_parts[txpo_idx+1:]
-
-                    test_class = ""
-                    test_file_parts = []
-                    for part in rel_parts:
-                        if part.startswith('Test') or part.endswith('Tests') or part.endswith('Test'):
-                            test_class = part
-                            break
-                        test_file_parts.append(part)
-
-                    if test_file_parts:
-                        test_file = 'torch-xpu-ops/' + '/'.join(test_file_parts) + '.py'
-                        if not test_file.endswith('_xpu.py'):
-                            test_file = test_file.replace('.py', '_xpu.py')
-                    else:
-                        test_file = ""
-
-                    origin_file = map_origin_test_file(test_file)
-                except:
-                    test_file = ""
-                    test_class = ""
-                    origin_file = ""
+                test_file, class_suffix, origin_file = resolve_test_file(test_path)
+                test_class = class_suffix
             else:
-                path_parts = test_path.split('.')
-                test_file_parts = []
-                test_class = ""
-                for part in path_parts:
-                    if part.startswith('Test') or part.endswith('Tests') or part.endswith('Test'):
-                        test_class = part
-                        break
-                    test_file_parts.append(part)
-                test_file = '/'.join(test_file_parts) + '.py'
-                origin_file = ""
+                test_file, class_suffix, origin_file = resolve_test_file(test_path)
+                test_class = class_suffix
+
+            if not test_class and '.' in test_case:
+                head, _, tail = test_case.rpartition('.')
+                if head and tail:
+                    test_class = head
+                    test_case = tail
 
             cases.append({
                 'test_type': test_type,
@@ -576,14 +748,19 @@ def parse_test_cases_from_body(body):
                     parts = test_path.split('::')
                     file_path = parts[0]
                     test_class = parts[1] if len(parts) > 1 else ""
-                    test_method = parts[2] if len(parts) > 2 else parts[-1]
-                    cases.append({
-                        'test_type': 'ut',
-                        'test_file': file_path,
-                        'origin_test_file': file_path,
-                        'test_class': test_class,
-                        'test_case': test_method
-                    })
+                    # Only emit test_case when an explicit ::method segment is present.
+                    # With just file::Class, the -k handler below produces the real
+                    # method row; emitting test_method=class here yields a degenerate
+                    # row where test_class == test_case.
+                    test_method = parts[2] if len(parts) > 2 else ""
+                    if test_method:
+                        cases.append({
+                            'test_type': 'ut',
+                            'test_file': file_path,
+                            'origin_test_file': file_path,
+                            'test_class': test_class,
+                            'test_case': test_method
+                        })
                 else:
                     # No class/method, just file
                     cases.append({
@@ -1161,6 +1338,12 @@ for issue in issues:
     
     # Parse test cases and e2e info
     test_cases = parse_test_cases_from_body(body)
+
+    llm_entry = get_llm_extraction(num, body)
+    # LLM is a FALLBACK: only consult it when the script extractor found nothing.
+    if llm_entry and not test_cases:
+        for llm_tc in llm_test_cases_for_issue(num, body):
+            test_cases.append(llm_tc)
     
     # Only parse e2e info if it's actually an e2e issue
     e2e_info = []
@@ -1179,15 +1362,13 @@ for issue in issues:
             test_case = tc.get('test_case', '')
             test_file = tc.get('test_file', '')
 
-            # Filter: skip if test_class or test_case is empty/invalid
-            if not test_class or not test_case:
+            if not test_file or not test_case:
                 continue
-            if len(test_class) < 3 or len(test_case) < 3:
-                continue
-            # Skip if too short or looks like garbage text
-            if any(c in test_class for c in ['~', '`', '@', '#', '$', '%', '^', '&', '*', '(', ')']):
+            if len(test_case) < 3:
                 continue
             if any(c in test_case for c in ['~', '`', '@', '#', '$', '%', '^', '&', '*', '(', ')']):
+                continue
+            if test_class and any(c in test_class for c in ['~', '`', '@', '#', '$', '%', '^', '&', '*', '(', ')']):
                 continue
 
             # Deduplication key: (test_file, test_class, test_case)
@@ -1207,8 +1388,30 @@ for issue in issues:
             case_row += 1
             issues_with_ut.add(num)
 
+    if num not in issues_with_ut and test_module != 'e2e':
+        label_lc = label_str.lower()
+        llm_kind = llm_entry.get('kind') if llm_entry else None
+        if 'module: ut' in label_lc or 'skipped' in label_lc or llm_kind == 'unittest':
+            be_file, be_class, be_case = best_effort_test_info(body, title)
+            if llm_entry and (not be_file or not be_case):
+                for llm_tc in llm_test_cases_for_issue(num, body):
+                    be_file = be_file or llm_tc['test_file']
+                    be_class = be_class or llm_tc['test_class']
+                    be_case = be_case or llm_tc['test_case']
+                    if be_file and be_case:
+                        break
+            ws_cases.cell(row=case_row, column=1, value=num)
+            ws_cases.cell(row=case_row, column=2, value=title[:150])
+            ws_cases.cell(row=case_row, column=3, value='ut')
+            ws_cases.cell(row=case_row, column=4, value=be_file)
+            ws_cases.cell(row=case_row, column=5, value=map_origin_test_file(be_file) if be_file else '')
+            ws_cases.cell(row=case_row, column=6, value=be_class)
+            ws_cases.cell(row=case_row, column=7, value=be_case)
+            case_row += 1
+            issues_with_ut.add(num)
+
     # Add to e2e sheet
-    if e2e_info:
+    if e2e_info and num not in issues_with_ut:
         for info in e2e_info:
             reproducer = info.get('reproducer', title[:150])
             ws_e2e.cell(row=e2e_row, column=1, value=num)
@@ -1224,7 +1427,7 @@ for issue in issues:
             # Columns 11-12: Error Message, Traceback - left blank for test_result_analysis/
             e2e_row += 1
             issues_with_e2e.add(num)
-    elif test_module == 'e2e':
+    elif test_module == 'e2e' and num not in issues_with_ut:
         # Add e2e issues without specific model info
         ws_e2e.cell(row=e2e_row, column=1, value=num)
         ws_e2e.cell(row=e2e_row, column=2, value=title[:150])
@@ -1232,6 +1435,22 @@ for issue in issues:
         # Columns 11-12: Error Message, Traceback - left blank for test_result_analysis/
         e2e_row += 1
         issues_with_e2e.add(num)
+
+    if (num not in issues_with_e2e and num not in issues_with_ut
+            and llm_entry and llm_entry.get('kind') == 'e2e'
+            and llm_entry.get('test_cases')):
+        llm_repro = llm_entry.get('reproducer') or title[:200]
+        for llm_tc in llm_entry['test_cases']:
+            benchmark = (llm_tc.get('test_class') or '').strip()
+            model = (llm_tc.get('test_method') or '').strip()
+            if not benchmark and not model:
+                continue
+            ws_e2e.cell(row=e2e_row, column=1, value=num)
+            ws_e2e.cell(row=e2e_row, column=2, value=llm_repro[:200])
+            ws_e2e.cell(row=e2e_row, column=3, value=benchmark)
+            ws_e2e.cell(row=e2e_row, column=4, value=model)
+            e2e_row += 1
+            issues_with_e2e.add(num)
 
     issue_row += 1
 
@@ -1250,9 +1469,20 @@ for issue in issues:
     body = issue.get('body', '') or ''
     labels = issue.get('labels', [])
     label_str = ", ".join([l['name'] for l in labels])
-    reproduce_step = extract_e2e_reproducer(body, title)
-    error_msg = extract_error_message(body)
-    traceback_text = extract_traceback(body)
+
+    llm_entry = get_llm_extraction(num, body)
+    if llm_entry and llm_entry.get('reproducer'):
+        reproduce_step = llm_entry['reproducer']
+    else:
+        reproduce_step = extract_e2e_reproducer(body, title)
+    if llm_entry and llm_entry.get('error_message'):
+        error_msg = llm_entry['error_message']
+    else:
+        error_msg = extract_error_message(body)
+    if llm_entry and llm_entry.get('traceback'):
+        traceback_text = llm_entry['traceback']
+    else:
+        traceback_text = extract_traceback(body)
 
     ws_others.cell(row=others_row, column=1, value=num)
     ws_others.cell(row=others_row, column=2, value=sanitize_cell(title))
@@ -1263,6 +1493,19 @@ for issue in issues:
     others_row += 1
 
 print(f"Total others rows: {others_row-2}")
+
+others_ids = set()
+for r in ws_others.iter_rows(min_row=2, values_only=True):
+    if r and r[0] is not None:
+        others_ids.add(r[0])
+for row_idx in range(2, ws_issues.max_row + 1):
+    num_val = ws_issues.cell(row=row_idx, column=1).value
+    if num_val in others_ids:
+        ws_issues.cell(row=row_idx, column=13, value='others')
+    elif num_val in issues_with_e2e:
+        ws_issues.cell(row=row_idx, column=13, value='e2e')
+    elif num_val in issues_with_ut:
+        ws_issues.cell(row=row_idx, column=13, value='ut')
 
 for ws in [ws_issues, ws_cases, ws_e2e, ws_others]:
     for col in ws.columns:
