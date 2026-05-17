@@ -5,39 +5,42 @@ from openpyxl.styles import Font, PatternFill
 import re
 import os
 import requests
+import subprocess
 import argparse
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = "/home/daisyden/opencode/ai_for_validation/opencode/issue_triage"
 RESULT_DIR = os.path.join(ROOT_DIR, "result")
 DATA_DIR = os.path.join(ROOT_DIR, "data")
-# DOC_DIR = os.path.join(ROOT_DIR, "doc")  # Removed ops_dep loading
 
 GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_HEADERS = {
     "Accept": "application/vnd.github.v3+json",
     "Authorization": f"token {GITHUB_TOKEN}"
 } if GITHUB_TOKEN else {}
-GITHUB_GRAPHQL_URL = "https://api.github.com/graphql"
+
+# PyTorchXPU ProjectV2 (Intel org, project number 61). Fetched in one batched
+# GraphQL call via `gh api graphql` to bypass per-token scope filtering.
+PYTORCHXPU_PROJECT_OWNER = "intel"
+PYTORCHXPU_PROJECT_NUMBER = 61
 VALID_PRIORITIES = {"P0", "P1", "P2", "P3"}
 
-# Mapping: prefixed field name (used outside the PyTorchXPU project) -> cache key
-PROJECT_FIELDS_PREFIXED = {
-    "PyTorchXPU Priority": "project_priority",
-    "PyTorchXPU Status": "project_status",
-    "PyTorchXPU Estimate": "project_estimate",
-    "PyTorchXPU Depending": "project_depending",
-    "PyTorchXPU Short Comments": "project_short_comments",
-}
-# Mapping: bare field name (used inside the PyTorchXPU project) -> cache key
+# Bare field names in PyTorchXPU project -> issue dict key.
 PYTORCHXPU_FIELD_MAP = {
     "Priority": "project_priority",
     "Status": "project_status",
     "Estimate": "project_estimate",
     "Depending": "project_depending",
-    "Short Comments": "project_short_comments",
+    "Short Comment": "project_short_comments",  # singular per project schema
+    "Short Comments": "project_short_comments",  # tolerate plural alias
 }
-ALL_PROJECT_KEYS = set(PROJECT_FIELDS_PREFIXED.values())
+ALL_PROJECT_KEYS = {
+    "project_priority",
+    "project_status",
+    "project_estimate",
+    "project_depending",
+    "project_short_comments",
+}
 
 # Excel cell limits
 EXCEL_MAX_CELL_LEN = 32767
@@ -58,64 +61,33 @@ def sanitize_cell(value):
     return text
 
 
-def normalize_project_priority(value):
-    text = str(value or "").strip().upper()
-    if not text:
-        return ""
-    match = re.search(r"\bP[0-3]\b", text)
-    return match.group(0) if match else ""
+def fetch_all_project_fields():
+    """Fetch field values for every PyTorchXPU project item in one batched call.
 
+    Uses `gh api graphql` (not requests) because gh CLI's auth handles the
+    read:project scope correctly, while $GITHUB_TOKEN-based OAuth tokens get
+    that scope stripped by GitHub's API gateway.
 
-def project_field_name(field_value):
-    field = field_value.get("field") or {}
-    return str(field.get("name") or "").strip()
-
-
-def project_field_value(field_value):
-    for key in ("name", "text", "title", "number", "date"):
-        value = field_value.get(key)
-        if value is not None and str(value).strip():
-            return str(value).strip()
-    return ""
-
-
-def fetch_project_fields(issue):
-    """Fetch all 5 PyTorchXPU project fields for one issue in a single GraphQL request.
-
-    Returns a dict with keys: project_priority, project_status, project_estimate,
-    project_depending, project_short_comments. Missing fields are empty strings.
-    Priority is normalized to P0/P1/P2/P3; other fields are raw strings.
+    Returns: dict[issue_number:int -> dict[cache_key:str -> value:str]]
     """
-    result = {key: "" for key in ALL_PROJECT_KEYS}
-    if not GITHUB_TOKEN:
-        return result
-    node_id = issue.get("node_id")
-    if not node_id:
-        return result
-    query = """
-    query($id: ID!) {
-      node(id: $id) {
-        ... on Issue {
-          projectItems(first: 20) {
+    query = '''
+    query($owner: String!, $number: Int!, $cursor: String) {
+      organization(login: $owner) {
+        projectV2(number: $number) {
+          items(first: 100, after: $cursor) {
+            pageInfo { hasNextPage endCursor }
             nodes {
-              project { title }
-              fieldValues(first: 50) {
+              content { ... on Issue { number repository { nameWithOwner } } }
+              fieldValues(first: 30) {
                 nodes {
                   ... on ProjectV2ItemFieldSingleSelectValue {
-                    name
-                    field { ... on ProjectV2FieldCommon { name } }
+                    name field { ... on ProjectV2FieldCommon { name } }
                   }
                   ... on ProjectV2ItemFieldTextValue {
-                    text
-                    field { ... on ProjectV2FieldCommon { name } }
+                    text field { ... on ProjectV2FieldCommon { name } }
                   }
                   ... on ProjectV2ItemFieldNumberValue {
-                    number
-                    field { ... on ProjectV2FieldCommon { name } }
-                  }
-                  ... on ProjectV2ItemFieldIterationValue {
-                    title
-                    field { ... on ProjectV2FieldCommon { name } }
+                    number field { ... on ProjectV2FieldCommon { name } }
                   }
                 }
               }
@@ -124,56 +96,95 @@ def fetch_project_fields(issue):
         }
       }
     }
-    """
-    response = requests.post(
-        GITHUB_GRAPHQL_URL,
-        headers=GITHUB_HEADERS,
-        json={"query": query, "variables": {"id": node_id}},
-        timeout=30,
-    )
-    if response.status_code != 200:
-        return result
-    data = response.json()
-    if data.get("errors"):
-        return result
-    project_items = (((data.get("data") or {}).get("node") or {}).get("projectItems") or {}).get("nodes") or []
-    for item in project_items:
-        project_title = ((item.get("project") or {}).get("title") or "").strip()
-        field_values = ((item.get("fieldValues") or {}).get("nodes") or [])
-        for field_value in field_values:
-            field_name = project_field_name(field_value)
-            # Determine which result key this field maps to.
-            cache_key = PROJECT_FIELDS_PREFIXED.get(field_name)
-            if cache_key is None and project_title == "PyTorchXPU":
-                cache_key = PYTORCHXPU_FIELD_MAP.get(field_name)
-            if cache_key is None:
+    '''
+    by_issue = {}
+    cursor = None
+    page = 0
+    while True:
+        page += 1
+        args = [
+            "gh", "api", "graphql",
+            "-f", f"query={query}",
+            "-F", f"owner={PYTORCHXPU_PROJECT_OWNER}",
+            "-F", f"number={PYTORCHXPU_PROJECT_NUMBER}",
+        ]
+        if cursor:
+            args.extend(["-F", f"cursor={cursor}"])
+        try:
+            proc = subprocess.run(args, capture_output=True, text=True, timeout=120)
+        except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
+            print(f"PyTorchXPU project fetch failed (page {page}): {exc}")
+            return by_issue
+        if proc.returncode != 0:
+            print(f"PyTorchXPU project fetch failed (page {page}): {proc.stderr.strip()}")
+            return by_issue
+        try:
+            data = json.loads(proc.stdout)
+        except json.JSONDecodeError as exc:
+            print(f"PyTorchXPU project fetch returned non-JSON (page {page}): {exc}")
+            return by_issue
+        if data.get("errors"):
+            print(f"PyTorchXPU project GraphQL errors: {data['errors']}")
+            return by_issue
+        proj = (((data.get("data") or {}).get("organization") or {}).get("projectV2") or {})
+        items = (proj.get("items") or {}).get("nodes") or []
+        for item in items:
+            content = item.get("content") or {}
+            issue_number = content.get("number")
+            if issue_number is None:
                 continue
-            raw = project_field_value(field_value)
-            if cache_key == "project_priority":
-                priority = normalize_project_priority(raw)
-                if priority in VALID_PRIORITIES and not result[cache_key]:
-                    result[cache_key] = priority
-            else:
-                if raw and not result[cache_key]:
-                    result[cache_key] = raw
-    return result
+            repo = ((content.get("repository") or {}).get("nameWithOwner") or "")
+            if repo and repo != "intel/torch-xpu-ops":
+                continue
+            fields = {key: "" for key in ALL_PROJECT_KEYS}
+            for fv in (item.get("fieldValues") or {}).get("nodes") or []:
+                field = fv.get("field") or {}
+                field_name = str(field.get("name") or "").strip()
+                cache_key = PYTORCHXPU_FIELD_MAP.get(field_name)
+                if cache_key is None:
+                    continue
+                raw = ""
+                for key in ("name", "text", "number"):
+                    val = fv.get(key)
+                    if val is not None and str(val).strip():
+                        raw = str(val).strip()
+                        break
+                if cache_key == "project_priority":
+                    match = re.search(r"\bP[0-3]\b", raw.upper())
+                    if match:
+                        fields[cache_key] = match.group(0)
+                else:
+                    fields[cache_key] = raw
+            by_issue[int(issue_number)] = fields
+        page_info = (proj.get("items") or {}).get("pageInfo") or {}
+        if not page_info.get("hasNextPage"):
+            break
+        cursor = page_info.get("endCursor")
+        if not cursor:
+            break
+    print(f"PyTorchXPU project: loaded fields for {len(by_issue)} issues across {page} page(s)")
+    return by_issue
 
 
 def populate_project_fields(issues):
-    if not GITHUB_TOKEN:
-        print("GITHUB_TOKEN not set; skipping PyTorchXPU project field fetch")
-        return
-    # Skip issue only when ALL 5 field keys are already present on the cached dict.
     missing = [issue for issue in issues if not ALL_PROJECT_KEYS.issubset(issue.keys())]
     if not missing:
         return
-    print(f"Fetching PyTorchXPU project fields for {len(missing)} issues...")
-    for idx, issue in enumerate(missing, 1):
-        fields = fetch_project_fields(issue)
-        for key, value in fields.items():
-            issue[key] = value
-        if idx % 50 == 0:
-            print(f"Fetched project fields for {idx}/{len(missing)} issues...")
+    fields_by_number = fetch_all_project_fields()
+    if not fields_by_number:
+        for issue in missing:
+            for key in ALL_PROJECT_KEYS:
+                issue.setdefault(key, "")
+        return
+    for issue in missing:
+        number = issue.get("number")
+        fields = fields_by_number.get(number) if number is not None else None
+        if fields:
+            for key, value in fields.items():
+                issue[key] = value
+        else:
+            for key in ALL_PROJECT_KEYS:
+                issue.setdefault(key, "")
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description="Generate Excel report for torch-xpu-ops issues")
@@ -1122,7 +1133,7 @@ for issue in issues:
     module = classify_module(body, title, labels)
     test_module = classify_test_module(body, title, labels)
     dependency = get_dependency_from_body(body, labels)
-    project_priority = normalize_project_priority(issue.get('project_priority', ''))
+    project_priority = issue.get('project_priority', '') or ''
     
     # Error Message, Traceback, torch-ops, dependency deferred to test_result_analysis/
     # Leave blank for now - will be populated by test_result_analysis/Test_Cases/
